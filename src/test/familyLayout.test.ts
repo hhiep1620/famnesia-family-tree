@@ -69,5 +69,6 @@ describe('family tree layout', () => {
 
     expect((byId.get('P0005')?.position.x ?? 0) + PERSON_WIDTH / 2).toBe(0)
     expect(byId.get('P0001')?.position.x).toBeLessThan(byId.get('P0002')?.position.x ?? 0)
+    expect(byId.get('P0011')?.position.x).toBeLessThan(byId.get('P0005')?.position.x ?? 0)
   })
 })

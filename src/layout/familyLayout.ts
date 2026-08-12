@@ -263,8 +263,12 @@ export function layoutFamilyTree(
       ? Math.round(subjectGenerations.reduce((sum, value) => sum + value, 0) / subjectGenerations.length)
       : generationOf(groupId)
     const branchOrders = members.map((member) => options?.kinships?.get(member.id)?.branch).filter((branch): branch is KinshipResult['branch'] => Boolean(branch))
-    const branchOrder = members.some((member) => member.id === options?.subjectId)
+    const containsSubject = members.some((member) => member.id === options?.subjectId)
+    const isDirectBloodGroup = branchOrders.length > 0 && branchOrders.every((branch) => branch === 'direct')
+    const branchOrder = containsSubject
       ? 0
+      : isDirectBloodGroup
+        ? -1
       : branchOrders.length
         ? branchOrders.reduce((sum, branch) => sum + BRANCH_ORDER[branch], 0) / branchOrders.length
         : 0
