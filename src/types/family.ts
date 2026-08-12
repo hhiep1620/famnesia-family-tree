@@ -166,6 +166,8 @@ export interface ReminderRule {
   daysBefore: number
 }
 
+export type KinshipBranch = 'direct' | 'paternal' | 'maternal' | 'spouse'
+
 export interface KinshipResult {
   subjectId: string
   targetId: string
@@ -174,6 +176,7 @@ export interface KinshipResult {
   relationCode: string
   label: string
   shortLabel: string
+  branch: KinshipBranch
   path: string[]
   explanation: string[]
   isBloodRelation: boolean

@@ -1,7 +1,7 @@
 import { CakeSlice, CalendarDays, Edit3, Flower2, Network, Plus, Trash2, UserRoundCheck, X } from 'lucide-react'
 import { useMemo } from 'react'
 import { calculateAge, formatFamilyDate, todayInFamilyTimezone } from '../../calendar/dateUtils'
-import { getFamilyEventsForYear } from '../../calendar/familyCalendar'
+import { getUpcomingFamilyEvents } from '../../calendar/familyCalendar'
 import { buildFamilyGraph } from '../../graph/familyGraph'
 import { getChildren, getParents, getSiblings, getSpouses } from '../../graph/familySelectors'
 import { useDriveImage } from '../../hooks/useDriveImage'
@@ -45,7 +45,7 @@ export function PersonDetails(props: Props) {
   const spouseCount = relationships.filter((relationship) => relationship.type === 'spouse' && (relationship.person1Id === person.id || relationship.person2Id === person.id)).length
   const childCount = relationships.filter((relationship) => relationship.type === 'parent' && relationship.person1Id === person.id).length
   const today = todayInFamilyTimezone()
-  const events = [...getFamilyEventsForYear([person], today.getFullYear()), ...getFamilyEventsForYear([person], today.getFullYear() + 1)].filter((event) => event.date >= `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`).slice(0, 2)
+  const events = getUpcomingFamilyEvents([person], 183, 'all', today).slice(0, 2)
   const age = person.isDeceased ? undefined : calculateAge(person.birthDate ?? undefined, today)
   const { url } = useDriveImage(workspaceId, person.photoFileId ?? undefined)
 

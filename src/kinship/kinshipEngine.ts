@@ -25,6 +25,7 @@ export function getKinship(subjectId: string, targetId: string, graph: FamilyGra
     relationCode: classified.relationCode,
     label: classified.label,
     shortLabel: classified.shortLabel,
+    branch: classified.branch,
     path: personPath,
     explanation,
     isBloodRelation: !steps.some((step) => step.type === 'spouse'),

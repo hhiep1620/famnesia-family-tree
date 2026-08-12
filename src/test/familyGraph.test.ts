@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { samplePersons, sampleRelationships } from '../data/sampleFamily'
 import { buildFamilyGraph } from '../graph/familyGraph'
+import { createFocusedFamilyGraph } from '../graph/focusedFamilyGraph'
 import { getChildren, getParents, getSiblings, getSpouses } from '../graph/familySelectors'
 import { createFamilyUnits } from '../graph/familyUnits'
 import { detectAncestryCycle, validateRelationship } from '../graph/familyValidation'
@@ -21,6 +22,16 @@ describe('family graph acceptance data', () => {
     const units = createFamilyUnits(graph)
     expect(units.find((unit) => unit.parentIds.join('|') === 'P0001|P0002')?.childIds).toEqual(['P0003', 'P0004'])
     expect(units.find((unit) => unit.parentIds.join('|') === 'P0003|P0005')?.childIds).toEqual(['P0006', 'P0007'])
+  })
+
+  it('builds expandable subject-centred slices by relationship distance', () => {
+    const compact = createFocusedFamilyGraph(graph, 'P0006', 2)
+    const expanded = createFocusedFamilyGraph(graph, 'P0006', compact.maxDepth)
+    expect(compact.graph.personsById.has('P0006')).toBe(true)
+    expect(compact.graph.personsById.has('P0001')).toBe(true)
+    expect(compact.graph.personsById.has('P0004')).toBe(false)
+    expect(expanded.graph.personsById.size).toBe(samplePersons.length)
+    expect(compact.graph.personsById.size).toBeLessThan(expanded.graph.personsById.size)
   })
 })
 

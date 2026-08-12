@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { calculateAge } from '../calendar/dateUtils'
 import { getBirthdayEvents } from '../calendar/birthdayEvents'
 import { getDeathAnniversaryEvents } from '../calendar/deathAnniversaryEvents'
+import { getUpcomingFamilyEvents } from '../calendar/familyCalendar'
 import { convertLunarToSolar, convertSolarToLunar } from '../calendar/lunarCalendar'
 import { buildFamilyGraph } from '../graph/familyGraph'
 import { createFamilyUnits } from '../graph/familyUnits'
@@ -30,6 +31,12 @@ const people: Person[] = [
   { id: 'MUS', name: 'Mợ', gender: 'female' },
   { id: 'GGP', name: 'Cụ', gender: 'male' },
   { id: 'SIB', name: 'Chị', gender: 'female', birthDate: '1988-01-01' },
+  { id: 'SIBH', name: 'Chồng của chị', gender: 'male', birthDate: '1987-01-01' },
+  { id: 'YB', name: 'Em trai', gender: 'male', birthDate: '1994-01-01' },
+  { id: 'YBW', name: 'Vợ của em trai', gender: 'female', birthDate: '1995-01-01' },
+  { id: 'PAC', name: 'Em họ nội', gender: 'female', birthDate: '1992-01-01' },
+  { id: 'MAO', name: 'Chị của mẹ', gender: 'female', birthDate: '1958-01-01' },
+  { id: 'MAOS', name: 'Chồng của chị mẹ', gender: 'male' },
 ]
 
 const relationships: Relationship[] = [
@@ -58,6 +65,15 @@ const relationships: Relationship[] = [
   { id: 'r23', person1Id: 'PU', person2Id: 'PUS', type: 'spouse', status: 'married' },
   { id: 'r24', person1Id: 'F', person2Id: 'SIB', type: 'parent' },
   { id: 'r25', person1Id: 'M', person2Id: 'SIB', type: 'parent' },
+  { id: 'r26', person1Id: 'SIB', person2Id: 'SIBH', type: 'spouse', status: 'married' },
+  { id: 'r27', person1Id: 'F', person2Id: 'YB', type: 'parent' },
+  { id: 'r28', person1Id: 'M', person2Id: 'YB', type: 'parent' },
+  { id: 'r29', person1Id: 'YB', person2Id: 'YBW', type: 'spouse', status: 'married' },
+  { id: 'r30', person1Id: 'PA', person2Id: 'PAC', type: 'parent' },
+  { id: 'r31', person1Id: 'PAS', person2Id: 'PAC', type: 'parent' },
+  { id: 'r32', person1Id: 'MGF', person2Id: 'MAO', type: 'parent' },
+  { id: 'r33', person1Id: 'MGM', person2Id: 'MAO', type: 'parent' },
+  { id: 'r34', person1Id: 'MAO', person2Id: 'MAOS', type: 'spouse', status: 'married' },
 ]
 
 describe('age and family events', () => {
@@ -72,6 +88,11 @@ describe('age and family events', () => {
     expect(convertLunarToSolar(14, 8, 2026, false)).toBe('2026-09-24')
     const deceased: Person = { id: 'D', name: 'Người đã mất', isDeceased: true, deathLunar: { day: 12, month: 7, leapMonth: false } }
     expect(getDeathAnniversaryEvents([deceased], 2026)).toHaveLength(1)
+  })
+
+  it('limits upcoming reminders to the next six months without duplicating the following year', () => {
+    const events = getUpcomingFamilyEvents([people[0]], 183, 'all', new Date(2026, 7, 12, 12))
+    expect(events.map((event) => event.date)).toEqual(['2026-12-05'])
   })
 })
 
@@ -88,8 +109,8 @@ describe('Vietnamese kinship engine', () => {
     expect(label('MGM')).toBe('Bà ngoại')
     expect(label('W')).toBe('Vợ')
     expect(label('C')).toBe('Con gái')
-    expect(label('GC')).toBe('Cháu trai')
-    expect(label('GGP')).toBe('Cụ ông')
+    expect(label('GC')).toBe('Cháu trai ngoại')
+    expect(label('GGP')).toBe('Cụ ông nội')
   })
 
   it('uses parental branch and marriage edges for extended kinship', () => {
@@ -101,7 +122,13 @@ describe('Vietnamese kinship engine', () => {
     expect(label('PU')).toBe('Chú')
     expect(label('PAS')).toBe('Dượng')
     expect(label('PUS')).toBe('Thím')
-    expect(label('SIB')).toBe('Chị')
+    expect(label('SIB')).toBe('Chị ruột')
+    expect(label('SIBH')).toBe('Anh rể')
+    expect(label('YB')).toBe('Em trai ruột')
+    expect(label('YBW')).toBe('Em dâu')
+    expect(label('PAC')).toBe('Em họ bên nội')
+    expect(label('MAO')).toBe('Bác gái')
+    expect(label('MAOS')).toBe('Bác trai')
     expect(getKinship('S', 'MUS', graph)?.isMarriageRelation).toBe(true)
   })
 })

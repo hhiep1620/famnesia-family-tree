@@ -30,6 +30,37 @@ const GROUP_GAP = 96
 const GENERATION_GAP = 300
 const CONNECTOR_OFFSET = 48
 
+interface SubjectLayoutOptions {
+  graph?: FamilyGraph
+  subjectId?: string
+  kinships?: Map<string, KinshipResult>
+}
+
+const BRANCH_ORDER: Record<KinshipResult['branch'], number> = {
+  paternal: -2,
+  direct: 0,
+  maternal: 2,
+  spouse: 4,
+}
+
+function generationFromSubject(personId: string, options?: SubjectLayoutOptions): number | undefined {
+  const path = options?.kinships?.get(personId)?.path
+  const graph = options?.graph
+  if (!path || !graph || path.length === 0) return personId === options?.subjectId ? 0 : undefined
+  let generation = 0
+  for (let index = 0; index < path.length - 1; index += 1) {
+    const fromId = path[index]
+    const toId = path[index + 1]
+    const relationship = graph.relationships.find((candidate) =>
+      (candidate.person1Id === fromId && candidate.person2Id === toId)
+      || (candidate.person1Id === toId && candidate.person2Id === fromId),
+    )
+    if (!relationship || relationship.type === 'spouse') continue
+    generation += relationship.person1Id === fromId ? 1 : -1
+  }
+  return generation
+}
+
 function getLifeLabel(person: Person): string | undefined {
   if (person.isDeceased) return `${person.birthDate?.slice(0, 4) ?? '?'} – ${person.deathDate?.slice(0, 4) ?? '?'}`
   const age = calculateAge(person.birthDate ?? undefined)
@@ -132,6 +163,7 @@ export function layoutFamilyTree(
   nodes: Array<PersonFlowNode | ConnectorFlowNode>,
   edges: Edge[],
   units: FamilyUnit[],
+  options?: SubjectLayoutOptions,
 ): Array<PersonFlowNode | ConnectorFlowNode> {
   const positioned = nodes.map((node) => ({ ...node, position: { ...node.position } }))
   const people = positioned.filter((node): node is PersonFlowNode => node.type === 'person')
@@ -223,20 +255,60 @@ export function layoutFamilyTree(
     return generation
   }
 
+  const rows = new Map<number, Array<{ groupId: string; members: PersonFlowNode[]; pointX: number; width: number; branchOrder: number }>>()
   for (const [groupId, members] of groups) {
     const point = layout.node(groupId)
-    const width = members.length * PERSON_WIDTH + Math.max(0, members.length - 1) * COUPLE_GAP
-    const left = point.x - width / 2
-    const y = 36 + generationOf(groupId) * GENERATION_GAP
-    const ordered = [...members].sort((a, b) => {
-      const anchorA = anchorOf(a.id)
-      const anchorB = anchorOf(b.id)
-      if (anchorA !== undefined && anchorB !== undefined && anchorA !== anchorB) return anchorA - anchorB
-      return members.indexOf(a) - members.indexOf(b)
+    const subjectGenerations = members.map((member) => generationFromSubject(member.id, options)).filter((value): value is number => value !== undefined)
+    const generation = subjectGenerations.length
+      ? Math.round(subjectGenerations.reduce((sum, value) => sum + value, 0) / subjectGenerations.length)
+      : generationOf(groupId)
+    const branchOrders = members.map((member) => options?.kinships?.get(member.id)?.branch).filter((branch): branch is KinshipResult['branch'] => Boolean(branch))
+    const branchOrder = members.some((member) => member.id === options?.subjectId)
+      ? 0
+      : branchOrders.length
+        ? branchOrders.reduce((sum, branch) => sum + BRANCH_ORDER[branch], 0) / branchOrders.length
+        : 0
+    const row = rows.get(generation) ?? []
+    row.push({
+      groupId,
+      members,
+      pointX: point.x,
+      width: members.length * PERSON_WIDTH + Math.max(0, members.length - 1) * COUPLE_GAP,
+      branchOrder,
     })
-    ordered.forEach((member, index) => {
-      member.position = { x: left + index * (PERSON_WIDTH + COUPLE_GAP), y }
-    })
+    rows.set(generation, row)
+  }
+
+  for (const [generation, row] of rows) {
+    row.sort((a, b) => a.branchOrder - b.branchOrder || a.pointX - b.pointX || a.groupId.localeCompare(b.groupId))
+    const rowWidth = row.reduce((sum, group) => sum + group.width, 0) + Math.max(0, row.length - 1) * GROUP_GAP
+    let cursor = -rowWidth / 2
+    for (const group of row) {
+      const ordered = [...group.members].sort((a, b) => {
+        if (a.id === options?.subjectId) return -1
+        if (b.id === options?.subjectId) return 1
+        const branchA = options?.kinships?.get(a.id)?.branch
+        const branchB = options?.kinships?.get(b.id)?.branch
+        if (branchA && branchB && BRANCH_ORDER[branchA] !== BRANCH_ORDER[branchB]) return BRANCH_ORDER[branchA] - BRANCH_ORDER[branchB]
+        const anchorA = anchorOf(a.id)
+        const anchorB = anchorOf(b.id)
+        if (anchorA !== undefined && anchorB !== undefined && anchorA !== anchorB) return anchorA - anchorB
+        return group.members.indexOf(a) - group.members.indexOf(b)
+      })
+      ordered.forEach((member, index) => {
+        member.position = {
+          x: cursor + index * (PERSON_WIDTH + COUPLE_GAP),
+          y: options?.subjectId ? generation * GENERATION_GAP : 36 + generation * GENERATION_GAP,
+        }
+      })
+      cursor += group.width + GROUP_GAP
+    }
+
+    const subject = row.flatMap((group) => group.members).find((member) => member.id === options?.subjectId)
+    if (subject) {
+      const offset = subject.position.x + PERSON_WIDTH / 2
+      row.flatMap((group) => group.members).forEach((member) => { member.position.x -= offset })
+    }
   }
 
   for (const edge of spouseEdges) {

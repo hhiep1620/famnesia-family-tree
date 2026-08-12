@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { buildFamilyGraph } from '../graph/familyGraph'
 import { createFamilyUnits } from '../graph/familyUnits'
+import { getAllKinships } from '../kinship/kinshipEngine'
 import { createFlowEdges, createFlowNodes, layoutFamilyTree, PERSON_HEIGHT, PERSON_WIDTH } from '../layout/familyLayout'
 import type { Person, Relationship } from '../types/family'
 
 const people: Person[] = Array.from({ length: 11 }, (_, index) => ({
   id: `P${String(index + 1).padStart(4, '0')}`,
   name: `Thành viên ${index + 1}`,
+  gender: index % 2 === 0 ? 'male' : 'female',
   sortOrder: index + 1,
 }))
 
@@ -54,5 +56,18 @@ describe('family tree layout', () => {
     const secondParentsCenter = ((byId.get('P0003')?.position.x ?? 0) + (byId.get('P0004')?.position.x ?? 0)) / 2
     const spouseOrder = (byId.get('P0005')?.position.x ?? 0) - (byId.get('P0006')?.position.x ?? 0)
     expect((firstParentsCenter - secondParentsCenter) * spouseOrder).toBeGreaterThanOrEqual(0)
+  })
+
+  it('centres the subject and orders paternal relatives before maternal relatives', () => {
+    const graph = buildFamilyGraph(people, relationships)
+    const units = createFamilyUnits(graph)
+    const kinships = getAllKinships('P0005', graph)
+    const nodes = createFlowNodes(graph, units, undefined, { subjectId: 'P0005', kinships })
+    const edges = createFlowEdges(graph, units)
+    const positioned = layoutFamilyTree(nodes, edges, units, { graph, subjectId: 'P0005', kinships }).filter((node) => node.type === 'person')
+    const byId = new Map(positioned.map((node) => [node.id, node]))
+
+    expect((byId.get('P0005')?.position.x ?? 0) + PERSON_WIDTH / 2).toBe(0)
+    expect(byId.get('P0001')?.position.x).toBeLessThan(byId.get('P0002')?.position.x ?? 0)
   })
 })
