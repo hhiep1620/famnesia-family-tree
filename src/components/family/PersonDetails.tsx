@@ -1,0 +1,72 @@
+import { CakeSlice, CalendarDays, Edit3, Flower2, Network, Plus, Trash2, UserRoundCheck, X } from 'lucide-react'
+import { useMemo } from 'react'
+import { calculateAge, formatFamilyDate, todayInFamilyTimezone } from '../../calendar/dateUtils'
+import { getFamilyEventsForYear } from '../../calendar/familyCalendar'
+import { buildFamilyGraph } from '../../graph/familyGraph'
+import { getChildren, getParents, getSiblings, getSpouses } from '../../graph/familySelectors'
+import { useDriveImage } from '../../hooks/useDriveImage'
+import { explainKinshipPath } from '../../kinship/kinshipEngine'
+import { SPOUSE_STATUS_LABELS } from '../../kinship/kinshipRules'
+import type { KinshipResult, Person, Relationship } from '../../types/family'
+import { getInitials } from '../../utils/initials'
+import { ManageRelationships } from './ManageRelationships'
+
+interface Props {
+  person: Person
+  persons: Person[]
+  relationships: Relationship[]
+  workspaceId?: string
+  readOnly?: boolean
+  subjectId?: string
+  kinship?: KinshipResult
+  context?: 'tree' | 'calendar'
+  onClose: () => void
+  onSelect: (id: string) => void
+  onSetSubject: (id: string) => void
+  onViewCalendar: (personId: string) => void
+  onViewTree: (personId: string) => void
+  onAddRelative: () => void
+  onEdit: () => void
+  onAddRelationship: (input: Omit<Relationship, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
+  onUpdateRelationship: (relationship: Relationship) => Promise<void>
+  onDeleteRelationship: (id: string) => Promise<void>
+  onDeletePerson: () => Promise<void>
+}
+
+const genderLabels = { male: 'Nam', female: 'Nữ', other: 'Khác', unknown: 'Không xác định' }
+
+export function PersonDetails(props: Props) {
+  const { person, persons, relationships, workspaceId } = props
+  const graph = useMemo(() => buildFamilyGraph(persons, relationships), [persons, relationships])
+  const groups = [['Cha mẹ', getParents(graph, person.id)], ['Bạn đời / bạn đời cũ', getSpouses(graph, person.id)], ['Con', getChildren(graph, person.id)], ['Anh chị em', getSiblings(graph, person.id)]] as const
+  const references = relationships.filter((relationship) => relationship.person1Id === person.id || relationship.person2Id === person.id)
+  const parentCount = relationships.filter((relationship) => relationship.type === 'parent' && relationship.person2Id === person.id).length
+  const spouseCount = relationships.filter((relationship) => relationship.type === 'spouse' && (relationship.person1Id === person.id || relationship.person2Id === person.id)).length
+  const childCount = relationships.filter((relationship) => relationship.type === 'parent' && relationship.person1Id === person.id).length
+  const today = todayInFamilyTimezone()
+  const events = [...getFamilyEventsForYear([person], today.getFullYear()), ...getFamilyEventsForYear([person], today.getFullYear() + 1)].filter((event) => event.date >= `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`).slice(0, 2)
+  const age = person.isDeceased ? undefined : calculateAge(person.birthDate ?? undefined, today)
+  const { url } = useDriveImage(workspaceId, person.photoFileId ?? undefined)
+
+  const relationshipSuffix = (member: Person) => {
+    const relationship = relationships.find((item) => item.type === 'spouse' && ((item.person1Id === person.id && item.person2Id === member.id) || (item.person2Id === person.id && item.person1Id === member.id)))
+    return relationship ? SPOUSE_STATUS_LABELS[relationship.status ?? 'unknown'] : undefined
+  }
+
+  return <aside className="person-details" aria-label={`Chi tiết ${person.name}`}>
+    <div className="sheet-handle" /><button className="details-close icon-button" onClick={props.onClose} aria-label="Đóng chi tiết"><X size={18} /></button>
+    <div className="details-identity"><div className={`details-portrait ${person.isDeceased ? 'is-deceased' : ''}`}>{url ? <img src={url} alt="" /> : <span>{getInitials(person.name)}</span>}</div><span className="eyebrow">{person.id}</span><h2>{person.name}</h2>{person.nickname && <p className="details-nickname">“{person.nickname}”</p>}{props.kinship && <span className={`details-kinship ${props.kinship.confidence}`}>{props.kinship.label}</span>}</div>
+    {!props.readOnly && <div className="details-actions"><button className="primary-button" onClick={props.onAddRelative}><Plus size={16} /> Thêm người thân</button><button className="secondary-button" onClick={props.onEdit}><Edit3 size={15} /> Sửa</button></div>}
+    <div className="context-actions">{props.subjectId === person.id ? <span className="current-subject"><UserRoundCheck size={15} /> Chủ thể hiện tại</span> : !props.readOnly && <button onClick={() => props.onSetSubject(person.id)}><UserRoundCheck size={15} /> Đặt làm tôi</button>}{props.context === 'calendar' ? <button onClick={() => props.onViewTree(person.id)}><Network size={15} /> Xem trên cây</button> : events.length > 0 && <button onClick={() => props.onViewCalendar(person.id)}><CalendarDays size={15} /> Xem lịch</button>}</div>
+
+    <section className="profile-facts"><span className="section-label">Hồ sơ</span><dl><div><dt>Giới tính</dt><dd>{genderLabels[person.gender ?? 'unknown']}</dd></div>{person.birthDate && <div><dt>Ngày sinh</dt><dd>{formatFamilyDate(person.birthDate)}{age !== undefined && ` · ${age} tuổi`}</dd></div>}{person.isDeceased && person.deathDate && <div><dt>Ngày mất</dt><dd>{formatFamilyDate(person.deathDate)}</dd></div>}{person.isDeceased && person.deathLunar && <div><dt>Ngày giỗ</dt><dd>{person.deathLunar.day}/{person.deathLunar.month} Âm lịch{person.deathLunar.leapMonth ? ' · tháng nhuận' : ''}</dd></div>}{person.ancestralRole === 'founding_ancestor' && <div><dt>Vai trò gia phả</dt><dd>Thủy tổ</dd></div>}</dl></section>
+
+    {props.kinship && <section className="kinship-explanation"><span className="section-label">Quan hệ với chủ thể</span><strong>{props.kinship.label}</strong><p>{explainKinshipPath(props.kinship)}</p>{props.kinship.confidence === 'generic' && <small>Nhãn khái quát do còn thiếu giới tính hoặc thứ tự sinh.</small>}</section>}
+
+    {events.length > 0 && <section className="person-upcoming"><span className="section-label">Sự kiện sắp tới</span>{events.map((event) => <button key={event.id} onClick={() => props.onViewCalendar(person.id)}>{event.type === 'birthday' ? <CakeSlice size={15} /> : <Flower2 size={15} />}<span>{event.type === 'birthday' ? 'Sinh nhật' : `Giỗ ${event.lunarDate?.day}/${event.lunarDate?.month} Âm lịch`}</span><time>{formatFamilyDate(event.date)}</time></button>)}</section>}
+
+    <div className="relationship-summary">{groups.map(([label, members]) => <section key={label}><span className="section-label">{label}</span>{members.length ? <div className="people-chips">{members.map((member) => <button key={member.id} onClick={() => props.onSelect(member.id)}>{member.name}{relationshipSuffix(member) && <small>{relationshipSuffix(member)}</small>}</button>)}</div> : <p>Chưa ghi nhận</p>}</section>)}</div>
+    {!props.readOnly && <ManageRelationships person={person} persons={persons} relationships={relationships} onAdd={props.onAddRelationship} onUpdate={props.onUpdateRelationship} onDelete={props.onDeleteRelationship} />}
+    {!props.readOnly && <div className="danger-zone"><button className="danger-button" disabled={references.length > 0} onClick={() => { if (window.confirm(`Xóa ${person.name}? Không thể hoàn tác.`)) void props.onDeletePerson() }}><Trash2 size={15} /> Xóa thành viên</button>{references.length > 0 && <p>Người này có {parentCount} quan hệ cha/mẹ, {spouseCount} quan hệ bạn đời và {childCount} quan hệ với con. Hãy gỡ hoặc chuyển các quan hệ trước khi xóa.</p>}</div>}
+  </aside>
+}
