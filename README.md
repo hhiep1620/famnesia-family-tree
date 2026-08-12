@@ -96,6 +96,18 @@ Không đưa `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `TOKEN_ENCRYPTION_KEY` ho
 
 ## Deploy
 
+Production được kết nối với repository GitHub `hhiep1620/famnesia-family-tree`. Mỗi lần push vào nhánh `main`, Vercel tự build và deploy lên `https://famnesia-family-tree.vercel.app`. Các nhánh khác và pull request tạo Preview Deployment.
+
+Flow thông thường:
+
+```bash
+git add .
+git commit -m "Mô tả thay đổi"
+git push origin main
+```
+
+Deploy thủ công chỉ dùng khi cần:
+
 ```bash
 npx vercel link --project family-tree --scope j4-f-vibe-coding
 npx vercel deploy --prod --scope j4-f-vibe-coding
