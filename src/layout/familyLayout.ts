@@ -25,8 +25,10 @@ export type ConnectorFlowNode = Node<Record<string, never>, 'connector'>
 export const PERSON_WIDTH = 160
 export const PERSON_HEIGHT = 178
 const UNIT_SIZE = 14
-const COUPLE_GAP = 24
-const FAMILY_GROUP_GAP = 64
+const COUPLE_GAP = 48
+const GROUP_GAP = 96
+const GENERATION_GAP = 300
+const CONNECTOR_OFFSET = 48
 
 function getLifeLabel(person: Person): string | undefined {
   if (person.isDeceased) return `${person.birthDate?.slice(0, 4) ?? '?'} – ${person.deathDate?.slice(0, 4) ?? '?'}`
@@ -64,7 +66,7 @@ export function createFlowNodes(
       workspaceId,
     },
   }))
-  nodes.push(...units.map((unit) => ({
+  nodes.push(...units.filter((unit) => unit.childIds.length > 0).map((unit) => ({
     id: unit.id,
     type: 'connector' as const,
     position: { x: 0, y: 0 },
@@ -78,6 +80,7 @@ export function createFlowNodes(
 export function createFlowEdges(graph: FamilyGraph, units: FamilyUnit[]): Edge[] {
   const edges: Edge[] = []
   for (const unit of units) {
+    if (unit.childIds.length === 0) continue
     for (const parentId of unit.parentIds) {
       edges.push({
         id: `${unit.id}:${parentId}:in`,
@@ -96,7 +99,8 @@ export function createFlowEdges(graph: FamilyGraph, units: FamilyUnit[]): Edge[]
         target: childId,
         sourceHandle: 'family-bottom',
         targetHandle: 'family-top',
-        type: 'smoothstep',
+        type: 'familyBranch',
+        data: { lane: 0 },
         className: 'family-line',
       })
     }
@@ -129,145 +133,148 @@ export function layoutFamilyTree(
   edges: Edge[],
   units: FamilyUnit[],
 ): Array<PersonFlowNode | ConnectorFlowNode> {
-  const layout = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
-  layout.setGraph({ rankdir: 'TB', nodesep: 58, ranksep: 92, marginx: 36, marginy: 36 })
-
-  for (const node of nodes) {
-    const connector = node.type === 'connector'
-    layout.setNode(node.id, { width: connector ? UNIT_SIZE : PERSON_WIDTH, height: connector ? UNIT_SIZE : PERSON_HEIGHT })
+  const positioned = nodes.map((node) => ({ ...node, position: { ...node.position } }))
+  const people = positioned.filter((node): node is PersonFlowNode => node.type === 'person')
+  const byId = new Map(positioned.map((node) => [node.id, node]))
+  const parent = new Map(people.map((node) => [node.id, node.id]))
+  const find = (id: string): string => {
+    const current = parent.get(id) ?? id
+    if (current === id) return current
+    const root = find(current)
+    parent.set(id, root)
+    return root
   }
-  for (const edge of edges.filter((candidate) => !candidate.id.startsWith('spouse:'))) {
-    layout.setEdge(edge.source, edge.target, { weight: edge.source.startsWith('family:') ? 3 : 5 })
+  const unite = (a: string, b: string) => {
+    if (!parent.has(a) || !parent.has(b)) return
+    const rootA = find(a)
+    const rootB = find(b)
+    if (rootA !== rootB) parent.set(rootB, rootA)
+  }
+
+  for (const unit of units) {
+    unit.parentIds.slice(1).forEach((parentId) => unite(unit.parentIds[0], parentId))
+  }
+  for (const edge of edges) {
+    if (edge.id.startsWith('spouse:')) unite(edge.source, edge.target)
+  }
+
+  const groups = new Map<string, PersonFlowNode[]>()
+  for (const person of people) {
+    const root = find(person.id)
+    const members = groups.get(root) ?? []
+    members.push(person)
+    groups.set(root, members)
+  }
+
+  const spouseEdges = edges.filter((edge) => edge.id.startsWith('spouse:'))
+  for (const members of groups.values()) {
+    if (members.length !== 2) continue
+    const spouse = spouseEdges.find((edge) => members.some((member) => member.id === edge.source) && members.some((member) => member.id === edge.target))
+    if (spouse && members[0].id !== spouse.source) members.reverse()
+  }
+
+  const personGroup = new Map<string, string>()
+  for (const [groupId, members] of groups) members.forEach((member) => personGroup.set(member.id, groupId))
+
+  const incoming = new Map<string, Set<string>>()
+  const layout = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
+  layout.setGraph({ rankdir: 'TB', nodesep: GROUP_GAP, ranksep: 120, marginx: 48, marginy: 36 })
+  for (const [groupId, members] of groups) {
+    const width = members.length * PERSON_WIDTH + Math.max(0, members.length - 1) * COUPLE_GAP
+    layout.setNode(groupId, { width, height: PERSON_HEIGHT })
+  }
+  for (const unit of units) {
+    const parentGroup = personGroup.get(unit.parentIds[0])
+    if (!parentGroup) continue
+    for (const childId of unit.childIds) {
+      const childGroup = personGroup.get(childId)
+      if (!childGroup || childGroup === parentGroup) continue
+      const parents = incoming.get(childGroup) ?? new Set<string>()
+      parents.add(parentGroup)
+      incoming.set(childGroup, parents)
+      layout.setEdge(parentGroup, childGroup, { weight: 5 })
+    }
   }
   dagre.layout(layout)
 
-  const positioned = nodes.map((node) => {
-    const point = layout.node(node.id)
-    const width = node.type === 'connector' ? UNIT_SIZE : PERSON_WIDTH
-    const height = node.type === 'connector' ? UNIT_SIZE : PERSON_HEIGHT
-    return { ...node, position: { x: point.x - width / 2, y: point.y - height / 2 } }
-  })
-
-  const byId = new Map(positioned.map((node) => [node.id, node]))
+  const parentAnchors = new Map<string, number[]>()
   for (const unit of units) {
-    if (unit.parentIds.length !== 2) continue
-    const connector = byId.get(unit.id)
-    const first = byId.get(unit.parentIds[0])
-    const second = byId.get(unit.parentIds[1])
-    if (!connector || !first || !second) continue
-    const center = connector.position.x + UNIT_SIZE / 2
-    const y = Math.min(first.position.y, second.position.y)
-    first.position = { x: center - PERSON_WIDTH - 12, y }
-    second.position = { x: center + 12, y }
-  }
-
-  // Dagre optimizes crossings, which can reverse the explicitly requested
-  // sibling order when one child has a spouse/descendant branch. Reorder whole
-  // descendant branches into the stable child order without persisting layout.
-  const orderedUnits = [...units].sort((a, b) => (byId.get(a.id)?.position.y ?? 0) - (byId.get(b.id)?.position.y ?? 0))
-  const collectBranch = (rootId: string): Set<string> => {
-    const branch = new Set<string>([rootId])
-    const visit = (personId: string) => {
-      for (const family of units.filter((candidate) => candidate.parentIds.includes(personId))) {
-        branch.add(family.id)
-        family.parentIds.forEach((parentId) => branch.add(parentId))
-        family.childIds.forEach((childId) => { branch.add(childId); visit(childId) })
-      }
+    const parentGroup = personGroup.get(unit.parentIds[0])
+    const parentPoint = parentGroup ? layout.node(parentGroup) : undefined
+    if (!parentPoint) continue
+    for (const childId of unit.childIds) {
+      parentAnchors.set(childId, [...(parentAnchors.get(childId) ?? []), parentPoint.x])
     }
-    visit(rootId)
-    return branch
+  }
+  const anchorOf = (personId: string): number | undefined => {
+    const anchors = parentAnchors.get(personId)
+    return anchors?.length ? anchors.reduce((sum, value) => sum + value, 0) / anchors.length : undefined
   }
 
-  for (const unit of orderedUnits) {
-    if (unit.childIds.length < 2) continue
-    const branches = unit.childIds.map(collectBranch)
-    const centers = branches.map((branch) => {
-      const people = [...branch].map((id) => byId.get(id)).filter((node) => node?.type === 'person')
-      const left = Math.min(...people.map((node) => node!.position.x))
-      const right = Math.max(...people.map((node) => node!.position.x + PERSON_WIDTH))
-      return (left + right) / 2
+  const generations = new Map<string, number>()
+  const generationOf = (groupId: string, visiting = new Set<string>()): number => {
+    const cached = generations.get(groupId)
+    if (cached !== undefined) return cached
+    if (visiting.has(groupId)) return 0
+    const nextVisiting = new Set(visiting).add(groupId)
+    const parents = [...(incoming.get(groupId) ?? [])]
+    const generation = parents.length ? Math.max(...parents.map((parentId) => generationOf(parentId, nextVisiting) + 1)) : 0
+    generations.set(groupId, generation)
+    return generation
+  }
+
+  for (const [groupId, members] of groups) {
+    const point = layout.node(groupId)
+    const width = members.length * PERSON_WIDTH + Math.max(0, members.length - 1) * COUPLE_GAP
+    const left = point.x - width / 2
+    const y = 36 + generationOf(groupId) * GENERATION_GAP
+    const ordered = [...members].sort((a, b) => {
+      const anchorA = anchorOf(a.id)
+      const anchorB = anchorOf(b.id)
+      if (anchorA !== undefined && anchorB !== undefined && anchorA !== anchorB) return anchorA - anchorB
+      return members.indexOf(a) - members.indexOf(b)
     })
-    const slots = [...centers].sort((a, b) => a - b)
-    branches.forEach((branch, index) => {
-      const shift = slots[index] - centers[index]
-      for (const id of branch) {
-        const node = byId.get(id)
-        if (node) node.position = { ...node.position, x: node.position.x + shift }
-      }
+    ordered.forEach((member, index) => {
+      member.position = { x: left + index * (PERSON_WIDTH + COUPLE_GAP), y }
     })
   }
 
-  // Manual couple and branch positioning happens after Dagre, so Dagre can no
-  // longer protect cards from overlapping. Resolve every visual row as grouped
-  // family clusters, then re-center its connectors under the final parent cards.
-  const people = positioned.filter((node): node is PersonFlowNode => node.type === 'person')
-  const rows: PersonFlowNode[][] = []
-  for (const person of [...people].sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x)) {
-    const row = rows.find((candidate) => Math.abs(candidate[0].position.y - person.position.y) < 4)
-    if (row) row.push(person)
-    else rows.push([person])
-  }
-
-  const familyPairs = [
-    ...units.flatMap((unit) => unit.parentIds.length > 1
-      ? unit.parentIds.slice(1).map((parentId) => [unit.parentIds[0], parentId] as const)
-      : []),
-    ...edges.filter((edge) => edge.id.startsWith('spouse:')).map((edge) => [edge.source, edge.target] as const),
-  ]
-
-  for (const row of rows) {
-    const rowIds = new Set(row.map((node) => node.id))
-    const parent = new Map(row.map((node) => [node.id, node.id]))
-    const find = (id: string): string => {
-      const current = parent.get(id) ?? id
-      if (current === id) return current
-      const root = find(current)
-      parent.set(id, root)
-      return root
-    }
-    const unite = (a: string, b: string) => {
-      const rootA = find(a); const rootB = find(b)
-      if (rootA !== rootB) parent.set(rootB, rootA)
-    }
-    familyPairs.forEach(([a, b]) => { if (rowIds.has(a) && rowIds.has(b)) unite(a, b) })
-
-    const components = new Map<string, PersonFlowNode[]>()
-    for (const node of row) {
-      const root = find(node.id)
-      const component = components.get(root) ?? []
-      component.push(node)
-      components.set(root, component)
-    }
-
-    const originalLeft = Math.min(...row.map((node) => node.position.x))
-    const originalRight = Math.max(...row.map((node) => node.position.x + PERSON_WIDTH))
-    const groups = [...components.values()].map((component) => {
-      const ordered = [...component].sort((a, b) => a.position.x - b.position.x || a.id.localeCompare(b.id))
-      const originalGroupLeft = Math.min(...ordered.map((node) => node.position.x))
-      ordered.forEach((node, index) => { node.position = { ...node.position, x: originalGroupLeft + index * (PERSON_WIDTH + COUPLE_GAP) } })
-      return { nodes: ordered, left: originalGroupLeft, width: ordered.length * PERSON_WIDTH + (ordered.length - 1) * COUPLE_GAP }
-    }).sort((a, b) => a.left - b.left)
-
-    let cursor = groups[0]?.left ?? 0
-    for (const group of groups) {
-      const left = Math.max(group.left, cursor)
-      const shift = left - group.left
-      group.nodes.forEach((node) => { node.position = { ...node.position, x: node.position.x + shift } })
-      cursor = left + group.width + FAMILY_GROUP_GAP
-    }
-
-    const resolvedLeft = Math.min(...row.map((node) => node.position.x))
-    const resolvedRight = Math.max(...row.map((node) => node.position.x + PERSON_WIDTH))
-    const centerShift = (originalLeft + originalRight - resolvedLeft - resolvedRight) / 2
-    row.forEach((node) => { node.position = { ...node.position, x: node.position.x + centerShift } })
+  for (const edge of spouseEdges) {
+    const source = byId.get(edge.source)
+    const target = byId.get(edge.target)
+    if (!source || !target || source.position.x <= target.position.x) continue
+    edge.sourceHandle = 'spouse-left-source'
+    edge.targetHandle = 'spouse-right-target'
   }
 
   for (const unit of units) {
     const connector = byId.get(unit.id)
+    if (!connector || unit.childIds.length === 0) continue
     const parents = unit.parentIds.map((id) => byId.get(id)).filter((node): node is PersonFlowNode => node?.type === 'person')
-    if (!connector || !parents.length) continue
+    const children = unit.childIds.map((id) => byId.get(id)).filter((node): node is PersonFlowNode => node?.type === 'person')
+    if (!parents.length || !children.length) continue
     const parentCenter = parents.reduce((sum, node) => sum + node.position.x + PERSON_WIDTH / 2, 0) / parents.length
-    connector.position = { ...connector.position, x: parentCenter - UNIT_SIZE / 2 }
+    const parentBottom = Math.max(...parents.map((node) => node.position.y + PERSON_HEIGHT))
+    const childTop = Math.min(...children.map((node) => node.position.y))
+    connector.position = {
+      x: parentCenter - UNIT_SIZE / 2,
+      y: Math.min(parentBottom + CONNECTOR_OFFSET, childTop - UNIT_SIZE - CONNECTOR_OFFSET),
+    }
+  }
+
+  const connectorRows = new Map<number, ConnectorFlowNode[]>()
+  for (const connector of positioned.filter((node): node is ConnectorFlowNode => node.type === 'connector')) {
+    const rowKey = Math.round(connector.position.y)
+    const row = connectorRows.get(rowKey) ?? []
+    row.push(connector)
+    connectorRows.set(rowKey, row)
+  }
+  for (const row of connectorRows.values()) {
+    row.sort((a, b) => a.position.x - b.position.x).forEach((connector, index) => {
+      for (const edge of edges) {
+        if (edge.source === connector.id && edge.type === 'familyBranch') edge.data = { ...(edge.data ?? {}), lane: index % 2 }
+      }
+    })
   }
 
   return positioned

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createFamilyDataTemplate, serializeFamilyData } from '../import/exportFamilyData'
 import { validateImportText } from '../import/validateImport'
+import { validateFamilyData } from '../schema/familyDataSchema'
 
 describe('family.json import contract', () => {
   it('accepts the official template and reports its summary', () => {
@@ -34,5 +35,11 @@ describe('family.json import contract', () => {
     const second = validateImportText(serializeFamilyData(first.data!))
     expect(second.errors).toEqual([])
     expect(second.data).toEqual(first.data)
+  })
+
+  it('does not treat an optional subject selection as a data warning', () => {
+    const data = createFamilyDataTemplate()
+    data.profiles[0].subjectPersonId = null
+    expect(validateFamilyData(data).warnings).toEqual([])
   })
 })

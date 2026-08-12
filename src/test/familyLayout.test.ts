@@ -4,7 +4,7 @@ import { createFamilyUnits } from '../graph/familyUnits'
 import { createFlowEdges, createFlowNodes, layoutFamilyTree, PERSON_HEIGHT, PERSON_WIDTH } from '../layout/familyLayout'
 import type { Person, Relationship } from '../types/family'
 
-const people: Person[] = Array.from({ length: 10 }, (_, index) => ({
+const people: Person[] = Array.from({ length: 11 }, (_, index) => ({
   id: `P${String(index + 1).padStart(4, '0')}`,
   name: `Thành viên ${index + 1}`,
   sortOrder: index + 1,
@@ -24,6 +24,8 @@ const relationships: Relationship[] = [
   { id: 'R0011', person1Id: 'P0006', person2Id: 'P0008', type: 'parent' },
   { id: 'R0012', person1Id: 'P0007', person2Id: 'P0009', type: 'spouse' },
   { id: 'R0013', person1Id: 'P0008', person2Id: 'P0010', type: 'spouse' },
+  { id: 'R0014', person1Id: 'P0001', person2Id: 'P0011', type: 'parent' },
+  { id: 'R0015', person1Id: 'P0002', person2Id: 'P0011', type: 'parent' },
 ]
 
 describe('family tree layout', () => {
@@ -43,5 +45,14 @@ describe('family tree layout', () => {
         expect(horizontalOverlap && verticalOverlap, `${a.id} overlaps ${b.id}`).toBe(false)
       }
     }
+
+    const byId = new Map(positioned.map((node) => [node.id, node]))
+    expect(byId.get('P0005')?.position.y).toBe(byId.get('P0011')?.position.y)
+    expect(byId.get('P0007')?.position.y).toBe(byId.get('P0008')?.position.y)
+
+    const firstParentsCenter = ((byId.get('P0001')?.position.x ?? 0) + (byId.get('P0002')?.position.x ?? 0)) / 2
+    const secondParentsCenter = ((byId.get('P0003')?.position.x ?? 0) + (byId.get('P0004')?.position.x ?? 0)) / 2
+    const spouseOrder = (byId.get('P0005')?.position.x ?? 0) - (byId.get('P0006')?.position.x ?? 0)
+    expect((firstParentsCenter - secondParentsCenter) * spouseOrder).toBeGreaterThanOrEqual(0)
   })
 })

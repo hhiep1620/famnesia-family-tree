@@ -7,10 +7,12 @@ import { createFamilyUnits } from '../../graph/familyUnits'
 import type { FamilyGraph } from '../../types/family'
 import type { FamilyEventType, KinshipResult } from '../../types/family'
 import { createFlowEdges, createFlowNodes, layoutFamilyTree, PERSON_HEIGHT, PERSON_WIDTH } from '../../layout/familyLayout'
+import { FamilyBranchEdge } from './FamilyBranchEdge'
 import { FamilyConnectorNode } from './FamilyConnectorNode'
 import { PersonNode } from './PersonNode'
 
 const nodeTypes: NodeTypes = { person: PersonNode, connector: FamilyConnectorNode }
+const edgeTypes = { familyBranch: FamilyBranchEdge }
 
 interface CanvasProps {
   graph: FamilyGraph
@@ -44,6 +46,16 @@ function FamilyTreeCanvas({ graph, workspaceId, selectedId, subjectId, kinships,
     void flow.setCenter(node.position.x + width / 2, node.position.y + height / 2, { zoom: 1.15, duration: 550 })
   }, [flow, nodes, selectedId])
 
+  useEffect(() => {
+    let frame = 0
+    const refit = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => { void flow.fitView({ padding: 0.18, maxZoom: 1.05, duration: 250 }) })
+    }
+    window.addEventListener('resize', refit)
+    return () => { window.removeEventListener('resize', refit); cancelAnimationFrame(frame) }
+  }, [flow])
+
   const handleNodeClick: NodeMouseHandler = (_, node) => {
     if (node.type === 'person') onSelect(node.id)
   }
@@ -52,6 +64,7 @@ function FamilyTreeCanvas({ graph, workspaceId, selectedId, subjectId, kinships,
     <ReactFlow
       nodes={selectedNodes}
       edges={edges}
+      edgeTypes={edgeTypes}
       nodeTypes={nodeTypes}
       onNodeClick={handleNodeClick}
       onPaneClick={() => onSelect(undefined)}

@@ -57,7 +57,6 @@ export function FamilyTreePage({ user, onSignOut }: Props) {
               </> : <FamilyCalendar persons={data.persons} onOpenPerson={setSelectedId} />
                 : <div className="center-state empty-state"><span className="seed-mark">+</span><span className="eyebrow">{data.activeProfile?.name}</span><h2>Gia đình này chưa có thành viên</h2><p>Thêm người đầu tiên hoặc import một family.json hoàn chỉnh.</p><div className="empty-actions"><button className="primary-button" onClick={() => setModal({ type: 'add' })}><Plus size={17} /> Thêm người đầu tiên</button><button className="secondary-button" onClick={openImport}>Import JSON</button></div></div>}
 
-      {view !== 'data' && data.issues.length > 0 && <div className="data-warning"><AlertTriangle size={16} /><span>Dữ liệu có {data.issues.length} cảnh báo. Xem chi tiết trong mục Dữ liệu.</span></div>}
       {data.error && data.familyData.updatedAt && <div className="toast error-toast">{data.error}</div>}{data.busy && <div className="toast busy-toast"><span className="mini-spinner" />{data.busy}</div>}
       {view === 'tree' && data.activeProfileId && canEdit && <button className="mobile-add" aria-label="Thêm người" onClick={() => setModal({ type: 'add' })}><Plus size={24} /></button>}
 

@@ -170,10 +170,6 @@ function issueText(issue: z.core.$ZodIssue): string {
 function collectWarnings(data: FamilyData): string[] {
   const warnings: string[] = []
   if (data.profiles.length === 0) warnings.push('Tệp chưa có gia đình nào. Bạn có thể tạo gia đình sau khi import.')
-  for (const profile of data.profiles) {
-    const members = data.persons.filter((person) => person.profileId === profile.id)
-    if (!profile.subjectPersonId && members.length > 0) warnings.push(`Gia đình '${profile.name}' chưa chọn chủ thể.`)
-  }
   for (const person of data.persons) {
     if (person.isDeceased && !person.deathDate && !person.deathLunar) warnings.push(`${person.name} được đánh dấu đã mất nhưng chưa có ngày mất hoặc ngày giỗ.`)
     if (!person.isDeceased && (person.deathDate || person.deathLunar)) warnings.push(`${person.name} có thông tin ngày mất nhưng chưa được đánh dấu đã mất.`)

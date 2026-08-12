@@ -9,6 +9,7 @@ export function PersonNode({ data, selected }: NodeProps<PersonFlowNode>) {
     <article className={`person-node ${selected ? 'is-selected' : ''} ${data.isDeceased ? 'is-deceased' : ''} ${data.isDimmed ? 'is-dimmed' : ''}`} aria-label={data.name}>
       <Handle id="family-top" type="target" position={Position.Top} className="family-handle" />
       <Handle id="spouse-left" type="target" position={Position.Left} className="family-handle" />
+      <Handle id="spouse-left-source" type="source" position={Position.Left} className="family-handle" />
       <div className="portrait-ring">
         {url ? <img src={url} alt="" /> : <span className={loading ? 'animate-pulse' : ''}>{getInitials(data.name)}</span>}
       </div>
@@ -18,6 +19,7 @@ export function PersonNode({ data, selected }: NodeProps<PersonFlowNode>) {
       {data.kinshipLabel && <div className={`kinship-tag ${data.isSubject ? 'is-subject' : ''}`}>{data.kinshipLabel}</div>}
       {data.eventType && <span className={`node-event-marker ${data.eventType}`} title={data.eventType === 'birthday' ? 'Sắp đến sinh nhật' : 'Sắp đến ngày giỗ'} />}
       <Handle id="spouse-right" type="source" position={Position.Right} className="family-handle" />
+      <Handle id="spouse-right-target" type="target" position={Position.Right} className="family-handle" />
       <Handle id="family-bottom" type="source" position={Position.Bottom} className="family-handle" />
     </article>
   )

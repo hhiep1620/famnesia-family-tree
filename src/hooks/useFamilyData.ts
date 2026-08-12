@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { sampleFamilyData } from '../data/sampleFamily'
 import { validateRelationship } from '../graph/familyValidation'
-import { requireValidFamilyData, validateFamilyData } from '../schema/familyDataSchema'
+import { requireValidFamilyData } from '../schema/familyDataSchema'
 import { ApiError } from '../services/apiClient'
 import { FamilyRepository, type FamilyDataRevision } from '../services/familyRepository'
 import { MutationGate } from '../services/mutationGate'
@@ -58,16 +58,13 @@ export function useFamilyData() {
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([])
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>()
   const [members, setMembers] = useState<WorkspaceMember[]>([])
-  const [issues, setIssues] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string>()
   const [error, setError] = useState<string>()
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
 
   const applySnapshot = useCallback((next: FamilyData, nextRevision?: FamilyDataRevision) => {
-    const validation = validateFamilyData(next)
     setFamilyData(next)
-    setIssues(validation.warnings)
     revision.current = nextRevision
     setActiveProfileIdState((current) => next.profiles.some((profile) => profile.id === current)
       ? current
@@ -437,7 +434,6 @@ export function useFamilyData() {
     workspaces,
     activeWorkspaceId,
     members,
-    issues,
     loading,
     busy,
     error,
@@ -464,7 +460,7 @@ export function useFamilyData() {
     removeMember,
   }), [
     activeProfile, activeProfileId, activeWorkspaceId, addMember, addPerson, addRelationship, backupNow, busy, createProfile,
-    deletePerson, deleteRelationship, error, familyData, issues, listBackups, loading, persons,
+    deletePerson, deleteRelationship, error, familyData, listBackups, loading, persons,
     refresh, relationships, replaceAllData, restoreBackup, saveStatus, setActiveProfileId,
     setSubject, switchWorkspace, updateMember, removeMember, refreshMembers, updatePerson, updateRelationship, useMockData, workspace, workspaces, members,
   ])
