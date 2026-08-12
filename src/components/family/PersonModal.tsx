@@ -1,5 +1,5 @@
 import { CalendarSync, Camera, Check, X } from 'lucide-react'
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { convertSolarToLunar } from '../../calendar/lunarCalendar'
 import { buildFamilyGraph } from '../../graph/familyGraph'
 import { getCurrentSpouses } from '../../graph/familySelectors'
@@ -41,6 +41,8 @@ export function PersonModal({ mode, persons, relationships, person, initialKind 
   const [relatedId, setRelatedId] = useState(mode === 'relative' ? person?.id ?? '' : '')
   const [extraParents, setExtraParents] = useState<string[]>(mode === 'relative' && initialKind === 'child' ? spouses.map((spouse) => spouse.id) : [])
   const [localError, setLocalError] = useState<string>()
+  const submittingRef = useRef(false)
+  const [submitting, setSubmitting] = useState(false)
 
   function calculateLunarDate() {
     const lunar = convertSolarToLunar(deathDate)
@@ -50,6 +52,7 @@ export function PersonModal({ mode, persons, relationships, person, initialKind 
 
   async function submit(event: FormEvent) {
     event.preventDefault()
+    if (submittingRef.current || busy) return
     if (!name.trim()) return setLocalError('Hãy nhập họ tên.')
     if ((lunarDay && !lunarMonth) || (!lunarDay && lunarMonth)) return setLocalError('Ngày và tháng âm lịch cần được nhập cùng nhau.')
     const draft: PersonDraft = {
@@ -63,6 +66,8 @@ export function PersonModal({ mode, persons, relationships, person, initialKind 
       sortOrder: sortOrder ? Number(sortOrder) : undefined, photo,
     }
     setLocalError(undefined)
+    submittingRef.current = true
+    setSubmitting(true)
     try {
       if (mode === 'edit') await onUpdate?.(draft, removePhoto)
       else {
@@ -71,7 +76,12 @@ export function PersonModal({ mode, persons, relationships, person, initialKind 
         await onCreate?.(draft, connection)
       }
       onClose()
-    } catch (caught) { setLocalError(caught instanceof Error ? caught.message : 'Không thể lưu thành viên này.') }
+    } catch (caught) {
+      setLocalError(caught instanceof Error ? caught.message : 'Không thể lưu thành viên này.')
+    } finally {
+      submittingRef.current = false
+      setSubmitting(false)
+    }
   }
 
   const title = mode === 'edit' ? 'Chỉnh sửa hồ sơ' : mode === 'relative' ? `Thêm người thân của ${person?.name}` : 'Thêm thành viên'
@@ -113,7 +123,7 @@ export function PersonModal({ mode, persons, relationships, person, initialKind 
           </div></fieldset>}
 
           {localError && <p className="form-error">{localError}</p>}
-          <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Hủy</button><button type="submit" className="primary-button" disabled={Boolean(busy)}>{busy ?? 'Lưu hồ sơ'}</button></div>
+          <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose} disabled={submitting}>Hủy</button><button type="submit" className="primary-button" disabled={submitting || Boolean(busy)}>{busy ?? (submitting ? 'Đang lưu hồ sơ…' : 'Lưu hồ sơ')}</button></div>
         </form>
       </section>
     </div>

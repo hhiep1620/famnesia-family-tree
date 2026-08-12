@@ -17,6 +17,7 @@ interface Props {
   relationships: Relationship[]
   workspaceId?: string
   readOnly?: boolean
+  busy?: boolean
   subjectId?: string
   kinship?: KinshipResult
   context?: 'tree' | 'calendar'
@@ -56,8 +57,8 @@ export function PersonDetails(props: Props) {
   return <aside className="person-details" aria-label={`Chi tiết ${person.name}`}>
     <div className="sheet-handle" /><button className="details-close icon-button" onClick={props.onClose} aria-label="Đóng chi tiết"><X size={18} /></button>
     <div className="details-identity"><div className={`details-portrait ${person.isDeceased ? 'is-deceased' : ''}`}>{url ? <img src={url} alt="" /> : <span>{getInitials(person.name)}</span>}</div><span className="eyebrow">{person.id}</span><h2>{person.name}</h2>{person.nickname && <p className="details-nickname">“{person.nickname}”</p>}{props.kinship && <span className={`details-kinship ${props.kinship.confidence}`}>{props.kinship.label}</span>}</div>
-    {!props.readOnly && <div className="details-actions"><button className="primary-button" onClick={props.onAddRelative}><Plus size={16} /> Thêm người thân</button><button className="secondary-button" onClick={props.onEdit}><Edit3 size={15} /> Sửa</button></div>}
-    <div className="context-actions">{props.subjectId === person.id ? <span className="current-subject"><UserRoundCheck size={15} /> Chủ thể hiện tại</span> : !props.readOnly && <button onClick={() => props.onSetSubject(person.id)}><UserRoundCheck size={15} /> Đặt làm tôi</button>}{props.context === 'calendar' ? <button onClick={() => props.onViewTree(person.id)}><Network size={15} /> Xem trên cây</button> : events.length > 0 && <button onClick={() => props.onViewCalendar(person.id)}><CalendarDays size={15} /> Xem lịch</button>}</div>
+    {!props.readOnly && <div className="details-actions"><button className="primary-button" disabled={props.busy} onClick={props.onAddRelative}><Plus size={16} /> Thêm người thân</button><button className="secondary-button" disabled={props.busy} onClick={props.onEdit}><Edit3 size={15} /> Sửa</button></div>}
+    <div className="context-actions">{props.subjectId === person.id ? <span className="current-subject"><UserRoundCheck size={15} /> Chủ thể hiện tại</span> : !props.readOnly && <button disabled={props.busy} onClick={() => props.onSetSubject(person.id)}><UserRoundCheck size={15} /> Đặt làm tôi</button>}{props.context === 'calendar' ? <button onClick={() => props.onViewTree(person.id)}><Network size={15} /> Xem trên cây</button> : events.length > 0 && <button onClick={() => props.onViewCalendar(person.id)}><CalendarDays size={15} /> Xem lịch</button>}</div>
 
     <section className="profile-facts"><span className="section-label">Hồ sơ</span><dl><div><dt>Giới tính</dt><dd>{genderLabels[person.gender ?? 'unknown']}</dd></div>{person.birthDate && <div><dt>Ngày sinh</dt><dd>{formatFamilyDate(person.birthDate)}{age !== undefined && ` · ${age} tuổi`}</dd></div>}{person.isDeceased && person.deathDate && <div><dt>Ngày mất</dt><dd>{formatFamilyDate(person.deathDate)}</dd></div>}{person.isDeceased && person.deathLunar && <div><dt>Ngày giỗ</dt><dd>{person.deathLunar.day}/{person.deathLunar.month} Âm lịch{person.deathLunar.leapMonth ? ' · tháng nhuận' : ''}</dd></div>}{person.ancestralRole === 'founding_ancestor' && <div><dt>Vai trò gia phả</dt><dd>Thủy tổ</dd></div>}</dl></section>
 
@@ -66,7 +67,7 @@ export function PersonDetails(props: Props) {
     {events.length > 0 && <section className="person-upcoming"><span className="section-label">Sự kiện sắp tới</span>{events.map((event) => <button key={event.id} onClick={() => props.onViewCalendar(person.id)}>{event.type === 'birthday' ? <CakeSlice size={15} /> : <Flower2 size={15} />}<span>{event.type === 'birthday' ? 'Sinh nhật' : `Giỗ ${event.lunarDate?.day}/${event.lunarDate?.month} Âm lịch`}</span><time>{formatFamilyDate(event.date)}</time></button>)}</section>}
 
     <div className="relationship-summary">{groups.map(([label, members]) => <section key={label}><span className="section-label">{label}</span>{members.length ? <div className="people-chips">{members.map((member) => <button key={member.id} onClick={() => props.onSelect(member.id)}>{member.name}{relationshipSuffix(member) && <small>{relationshipSuffix(member)}</small>}</button>)}</div> : <p>Chưa ghi nhận</p>}</section>)}</div>
-    {!props.readOnly && <ManageRelationships person={person} persons={persons} relationships={relationships} onAdd={props.onAddRelationship} onUpdate={props.onUpdateRelationship} onDelete={props.onDeleteRelationship} />}
-    {!props.readOnly && <div className="danger-zone"><button className="danger-button" disabled={references.length > 0} onClick={() => { if (window.confirm(`Xóa ${person.name}? Không thể hoàn tác.`)) void props.onDeletePerson() }}><Trash2 size={15} /> Xóa thành viên</button>{references.length > 0 && <p>Người này có {parentCount} quan hệ cha/mẹ, {spouseCount} quan hệ bạn đời và {childCount} quan hệ với con. Hãy gỡ hoặc chuyển các quan hệ trước khi xóa.</p>}</div>}
+    {!props.readOnly && <ManageRelationships person={person} persons={persons} relationships={relationships} onAdd={props.onAddRelationship} onUpdate={props.onUpdateRelationship} onDelete={props.onDeleteRelationship} busy={props.busy} />}
+    {!props.readOnly && <div className="danger-zone"><button className="danger-button" disabled={props.busy || references.length > 0} onClick={() => { if (window.confirm(`Xóa ${person.name}? Không thể hoàn tác.`)) void props.onDeletePerson() }}><Trash2 size={15} /> Xóa thành viên</button>{references.length > 0 && <p>Người này có {parentCount} quan hệ cha/mẹ, {spouseCount} quan hệ bạn đời và {childCount} quan hệ với con. Hãy gỡ hoặc chuyển các quan hệ trước khi xóa.</p>}</div>}
   </aside>
 }

@@ -10,22 +10,23 @@ interface Props {
   onAdd: (input: Omit<Relationship, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
   onUpdate: (relationship: Relationship) => Promise<void>
   onDelete: (id: string) => Promise<void>
+  busy?: boolean
 }
 
-interface RelationshipEditorProps { relationship: Relationship; otherName: string; onUpdate: Props['onUpdate']; onDelete: Props['onDelete'] }
+interface RelationshipEditorProps { relationship: Relationship; otherName: string; onUpdate: Props['onUpdate']; onDelete: Props['onDelete']; busy?: boolean }
 
-function RelationshipEditor({ relationship, otherName, onUpdate, onDelete }: RelationshipEditorProps) {
+function RelationshipEditor({ relationship, otherName, onUpdate, onDelete, busy }: RelationshipEditorProps) {
   const [status, setStatus] = useState<SpouseStatus>(relationship.status ?? 'unknown')
   const [startDate, setStartDate] = useState(relationship.startDate ?? '')
   const [endDate, setEndDate] = useState(relationship.endDate ?? '')
   const spouse = relationship.type === 'spouse'
   return <div className={`relationship-record ${spouse ? `status-${status}` : ''}`}>
-    <div className="relationship-row"><span>{otherName}</span>{spouse && <span className="relationship-status">{SPOUSE_STATUS_LABELS[relationship.status ?? 'unknown']}</span>}<button type="button" aria-label={`Xóa quan hệ với ${otherName}`} onClick={() => { if (window.confirm('Xóa mối quan hệ này? Không ai bị xóa khỏi gia phả.')) void onDelete(relationship.id) }}><Trash2 size={14} /></button></div>
-    {spouse && <details className="relationship-edit"><summary>Chỉnh trạng thái hôn phối</summary><div className="relationship-edit-grid"><label>Trạng thái<select value={status} onChange={(event) => setStatus(event.target.value as SpouseStatus)}>{Object.entries(SPOUSE_STATUS_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label>Bắt đầu<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label><label>Kết thúc<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></label><button type="button" className="mini-save" onClick={() => void onUpdate({ ...relationship, status, startDate: startDate || undefined, endDate: endDate || undefined })}><Save size={13} /> Lưu</button></div></details>}
+    <div className="relationship-row"><span>{otherName}</span>{spouse && <span className="relationship-status">{SPOUSE_STATUS_LABELS[relationship.status ?? 'unknown']}</span>}<button type="button" disabled={busy} aria-label={`Xóa quan hệ với ${otherName}`} onClick={() => { if (window.confirm('Xóa mối quan hệ này? Không ai bị xóa khỏi gia phả.')) void onDelete(relationship.id) }}><Trash2 size={14} /></button></div>
+    {spouse && <details className="relationship-edit"><summary>Chỉnh trạng thái hôn phối</summary><div className="relationship-edit-grid"><label>Trạng thái<select disabled={busy} value={status} onChange={(event) => setStatus(event.target.value as SpouseStatus)}>{Object.entries(SPOUSE_STATUS_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label>Bắt đầu<input disabled={busy} type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label><label>Kết thúc<input disabled={busy} type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></label><button type="button" className="mini-save" disabled={busy} onClick={() => void onUpdate({ ...relationship, status, startDate: startDate || undefined, endDate: endDate || undefined })}><Save size={13} /> Lưu</button></div></details>}
   </div>
 }
 
-export function ManageRelationships({ person, persons, relationships, onAdd, onUpdate, onDelete }: Props) {
+export function ManageRelationships({ person, persons, relationships, onAdd, onUpdate, onDelete, busy }: Props) {
   const [kind, setKind] = useState<FriendlyRelationship>('parent')
   const [otherId, setOtherId] = useState('')
   const [status, setStatus] = useState<SpouseStatus>('unknown')
@@ -48,7 +49,7 @@ export function ManageRelationships({ person, persons, relationships, onAdd, onU
 
   return <div className="relationship-manager">
     <span className="section-label">Quản lý quan hệ</span>
-    {Object.entries(groups).map(([label, items]) => <div className="relationship-group" key={label}><h4>{label}</h4>{items.length ? items.map((relationship) => <RelationshipEditor key={relationship.id} relationship={relationship} otherName={otherPerson(relationship)?.name ?? 'Không tìm thấy'} onUpdate={onUpdate} onDelete={onDelete} />) : <p>Chưa ghi nhận</p>}</div>)}
-    <form className="add-relationship" onSubmit={add}><div><Link2 size={16} /><strong>Thêm người đã có</strong></div><select value={kind} onChange={(event) => setKind(event.target.value as FriendlyRelationship)}><option value="parent">làm cha/mẹ</option><option value="spouse">làm bạn đời</option><option value="child">làm con</option></select>{kind === 'spouse' && <select value={status} onChange={(event) => setStatus(event.target.value as SpouseStatus)}>{Object.entries(SPOUSE_STATUS_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select>}<select required value={otherId} onChange={(event) => setOtherId(event.target.value)}><option value="">Chọn thành viên</option>{persons.filter((candidate) => candidate.id !== person.id).map((candidate) => <option value={candidate.id} key={candidate.id}>{candidate.name}</option>)}</select><button className="secondary-button" type="submit">Thêm quan hệ</button>{error && <p className="form-error">{error}</p>}</form>
+    {Object.entries(groups).map(([label, items]) => <div className="relationship-group" key={label}><h4>{label}</h4>{items.length ? items.map((relationship) => <RelationshipEditor key={relationship.id} relationship={relationship} otherName={otherPerson(relationship)?.name ?? 'Không tìm thấy'} onUpdate={onUpdate} onDelete={onDelete} busy={busy} />) : <p>Chưa ghi nhận</p>}</div>)}
+    <form className="add-relationship" onSubmit={add}><div><Link2 size={16} /><strong>Thêm người đã có</strong></div><select disabled={busy} value={kind} onChange={(event) => setKind(event.target.value as FriendlyRelationship)}><option value="parent">làm cha/mẹ</option><option value="spouse">làm bạn đời</option><option value="child">làm con</option></select>{kind === 'spouse' && <select disabled={busy} value={status} onChange={(event) => setStatus(event.target.value as SpouseStatus)}>{Object.entries(SPOUSE_STATUS_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select>}<select disabled={busy} required value={otherId} onChange={(event) => setOtherId(event.target.value)}><option value="">Chọn thành viên</option>{persons.filter((candidate) => candidate.id !== person.id).map((candidate) => <option value={candidate.id} key={candidate.id}>{candidate.name}</option>)}</select><button className="secondary-button" type="submit" disabled={busy}>Thêm quan hệ</button>{error && <p className="form-error">{error}</p>}</form>
   </div>
 }

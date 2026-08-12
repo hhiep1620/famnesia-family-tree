@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { sampleFamilyData } from '../data/sampleFamily'
 import { validateRelationship } from '../graph/familyValidation'
 import { requireValidFamilyData, validateFamilyData } from '../schema/familyDataSchema'
+import { ApiError } from '../services/apiClient'
 import { FamilyRepository, type FamilyDataRevision } from '../services/familyRepository'
+import { MutationGate } from '../services/mutationGate'
 import type {
   FamilyBackup,
   FamilyData,
@@ -43,6 +45,7 @@ export function useFamilyData() {
   const useMockData = import.meta.env.DEV && import.meta.env.VITE_USE_MOCK_DATA === 'true'
   const repository = useRef<FamilyRepository | undefined>(undefined)
   const revision = useRef<FamilyDataRevision | undefined>(undefined)
+  const mutationGate = useRef(new MutationGate())
   const mockData = useRef<FamilyData>(cloneData(sampleFamilyData))
   const mockBackups = useRef<MockBackup[]>([])
   const [familyData, setFamilyData] = useState<FamilyData>(() => ({
@@ -100,33 +103,58 @@ export function useFamilyData() {
     void refresh()
   }, [activeWorkspaceId, refresh])
 
-  const persist = useCallback(async (label: string, next: FamilyData): Promise<FamilyData> => {
-    const valid = requireValidFamilyData(next)
-    setBusy(label)
-    setError(undefined)
-    setSaveStatus('saving')
-    try {
-      if (useMockData) {
-        const saved = requireValidFamilyData({ ...valid, updatedAt: new Date().toISOString() })
-        mockData.current = cloneData(saved)
-        applySnapshot(saved)
-        return saved
+  const runMutation = useCallback(async <T,>(label: string, action: () => Promise<T>): Promise<T> => {
+    return mutationGate.current.run(async () => {
+      setBusy(label)
+      setError(undefined)
+      setSaveStatus('saving')
+      try {
+        return await action()
+      } catch (caught) {
+        console.error(caught)
+        let message = caught instanceof Error ? caught.message : 'Không thể lưu thay đổi.'
+        let errorToThrow: unknown = caught
+        let conflictSynced = false
+        if (caught instanceof ApiError && caught.code === 'FAMILY_DATA_CONFLICT' && repository.current) {
+          try {
+            const latest = await repository.current.load()
+            applySnapshot(latest.data, latest.revision)
+            message = 'Famnesia đã đồng bộ dữ liệu mới nhất. Thay đổi vừa nhập chưa được lưu; hãy thực hiện lại thao tác.'
+            errorToThrow = new Error(message)
+            conflictSynced = true
+          } catch (syncError) {
+            console.error(syncError)
+            message = 'Dữ liệu đã thay đổi nhưng Famnesia chưa thể đồng bộ lại. Hãy thử nút Làm mới.'
+            errorToThrow = new Error(message)
+          }
+        }
+        setError(message)
+        if (!conflictSynced) setSaveStatus('failed')
+        throw errorToThrow
+      } finally {
+        setBusy(undefined)
       }
-      if (!repository.current) throw new Error('Workspace Google Drive chưa sẵn sàng.')
-      if (!repository.current.workspace.canEdit) throw new Error('Bạn chỉ có quyền xem workspace này.')
-      const snapshot = await repository.current.save(valid, revision.current)
-      applySnapshot(snapshot.data, snapshot.revision)
-      return snapshot.data
-    } catch (caught) {
-      console.error(caught)
-      const message = caught instanceof Error ? caught.message : 'Không thể lưu thay đổi.'
-      setError(message)
-      setSaveStatus('failed')
-      throw caught
-    } finally {
-      setBusy(undefined)
+    })
+  }, [applySnapshot])
+
+  const saveData = useCallback(async (next: FamilyData): Promise<FamilyData> => {
+    const valid = requireValidFamilyData(next)
+    if (useMockData) {
+      const saved = requireValidFamilyData({ ...valid, updatedAt: new Date().toISOString() })
+      mockData.current = cloneData(saved)
+      applySnapshot(saved)
+      return saved
     }
+    if (!repository.current) throw new Error('Workspace Google Drive chưa sẵn sàng.')
+    if (!repository.current.workspace.canEdit) throw new Error('Bạn chỉ có quyền xem workspace này.')
+    const snapshot = await repository.current.save(valid, revision.current)
+    applySnapshot(snapshot.data, snapshot.revision)
+    return snapshot.data
   }, [applySnapshot, useMockData])
+
+  const persist = useCallback((label: string, next: FamilyData): Promise<FamilyData> => (
+    runMutation(label, () => saveData(next))
+  ), [runMutation, saveData])
 
   const activeProfile = familyData.profiles.find((profile) => profile.id === activeProfileId)
   const persons = useMemo(() => familyData.persons.filter((person) => person.profileId === activeProfileId), [activeProfileId, familyData.persons])
@@ -157,7 +185,7 @@ export function useFamilyData() {
     })
   }, [activeProfile, familyData, persist, persons])
 
-  const addPerson = useCallback(async (draft: PersonDraft, connection?: NewPersonConnection) => {
+  const addPerson = useCallback(async (draft: PersonDraft, connection?: NewPersonConnection) => runMutation('Đang lưu thành viên…', async () => {
     if (!activeProfile) throw new Error('Hãy tạo hoặc chọn một gia đình trước.')
     let uploadedPhotoId: string | undefined
     try {
@@ -206,7 +234,7 @@ export function useFamilyData() {
         if (validation) throw new Error(validation)
         pending.push(relationship)
       }
-      await persist('Đang lưu thành viên…', {
+      await saveData({
         ...familyData,
         persons: [...familyData.persons, created],
         relationships: [...familyData.relationships, ...pending],
@@ -216,9 +244,9 @@ export function useFamilyData() {
       if (uploadedPhotoId && !useMockData) await repository.current?.deletePhoto(uploadedPhotoId).catch(console.error)
       throw caught
     }
-  }, [activeProfile, familyData, persist, persons, relationships, useMockData, workspace])
+  }), [activeProfile, familyData, persons, relationships, runMutation, saveData, useMockData, workspace])
 
-  const updatePerson = useCallback(async (id: string, draft: PersonDraft, removePhoto = false) => {
+  const updatePerson = useCallback(async (id: string, draft: PersonDraft, removePhoto = false) => runMutation('Đang cập nhật thành viên…', async () => {
     const current = familyData.persons.find((person) => person.id === id)
     if (!current) throw new Error('Thành viên này không còn tồn tại.')
     let uploadedPhotoId: string | undefined
@@ -244,7 +272,7 @@ export function useFamilyData() {
         photoFileId: uploadedPhotoId ?? (removePhoto ? null : current.photoFileId ?? null),
         updatedAt: new Date().toISOString(),
       }
-      await persist('Đang cập nhật thành viên…', {
+      await saveData({
         ...familyData,
         persons: familyData.persons.map((person) => person.id === id ? updated : person),
       })
@@ -255,7 +283,7 @@ export function useFamilyData() {
       if (uploadedPhotoId && !useMockData) await repository.current?.deletePhoto(uploadedPhotoId).catch(console.error)
       throw caught
     }
-  }, [familyData, persist, useMockData, workspace])
+  }), [familyData, runMutation, saveData, useMockData, workspace])
 
   const addRelationship = useCallback(async (input: Omit<Relationship, 'id' | 'createdAt' | 'updatedAt'>) => {
     if (!activeProfile) throw new Error('Hãy chọn gia đình trước.')
@@ -337,10 +365,7 @@ export function useFamilyData() {
 
   const replaceAllData = useCallback(async (replacement: FamilyData, reason = 'manual-import') => {
     const valid = requireValidFamilyData(replacement)
-    setBusy(reason === 'restore' ? 'Đang khôi phục dữ liệu…' : 'Đang import dữ liệu…')
-    setError(undefined)
-    setSaveStatus('saving')
-    try {
+    await runMutation(reason === 'restore' ? 'Đang khôi phục dữ liệu…' : 'Đang import dữ liệu…', async () => {
       if (useMockData) {
         const backup: MockBackup = { id: `mock-${Date.now()}`, name: `famnesia_before_${reason}.json`, createdTime: new Date().toISOString(), reason, data: cloneData(familyData) }
         mockBackups.current.unshift(backup)
@@ -352,16 +377,8 @@ export function useFamilyData() {
         const snapshot = await repository.current.save(valid, revision.current, reason === 'restore' ? 'restore' : 'replace')
         applySnapshot(snapshot.data, snapshot.revision)
       }
-    } catch (caught) {
-      console.error(caught)
-      const message = caught instanceof Error ? caught.message : 'Không thể thay thế dữ liệu.'
-      setError(message)
-      setSaveStatus('failed')
-      throw caught
-    } finally {
-      setBusy(undefined)
-    }
-  }, [applySnapshot, familyData, useMockData])
+    })
+  }, [applySnapshot, familyData, runMutation, useMockData])
 
   const restoreBackup = useCallback(async (backupId: string) => {
     let data: FamilyData | undefined
