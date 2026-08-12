@@ -1,6 +1,5 @@
-export function formatGenerationLabel(generation: number): string {
-  if (generation === 0) return 'ĐỜI 0'
-  return `ĐỜI ${generation > 0 ? '+' : ''}${generation}`
+export function formatGenerationLabel(ordinal: number): string {
+  return `ĐỜI ${Math.max(1, Math.trunc(ordinal))}`
 }
 
 export function describeGeneration(generation: number): string {

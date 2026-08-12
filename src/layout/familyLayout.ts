@@ -19,7 +19,9 @@ export interface PersonNodeData extends Record<string, unknown> {
   photoFileId?: string
   workspaceId?: string
   hiddenBranchCount?: number
+  isBranchExpanded?: boolean
   onExpandBranch?: (personId: string) => void
+  onCollapseBranch?: (personId: string) => void
 }
 
 export type PersonFlowNode = Node<PersonNodeData, 'person'>
@@ -83,7 +85,9 @@ export function createFlowNodes(
     filterActive?: boolean
     primaryPhotoIds?: Map<string, string>
     hiddenCounts?: Map<string, number>
+    expandedPersonIds?: Set<string>
     onExpandBranch?: (personId: string) => void
+    onCollapseBranch?: (personId: string) => void
   },
 ): Array<PersonFlowNode | ConnectorFlowNode> {
   const nodes: Array<PersonFlowNode | ConnectorFlowNode> = [...graph.personsById.values()].map((person) => ({
@@ -103,7 +107,9 @@ export function createFlowNodes(
       photoFileId: options?.primaryPhotoIds?.get(person.id),
       workspaceId,
       hiddenBranchCount: options?.hiddenCounts?.get(person.id),
+      isBranchExpanded: options?.expandedPersonIds?.has(person.id),
       onExpandBranch: options?.onExpandBranch,
+      onCollapseBranch: options?.onCollapseBranch,
     },
   }))
   nodes.push(...units.filter((unit) => unit.childIds.length > 0).map((unit) => ({
@@ -120,6 +126,7 @@ export function createFlowNodes(
 export function addGenerationBands(
   nodes: Array<PersonFlowNode | ConnectorFlowNode>,
   generations: Map<string, number>,
+  generationOrdinals: Map<string, number>,
 ): Array<PersonFlowNode | ConnectorFlowNode | GenerationBandFlowNode> {
   const people = nodes.filter((node): node is PersonFlowNode => node.type === 'person')
   const rows = new Map<number, PersonFlowNode[]>()
@@ -136,7 +143,7 @@ export function addGenerationBands(
       id: `generation:${generation}`,
       type: 'generationBand',
       position: { x: minX, y },
-      data: { label: formatGenerationLabel(generation), description: describeGeneration(generation) },
+      data: { label: formatGenerationLabel(generationOrdinals.get(members[0].id) ?? 1), description: describeGeneration(generation) },
       style: { width: maxX - minX, height: PERSON_HEIGHT + 108 },
       selectable: false,
       focusable: false,

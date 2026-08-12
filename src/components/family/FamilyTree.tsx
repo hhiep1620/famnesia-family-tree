@@ -1,10 +1,10 @@
-import { ChevronsDownUp, ChevronsUpDown, CornerUpLeft, LocateFixed } from 'lucide-react'
+import { ChevronsDownUp, ChevronsUpDown, CornerUpLeft, LocateFixed, Minus, Plus, SlidersHorizontal, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Background, Controls, Panel, ReactFlow, ReactFlowProvider, useReactFlow,
   type NodeMouseHandler, type NodeTypes,
 } from '@xyflow/react'
-import { calculateAllGenerations } from '../../generation/generationEngine'
+import { calculateAllGenerations, calculateGenerationOrdinals } from '../../generation/generationEngine'
 import { createFamilyUnits } from '../../graph/familyUnits'
 import { createBranchVisibleGraph, type CollateralVisibility } from '../../lineage/branchVisibility'
 import { createPrimaryMediaMap } from '../../media/mediaSelectors'
@@ -18,6 +18,7 @@ import { PersonNode } from './PersonNode'
 const nodeTypes: NodeTypes = { person: PersonNode, connector: FamilyConnectorNode, generationBand: GenerationBandNode }
 const edgeTypes = { familyBranch: FamilyBranchEdge }
 const ALL_DEPTH = 99
+const DEPTH_LEVELS = [1, 2, 3, ALL_DEPTH]
 
 interface CanvasProps {
   graph: FamilyGraph
@@ -36,27 +37,72 @@ interface CanvasProps {
   onSelect: (personId?: string) => void
 }
 
-function DepthSelect({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
-  return <label><span>{label}</span><select value={value} onChange={(event) => onChange(Number(event.target.value))} aria-label={label}><option value={1}>1 đời</option><option value={2}>2 đời</option><option value={3}>3 đời</option><option value={ALL_DEPTH}>Tất cả</option></select></label>
+function depthLabel(value: number): string {
+  return value === ALL_DEPTH ? 'Tất cả' : `${value} đời`
+}
+
+function DepthStepper({ label, help, value, onChange }: { label: string; help: string; value: number; onChange: (value: number) => void }) {
+  const index = DEPTH_LEVELS.indexOf(value)
+  return <div className="tree-depth-setting">
+    <div><strong>{label}</strong><small>{help}</small></div>
+    <div className="tree-depth-stepper">
+      <button type="button" disabled={index <= 0} onClick={() => onChange(DEPTH_LEVELS[index - 1])} aria-label={`Giảm phạm vi ${label.toLocaleLowerCase('vi')}`}><Minus size={14} /></button>
+      <output aria-live="polite">{depthLabel(value)}</output>
+      <button type="button" disabled={index >= DEPTH_LEVELS.length - 1} onClick={() => onChange(DEPTH_LEVELS[index + 1])} aria-label={`Tăng phạm vi ${label.toLocaleLowerCase('vi')}`}><Plus size={14} /></button>
+    </div>
+  </div>
+}
+
+function ScopeLauncher({ ancestorDepth, descendantDepth, collateral, onOpen }: { ancestorDepth: number; descendantDepth: number; collateral: CollateralVisibility; onOpen: () => void }) {
+  const collateralLabel = collateral === 'immediate' ? 'Gần' : collateral === 'extended' ? 'Mở rộng' : 'Tất cả'
+  return <button className="tree-scope-launcher" type="button" onClick={onOpen} aria-label="Mở điều khiển phạm vi cây" aria-expanded="false">
+    <SlidersHorizontal size={15} />
+    <span><strong>Phạm vi cây</strong><small>Trên {depthLabel(ancestorDepth)} · Dưới {depthLabel(descendantDepth)} · Nhánh {collateralLabel}</small></span>
+  </button>
 }
 
 function FamilyTreeCanvas({ graph, workspaceId, selectedId, subjectId, subjectName, kinships, highlightedIds, eventTypes, filterActive, media = [], canGoBack, onBack, onOpenBranch, onSelect }: CanvasProps) {
   const flow = useReactFlow()
+  const [flowReady, setFlowReady] = useState(false)
   const [ancestorDepth, setAncestorDepth] = useState(() => window.innerWidth <= 760 ? 1 : 2)
   const [descendantDepth, setDescendantDepth] = useState(1)
   const [collateral, setCollateral] = useState<CollateralVisibility>('immediate')
   const [expandedPersonIds, setExpandedPersonIds] = useState<Set<string>>(new Set())
-  const visible = useMemo(() => createBranchVisibleGraph(graph, subjectId, { ancestorDepth, descendantDepth, collateral, expandedPersonIds }), [ancestorDepth, collateral, descendantDepth, expandedPersonIds, graph, subjectId])
+  const [collapsedPersonIds, setCollapsedPersonIds] = useState<Set<string>>(new Set())
+  const [revealAllBranches, setRevealAllBranches] = useState(false)
+  const [scopeOpen, setScopeOpen] = useState(false)
+
+  const visible = useMemo(() => createBranchVisibleGraph(graph, subjectId, {
+    ancestorDepth, descendantDepth, collateral, expandedPersonIds, collapsedPersonIds, revealAllBranches,
+  }), [ancestorDepth, collapsedPersonIds, collateral, descendantDepth, expandedPersonIds, graph, revealAllBranches, subjectId])
   const units = useMemo(() => createFamilyUnits(visible.graph), [visible.graph])
   const primaryPhotoIds = useMemo(() => new Map([...createPrimaryMediaMap(media)].map(([personId, item]) => [personId, item.driveFileId])), [media])
   const generations = useMemo(() => subjectId ? calculateAllGenerations(subjectId, graph) : new Map<string, number>(), [graph, subjectId])
-  const expandBranch = useCallback((personId: string) => setExpandedPersonIds((current) => new Set(current).add(personId)), [])
+  const generationOrdinals = useMemo(() => calculateGenerationOrdinals(generations), [generations])
+  const branchExpandedIds = useMemo(() => {
+    if (!revealAllBranches) return expandedPersonIds
+    return new Set([...visible.graph.personsById.keys()].filter((personId) => !collapsedPersonIds.has(personId)))
+  }, [collapsedPersonIds, expandedPersonIds, revealAllBranches, visible.graph.personsById])
+
+  const expandBranch = useCallback((personId: string) => {
+    setCollapsedPersonIds((current) => { const next = new Set(current); next.delete(personId); return next })
+    setExpandedPersonIds((current) => new Set(current).add(personId))
+  }, [])
+  const collapseBranch = useCallback((personId: string) => {
+    setExpandedPersonIds((current) => { const next = new Set(current); next.delete(personId); return next })
+    setCollapsedPersonIds((current) => new Set(current).add(personId))
+  }, [])
+
   const { nodes, edges } = useMemo(() => {
-    const nextNodes = createFlowNodes(visible.graph, units, workspaceId, { subjectId, kinships, highlightedIds, eventTypes, filterActive, primaryPhotoIds, hiddenCounts: visible.hiddenCounts, onExpandBranch: expandBranch })
+    const nextNodes = createFlowNodes(visible.graph, units, workspaceId, {
+      subjectId, kinships, highlightedIds, eventTypes, filterActive, primaryPhotoIds,
+      hiddenCounts: visible.hiddenCounts, expandedPersonIds: branchExpandedIds,
+      onExpandBranch: expandBranch, onCollapseBranch: collapseBranch,
+    })
     const nextEdges = createFlowEdges(visible.graph, units)
     const positioned = layoutFamilyTree(nextNodes, nextEdges, units, { graph, subjectId, kinships })
-    return { nodes: addGenerationBands(positioned, generations), edges: nextEdges }
-  }, [workspaceId, eventTypes, expandBranch, filterActive, generations, graph, highlightedIds, kinships, primaryPhotoIds, subjectId, units, visible.graph, visible.hiddenCounts])
+    return { nodes: addGenerationBands(positioned, generations, generationOrdinals), edges: nextEdges }
+  }, [workspaceId, branchExpandedIds, collapseBranch, eventTypes, expandBranch, filterActive, generationOrdinals, generations, graph, highlightedIds, kinships, primaryPhotoIds, subjectId, units, visible.graph, visible.hiddenCounts])
 
   const selectedNodes = useMemo(() => nodes.map((node) => ({ ...node, selected: node.type === 'person' && node.id === selectedId })), [nodes, selectedId])
 
@@ -74,20 +120,26 @@ function FamilyTreeCanvas({ graph, workspaceId, selectedId, subjectId, subjectNa
     setDescendantDepth(1)
     setCollateral('immediate')
     setExpandedPersonIds(new Set())
+    setCollapsedPersonIds(new Set())
+    setRevealAllBranches(false)
+    setScopeOpen(false)
   }, [subjectId])
 
   useEffect(() => {
-    if (selectedId || !subjectId) return
-    const frame = requestAnimationFrame(() => centerSubject(400))
-    return () => cancelAnimationFrame(frame)
-  }, [ancestorDepth, centerSubject, collateral, descendantDepth, expandedPersonIds, selectedId, subjectId])
+    if (selectedId || !subjectId || !flowReady) return
+    let secondFrame = 0
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => centerSubject(400))
+    })
+    return () => { cancelAnimationFrame(firstFrame); cancelAnimationFrame(secondFrame) }
+  }, [ancestorDepth, centerSubject, collapsedPersonIds, collateral, descendantDepth, expandedPersonIds, flowReady, revealAllBranches, selectedId, subjectId])
 
   useEffect(() => {
-    if (!selectedId) return
+    if (!selectedId || !flowReady) return
     const node = nodes.find((candidate) => candidate.type === 'person' && candidate.id === selectedId)
     if (!node) return
     void flow.setCenter(node.position.x + PERSON_WIDTH / 2, node.position.y + PERSON_HEIGHT / 2, { zoom: 1.1, duration: 500 })
-  }, [flow, nodes, selectedId])
+  }, [flow, flowReady, nodes, selectedId])
 
   useEffect(() => {
     let frame = 0
@@ -96,13 +148,21 @@ function FamilyTreeCanvas({ graph, workspaceId, selectedId, subjectId, subjectNa
     return () => { window.removeEventListener('resize', refit); cancelAnimationFrame(frame) }
   }, [centerSubject])
 
-  const handleNodeClick: NodeMouseHandler = (_, node) => { if (node.type === 'person') onSelect(node.id) }
-  const handleNodeDoubleClick: NodeMouseHandler = (_, node) => { if (node.type === 'person') onOpenBranch?.(node.id) }
-  const collapseAll = () => { setAncestorDepth(1); setDescendantDepth(1); setCollateral('immediate'); setExpandedPersonIds(new Set()) }
+  const changeAncestorDepth = (value: number) => { setRevealAllBranches(false); setAncestorDepth(value) }
+  const changeDescendantDepth = (value: number) => { setRevealAllBranches(false); setDescendantDepth(value) }
+  const changeCollateral = (value: CollateralVisibility) => { setRevealAllBranches(false); setCollateral(value) }
+  const collapseAll = () => {
+    setAncestorDepth(1); setDescendantDepth(1); setCollateral('immediate')
+    setExpandedPersonIds(new Set()); setCollapsedPersonIds(new Set()); setRevealAllBranches(false); setScopeOpen(false)
+  }
   const expandAll = () => {
     if (graph.personsById.size > 500 && !window.confirm(`Gia phả có ${graph.personsById.size.toLocaleString('vi-VN')} người. Mở toàn bộ có thể làm trình duyệt chậm. Tiếp tục?`)) return
-    setAncestorDepth(ALL_DEPTH); setDescendantDepth(ALL_DEPTH); setCollateral('all'); setExpandedPersonIds(new Set())
+    setAncestorDepth(ALL_DEPTH); setDescendantDepth(ALL_DEPTH); setCollateral('all')
+    setExpandedPersonIds(new Set()); setCollapsedPersonIds(new Set()); setRevealAllBranches(true); setScopeOpen(false)
   }
+
+  const handleNodeClick: NodeMouseHandler = (_, node) => { if (node.type === 'person') onSelect(node.id) }
+  const handleNodeDoubleClick: NodeMouseHandler = (_, node) => { if (node.type === 'person') onOpenBranch?.(node.id) }
 
   return <ReactFlow
     nodes={selectedNodes}
@@ -112,6 +172,7 @@ function FamilyTreeCanvas({ graph, workspaceId, selectedId, subjectId, subjectNa
     onNodeClick={handleNodeClick}
     onNodeDoubleClick={handleNodeDoubleClick}
     onPaneClick={() => onSelect(undefined)}
+    onInit={() => setFlowReady(true)}
     minZoom={0.2}
     maxZoom={1.8}
     proOptions={{ hideAttribution: true }}
@@ -122,15 +183,22 @@ function FamilyTreeCanvas({ graph, workspaceId, selectedId, subjectId, subjectNa
   >
     <Background color="#d8d5cb" gap={28} size={1} />
     <Controls position="bottom-left" showInteractive={false} />
-    {subjectId && <Panel position="top-left" className="tree-branch-guide" aria-label="Hướng các nhánh gia đình">{canGoBack && <button type="button" onClick={onBack} aria-label="Quay lại chủ thể trước"><CornerUpLeft size={14} /></button>}<span>← Họ nội</span><strong>{subjectName ?? 'Chủ thể'}</strong><span>Họ ngoại →</span></Panel>}
-    {subjectId && <Panel position="bottom-center" className="tree-visibility-controls">
-      <DepthSelect label="Tổ tiên" value={ancestorDepth} onChange={setAncestorDepth} />
-      <DepthSelect label="Hậu duệ" value={descendantDepth} onChange={setDescendantDepth} />
-      <label><span>Nhánh ngang</span><select value={collateral} onChange={(event) => setCollateral(event.target.value as CollateralVisibility)} aria-label="Nhánh ngang"><option value="immediate">Gần</option><option value="extended">Mở rộng</option><option value="all">Tất cả</option></select></label>
-      <button type="button" onClick={collapseAll} title="Thu gọn tất cả"><ChevronsDownUp size={15} /></button>
-      <button type="button" onClick={expandAll} title="Mở rộng tất cả"><ChevronsUpDown size={15} /></button>
-      <button type="button" onClick={() => centerSubject()} title="Đưa chủ thể về giữa"><LocateFixed size={15} /></button>
-    </Panel>}
+    {subjectId ? <Panel position="top-left" className="tree-branch-guide" aria-label="Hướng các nhánh gia đình">{canGoBack ? <button type="button" onClick={onBack} aria-label="Quay lại chủ thể trước"><CornerUpLeft size={14} /></button> : null}<span>← Họ nội</span><strong>{subjectName ?? 'Chủ thể'}</strong><span>Họ ngoại →</span></Panel> : null}
+    {subjectId ? <Panel position="bottom-center" className={scopeOpen ? 'tree-scope-panel' : 'tree-scope-panel is-closed'}>
+      {!scopeOpen ? <ScopeLauncher ancestorDepth={ancestorDepth} descendantDepth={descendantDepth} collateral={collateral} onOpen={() => setScopeOpen(true)} /> : <section className="tree-scope-controls" aria-label="Điều khiển phạm vi cây">
+        <header><div><strong>Phạm vi hiển thị</strong><small>Chọn số đời và mức mở của các nhánh bên.</small></div><button type="button" onClick={() => setScopeOpen(false)} aria-label="Đóng điều khiển phạm vi"><X size={16} /></button></header>
+        <div className="tree-scope-body">
+          <DepthStepper label="Tổ tiên phía trên" help="Cha mẹ, ông bà, cụ…" value={ancestorDepth} onChange={changeAncestorDepth} />
+          <DepthStepper label="Hậu duệ phía dưới" help="Con, cháu, chắt…" value={descendantDepth} onChange={changeDescendantDepth} />
+          <div className="tree-collateral-setting"><div><strong>Nhánh bên</strong><small>Anh chị em, cô chú bác và họ hàng.</small></div><div role="group" aria-label="Mức hiển thị nhánh bên"><button className={collateral === 'immediate' ? 'active' : ''} type="button" onClick={() => changeCollateral('immediate')}>Gần</button><button className={collateral === 'extended' ? 'active' : ''} type="button" onClick={() => changeCollateral('extended')}>Mở rộng</button><button className={collateral === 'all' ? 'active' : ''} type="button" onClick={() => changeCollateral('all')}>Tất cả</button></div></div>
+        </div>
+        <footer>
+          <button type="button" onClick={collapseAll}><ChevronsDownUp size={15} /><span><strong>Về mức cơ bản</strong><small>Cha mẹ, vợ/chồng, con</small></span></button>
+          <button type="button" onClick={expandAll}><ChevronsUpDown size={15} /><span><strong>Mở toàn bộ</strong><small>Kể cả nhánh thông gia</small></span></button>
+          <button type="button" onClick={() => { centerSubject(); setScopeOpen(false) }}><LocateFixed size={15} /><span><strong>Về chủ thể</strong><small>Đưa card chính vào giữa</small></span></button>
+        </footer>
+      </section>}
+    </Panel> : null}
   </ReactFlow>
 }
 

@@ -15,3 +15,9 @@ export function calculateAllGenerations(subjectId: string, graph: FamilyGraph): 
   }
   return generations
 }
+
+export function calculateGenerationOrdinals(generations: Map<string, number>): Map<string, number> {
+  if (generations.size === 0) return new Map()
+  const highestGeneration = Math.max(...generations.values())
+  return new Map([...generations].map(([personId, generation]) => [personId, highestGeneration - generation + 1]))
+}

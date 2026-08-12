@@ -9,6 +9,8 @@ export interface BranchVisibilityOptions {
   descendantDepth: number
   collateral: CollateralVisibility
   expandedPersonIds?: Set<string>
+  collapsedPersonIds?: Set<string>
+  revealAllBranches?: boolean
 }
 
 export interface BranchVisibilityResult {
@@ -58,6 +60,17 @@ function neighbours(graph: FamilyGraph, personId: string): string[] {
   ])]
 }
 
+function isHiddenByCollapsedBranch(subjectId: string, targetId: string, graph: FamilyGraph, collapsedPersonIds: Set<string>): boolean {
+  if (targetId === subjectId || collapsedPersonIds.size === 0) return false
+  const path = findKinshipPath(subjectId, targetId, graph)
+  if (!path) return false
+  const personPath = [subjectId, ...path.map((step) => step.toId)]
+  return [...collapsedPersonIds].some((collapsedId) => {
+    const collapsedIndex = personPath.indexOf(collapsedId)
+    return collapsedIndex >= 0 && collapsedIndex < personPath.length - 1
+  })
+}
+
 function countHiddenFrom(graph: FamilyGraph, rootId: string, visibleIds: Set<string>): number {
   const queue = neighbours(graph, rootId).filter((personId) => !visibleIds.has(personId))
   const visited = new Set(queue)
@@ -74,8 +87,10 @@ function countHiddenFrom(graph: FamilyGraph, rootId: string, visibleIds: Set<str
 
 export function createBranchVisibleGraph(graph: FamilyGraph, subjectId: string | undefined, options: BranchVisibilityOptions): BranchVisibilityResult {
   if (!subjectId || !graph.personsById.has(subjectId)) return { graph, visibleIds: new Set(graph.personsById.keys()), hiddenCounts: new Map() }
-  const visibleIds = new Set([...graph.personsById.keys()].filter((personId) => shouldShowByDefault(subjectId, personId, graph, options)))
+  const collapsedPersonIds = options.collapsedPersonIds ?? new Set<string>()
+  const visibleIds = new Set([...graph.personsById.keys()].filter((personId) => options.revealAllBranches || shouldShowByDefault(subjectId, personId, graph, options)))
   for (const expandedId of options.expandedPersonIds ?? []) for (const personId of localExpansionIds(graph, expandedId)) visibleIds.add(personId)
+  for (const personId of visibleIds) if (isHiddenByCollapsedBranch(subjectId, personId, graph, collapsedPersonIds)) visibleIds.delete(personId)
   const persons = [...graph.personsById.values()].filter((person) => visibleIds.has(person.id))
   const relationships = graph.relationships.filter((relationship) => visibleIds.has(relationship.person1Id) && visibleIds.has(relationship.person2Id))
   const hiddenCounts = new Map<string, number>()

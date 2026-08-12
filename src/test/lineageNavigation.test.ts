@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calculateAllGenerations, calculateGeneration } from '../generation/generationEngine'
+import { calculateAllGenerations, calculateGeneration, calculateGenerationOrdinals } from '../generation/generationEngine'
 import { buildFamilyGraph } from '../graph/familyGraph'
 import { createBranchVisibleGraph } from '../lineage/branchVisibility'
 import { classifyRelativeScope } from '../lineage/lineageClassifier'
@@ -48,6 +48,21 @@ describe('generation and lineage engines', () => {
     expect(calculateAllGenerations('S', graph).get('SW')).toBe(0)
   })
 
+  it('numbers generations from the highest known ancestor and shifts when an earlier generation is added', () => {
+    const currentOrdinals = calculateGenerationOrdinals(calculateAllGenerations('S', graph))
+    expect(currentOrdinals.get('PGF')).toBe(1)
+    expect(currentOrdinals.get('F')).toBe(2)
+    expect(currentOrdinals.get('S')).toBe(3)
+
+    const extendedPeople = [...people, { id: 'GGP', name: 'Cụ nội', gender: 'male' as const }]
+    const extendedRelationships = [...relationships, { id: 'r15', person1Id: 'GGP', person2Id: 'PGF', type: 'parent' as const }]
+    const extendedGraph = buildFamilyGraph(extendedPeople, extendedRelationships)
+    const shiftedOrdinals = calculateGenerationOrdinals(calculateAllGenerations('S', extendedGraph))
+    expect(shiftedOrdinals.get('GGP')).toBe(1)
+    expect(shiftedOrdinals.get('PGF')).toBe(2)
+    expect(shiftedOrdinals.get('S')).toBe(4)
+  })
+
   it('classifies father and mother branches without persisting scope', () => {
     expect(classifyRelativeScope('S', 'PGF', graph)).toBe('paternal')
     expect(classifyRelativeScope('S', 'MGF', graph)).toBe('maternal')
@@ -68,6 +83,12 @@ describe('generation and lineage engines', () => {
     const expanded = createBranchVisibleGraph(graph, 'S', { ancestorDepth: 2, descendantDepth: 1, collateral: 'immediate', expandedPersonIds: new Set(['W']) })
     expect(expanded.visibleIds.has('WF')).toBe(true)
     expect(expanded.visibleIds.has('WM')).toBe(true)
+
+    const collapsedAfterExpandAll = createBranchVisibleGraph(graph, 'S', { ancestorDepth: 99, descendantDepth: 99, collateral: 'all', revealAllBranches: true, collapsedPersonIds: new Set(['W']) })
+    expect(collapsedAfterExpandAll.visibleIds.has('W')).toBe(true)
+    expect(collapsedAfterExpandAll.visibleIds.has('WF')).toBe(false)
+    expect(collapsedAfterExpandAll.visibleIds.has('WM')).toBe(false)
+    expect(collapsedAfterExpandAll.visibleIds.has('BC')).toBe(true)
   })
 
   it('builds nearest relative groups around the temporary target', () => {
