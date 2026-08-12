@@ -15,7 +15,7 @@ interface Props {
   busy?: string
   onClose: () => void
   onCreate?: (draft: PersonDraft, connection?: NewPersonConnection) => Promise<unknown>
-  onUpdate?: (draft: PersonDraft, removePhoto: boolean) => Promise<unknown>
+  onUpdate?: (draft: PersonDraft) => Promise<unknown>
 }
 
 const relationshipLabels: Record<FriendlyRelationship, string> = { child: 'Con của', parent: 'Cha/mẹ của', spouse: 'Bạn đời của' }
@@ -34,8 +34,11 @@ export function PersonModal({ mode, persons, relationships, person, initialKind 
   const [lunarLeap, setLunarLeap] = useState(mode === 'edit' ? person?.deathLunar?.leapMonth ?? false : false)
   const [foundingAncestor, setFoundingAncestor] = useState(mode === 'edit' ? person?.ancestralRole === 'founding_ancestor' : false)
   const [sortOrder, setSortOrder] = useState(mode === 'edit' ? person?.sortOrder?.toString() ?? '' : '')
-  const [photo, setPhoto] = useState<File>()
-  const [removePhoto, setRemovePhoto] = useState(false)
+  const [phone1, setPhone1] = useState(mode === 'edit' ? person?.phone1 ?? '' : '')
+  const [phone2, setPhone2] = useState(mode === 'edit' ? person?.phone2 ?? '' : '')
+  const [address, setAddress] = useState(mode === 'edit' ? person?.address ?? '' : '')
+  const [note, setNote] = useState(mode === 'edit' ? person?.note ?? '' : '')
+  const [photos, setPhotos] = useState<File[]>([])
   const [kind, setKind] = useState<FriendlyRelationship | 'none'>(mode === 'add' ? 'none' : initialKind)
   const [spouseStatus, setSpouseStatus] = useState<SpouseStatus>('unknown')
   const [relatedId, setRelatedId] = useState(mode === 'relative' ? person?.id ?? '' : '')
@@ -63,13 +66,18 @@ export function PersonModal({ mode, persons, relationships, person, initialKind 
       deathLunarMonth: isDeceased && lunarMonth ? Number(lunarMonth) : undefined,
       deathLunarLeapMonth: isDeceased && lunarLeap,
       ancestralRole: foundingAncestor ? 'founding_ancestor' : 'none',
-      sortOrder: sortOrder ? Number(sortOrder) : undefined, photo,
+      sortOrder: sortOrder ? Number(sortOrder) : undefined,
+      phone1: phone1.trim() || undefined,
+      phone2: phone2.trim() || undefined,
+      address: address.trim() || undefined,
+      note: note.trim() || undefined,
+      photos,
     }
     setLocalError(undefined)
     submittingRef.current = true
     setSubmitting(true)
     try {
-      if (mode === 'edit') await onUpdate?.(draft, removePhoto)
+      if (mode === 'edit') await onUpdate?.(draft)
       else {
         const ids = mode === 'relative' && kind === 'child' ? [person!.id, ...extraParents] : relatedId ? [relatedId] : []
         const connection = kind === 'none' || !ids.length ? undefined : { kind, relatedPersonIds: ids, spouseStatus } as NewPersonConnection
@@ -101,6 +109,15 @@ export function PersonModal({ mode, persons, relationships, person, initialKind 
             </div>
           </fieldset>
 
+          <fieldset className="form-section"><legend>Liên hệ</legend>
+            <div className="form-grid two-columns">
+              <label className="field"><span>Số điện thoại chính</span><input type="tel" inputMode="tel" value={phone1} onChange={(event) => setPhone1(event.target.value)} placeholder="090 123 4567" /></label>
+              <label className="field"><span>Số điện thoại khác</span><input type="tel" inputMode="tel" value={phone2} onChange={(event) => setPhone2(event.target.value)} placeholder="Số nhà, cơ quan…" /></label>
+              <label className="field field-wide"><span>Địa chỉ</span><textarea rows={2} value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Nơi ở hiện tại hoặc quê quán" /></label>
+              <label className="field field-wide"><span>Ghi chú</span><textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Thông tin giúp gia đình dễ nhớ về người này" /></label>
+            </div>
+          </fieldset>
+
           <fieldset className="form-section"><legend>Thông tin gia phả</legend>
             <label className="toggle-row"><input type="checkbox" checked={isDeceased} onChange={(event) => setIsDeceased(event.target.checked)} /><span><strong>Đã mất</strong><small>Mở phần ngày mất và ngày giỗ</small></span></label>
             {isDeceased && <div className="deceased-fields">
@@ -110,9 +127,9 @@ export function PersonModal({ mode, persons, relationships, person, initialKind 
             <label className="toggle-row compact"><input type="checkbox" checked={foundingAncestor} onChange={(event) => setFoundingAncestor(event.target.checked)} /><span><strong>Thủy tổ</strong><small>Người khai sinh dòng họ theo gia phả</small></span></label>
           </fieldset>
 
-          <fieldset className="form-section"><legend>Ảnh đại diện</legend>
-            <label className="field photo-field"><div className="file-control"><Camera size={18} /><span>{photo?.name ?? (person?.photoFileId ? 'Chọn ảnh thay thế' : 'Chọn ảnh')}</span><input type="file" accept="image/*" onChange={(event) => setPhoto(event.target.files?.[0])} /></div></label>
-            {mode === 'edit' && person?.photoFileId && <label className="check-row"><input type="checkbox" checked={removePhoto} onChange={(event) => setRemovePhoto(event.target.checked)} /> Xóa ảnh hiện tại</label>}
+          <fieldset className="form-section"><legend>Thư viện ảnh</legend>
+            <label className="field photo-field"><div className="file-control"><Camera size={18} /><span>{photos.length ? `Đã chọn ${photos.length} ảnh` : 'Chọn một hoặc nhiều ảnh'}</span><input type="file" accept="image/*" multiple onChange={(event) => setPhotos(Array.from(event.target.files ?? []))} /></div></label>
+            <small className="field-help">Ảnh đầu tiên sẽ là ảnh đại diện nếu người này chưa có ảnh. Bạn có thể đổi ảnh đại diện, chú thích hoặc xóa ảnh trong hồ sơ chi tiết.</small>
           </fieldset>
 
           {mode !== 'edit' && <fieldset className="form-section"><legend>Kết nối gia đình</legend><div className="connection-fields">

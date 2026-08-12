@@ -9,6 +9,8 @@ export default { fetch(request: Request) { return withErrors(async () => {
   const form = await request.formData()
   const file = form.get('photo')
   if (!(file instanceof File)) throw new AppError(400, 'PHOTO_REQUIRED', 'A photo file is required.')
-  const id = await uploadPhoto(auth.accessToken, pathParameter(request, 'workspaces'), file, file.name)
+  const profileId = form.get('profileId')
+  const personId = form.get('personId')
+  const id = await uploadPhoto(auth.accessToken, pathParameter(request, 'workspaces'), file, file.name, typeof profileId === 'string' ? profileId : undefined, typeof personId === 'string' ? personId : undefined)
   return json({ id }, { status: 201 })
 }) } }

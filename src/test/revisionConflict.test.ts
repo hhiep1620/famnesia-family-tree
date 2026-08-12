@@ -8,6 +8,7 @@ const data = (updatedAt?: string): FamilyData => ({
   profiles: [],
   persons: [],
   relationships: [],
+  media: [],
   settings: { timezone: 'Asia/Ho_Chi_Minh', locale: 'vi-VN' },
 })
 

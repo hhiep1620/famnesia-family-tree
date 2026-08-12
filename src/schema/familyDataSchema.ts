@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { FamilyData, Person, Relationship } from '../types/family.js'
 
-export const CURRENT_SCHEMA_VERSION = 1
+export const CURRENT_SCHEMA_VERSION = 2
 
 const GENDERS = ['male', 'female', 'other', 'unknown'] as const
 const ANCESTRAL_ROLES = ['none', 'founding_ancestor'] as const
@@ -45,11 +45,27 @@ export const PersonSchema = z.object({
   isDeceased: z.boolean().default(false),
   deathDate: OptionalDateSchema,
   deathLunar: z.union([DeathLunarSchema, z.null()]).optional(),
+  phone1: z.string().default(''),
+  phone2: z.string().default(''),
+  address: z.string().default(''),
+  note: z.string().default(''),
   ancestralRole: z.enum(ANCESTRAL_ROLES).default('none'),
-  photoFileId: OptionalTextSchema,
   sortOrder: z.number().finite().optional(),
   createdAt: IsoDateTimeSchema.optional(),
   updatedAt: IsoDateTimeSchema.optional(),
+})
+
+export const PersonMediaSchema = z.object({
+  id: z.string().trim().min(1, 'Media ID không được để trống.'),
+  profileId: z.string().trim().min(1, 'profileId không được để trống.'),
+  personId: z.string().trim().min(1, 'personId không được để trống.'),
+  driveFileId: z.string().trim().regex(/^[A-Za-z0-9_-]+$/, 'Drive file ID không hợp lệ.'),
+  type: z.literal('photo'),
+  isPrimary: z.boolean().default(false),
+  caption: z.string().default(''),
+  takenDate: OptionalDateSchema,
+  sortOrder: z.number().finite().optional(),
+  createdAt: IsoDateTimeSchema.optional(),
 })
 
 export const RelationshipSchema = z.object({
@@ -101,12 +117,13 @@ export const FamilyDataSchema = z.object({
   profiles: z.array(ProfileSchema).default([]),
   persons: z.array(PersonSchema).default([]),
   relationships: z.array(RelationshipSchema).default([]),
+  media: z.array(PersonMediaSchema).default([]),
   settings: z.object({
     timezone: z.string().trim().min(1).default('Asia/Ho_Chi_Minh'),
     locale: z.string().trim().min(1).default('vi-VN'),
   }).default({ timezone: 'Asia/Ho_Chi_Minh', locale: 'vi-VN' }),
 }).superRefine((data, context) => {
-  const duplicateCheck = (values: string[], path: 'profiles' | 'persons' | 'relationships', label: string) => {
+  const duplicateCheck = (values: string[], path: 'profiles' | 'persons' | 'relationships' | 'media', label: string) => {
     const seen = new Set<string>()
     values.forEach((id, index) => {
       if (seen.has(id)) context.addIssue({ code: 'custom', path: [path, index, 'id'], message: `${label} '${id}' bị trùng.` })
@@ -116,6 +133,7 @@ export const FamilyDataSchema = z.object({
   duplicateCheck(data.profiles.map((item) => item.id), 'profiles', 'Profile ID')
   duplicateCheck(data.persons.map((item) => item.id), 'persons', 'Person ID')
   duplicateCheck(data.relationships.map((item) => item.id), 'relationships', 'Relationship ID')
+  duplicateCheck(data.media.map((item) => item.id), 'media', 'Media ID')
 
   const profiles = new Map(data.profiles.map((profile) => [profile.id, profile]))
   const persons = new Map(data.persons.map((person) => [person.id, person]))
@@ -131,6 +149,18 @@ export const FamilyDataSchema = z.object({
       context.addIssue({ code: 'custom', path: ['profiles', index, 'subjectPersonId'], message: `Chủ thể '${profile.subjectPersonId}' không thuộc profile này.` })
     }
   })
+
+  const primaryByPerson = new Map<string, number>()
+  data.media.forEach((media, index) => {
+    const person = persons.get(media.personId)
+    if (!profiles.has(media.profileId)) context.addIssue({ code: 'custom', path: ['media', index, 'profileId'], message: `Không tìm thấy profile '${media.profileId}'.` })
+    if (!person) context.addIssue({ code: 'custom', path: ['media', index, 'personId'], message: `Không tìm thấy người '${media.personId}'.` })
+    if (person && person.profileId !== media.profileId) context.addIssue({ code: 'custom', path: ['media', index, 'personId'], message: 'Ảnh và thành viên không thuộc cùng profile.' })
+    if (media.isPrimary) primaryByPerson.set(media.personId, (primaryByPerson.get(media.personId) ?? 0) + 1)
+  })
+  for (const [personId, count] of primaryByPerson) {
+    if (count > 1) context.addIssue({ code: 'custom', path: ['media'], message: `Thành viên '${personId}' có nhiều hơn một ảnh đại diện.` })
+  }
 
   const relationshipKeys = new Set<string>()
   data.relationships.forEach((relationship, index) => {
@@ -191,6 +221,7 @@ export function createEmptyFamilyData(now = new Date().toISOString()): FamilyDat
     profiles: [],
     persons: [],
     relationships: [],
+    media: [],
     settings: { timezone: 'Asia/Ho_Chi_Minh', locale: 'vi-VN' },
   }
 }
@@ -200,6 +231,35 @@ export function migrateFamilyData(input: unknown): unknown {
   const version = (input as { schemaVersion?: unknown }).schemaVersion
   if (version === CURRENT_SCHEMA_VERSION) return input
   if (typeof version !== 'number') throw new Error('family.json thiếu schemaVersion.')
+  if (version === 1) {
+    const legacy = input as Record<string, unknown> & { persons?: Array<Record<string, unknown>>; media?: unknown[] }
+    const media = Array.isArray(legacy.media) ? [...legacy.media] : []
+    let mediaSequence = media.reduce<number>((current, item) => {
+      if (!item || typeof item !== 'object') return current
+      const match = /^M(\d+)$/i.exec(String((item as { id?: unknown }).id ?? ''))
+      return match ? Math.max(current, Number(match[1])) : current
+    }, 0)
+    const persons = (Array.isArray(legacy.persons) ? legacy.persons : []).map((person) => {
+      const { photoFileId, ...rest } = person
+      if (typeof photoFileId === 'string' && photoFileId.trim()) {
+        mediaSequence += 1
+        media.push({
+          id: `M${String(mediaSequence).padStart(4, '0')}`,
+          profileId: person.profileId,
+          personId: person.id,
+          driveFileId: photoFileId.trim(),
+          type: 'photo',
+          isPrimary: true,
+          caption: '',
+          takenDate: null,
+          sortOrder: 1,
+          createdAt: person.updatedAt ?? person.createdAt,
+        })
+      }
+      return { ...rest, phone1: '', phone2: '', address: '', note: '' }
+    })
+    return { ...legacy, schemaVersion: CURRENT_SCHEMA_VERSION, persons, media }
+  }
   throw new Error(`schemaVersion ${version} chưa được hỗ trợ. Phiên bản hiện tại là ${CURRENT_SCHEMA_VERSION}.`)
 }
 
@@ -216,6 +276,9 @@ export function normalizePersonForStorage(person: Person): Person {
     birthDate: person.birthDate || null,
     deathDate: person.deathDate || null,
     deathLunar: person.deathLunar ?? null,
-    photoFileId: person.photoFileId || null,
+    phone1: person.phone1?.trim() ?? '',
+    phone2: person.phone2?.trim() ?? '',
+    address: person.address?.trim() ?? '',
+    note: person.note?.trim() ?? '',
   }
 }

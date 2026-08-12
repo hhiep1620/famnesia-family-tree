@@ -31,6 +31,7 @@ export function getKinship(subjectId: string, targetId: string, graph: FamilyGra
     isBloodRelation: !steps.some((step) => step.type === 'spouse'),
     isMarriageRelation: steps.some((step) => step.type === 'spouse'),
     confidence: classified.confidence,
+    distance: steps.length,
   }
 }
 

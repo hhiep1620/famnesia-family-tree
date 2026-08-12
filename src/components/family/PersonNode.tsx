@@ -1,4 +1,5 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { ChevronRight } from 'lucide-react'
 import { useDriveImage } from '../../hooks/useDriveImage'
 import type { PersonFlowNode } from '../../layout/familyLayout'
 import { getInitials } from '../../utils/initials'
@@ -17,6 +18,7 @@ export function PersonNode({ data, selected }: NodeProps<PersonFlowNode>) {
       {data.nickname && <div className="person-node-nickname">“{data.nickname}”</div>}
       {data.lifeLabel && <div className="person-node-life">{data.lifeLabel}</div>}
       {data.kinshipLabel && <div className={`kinship-tag ${data.isSubject ? 'is-subject' : ''}`}>{data.kinshipLabel}</div>}
+      {data.hiddenBranchCount ? <button className="branch-expand-indicator" type="button" onClick={(event) => { event.stopPropagation(); data.onExpandBranch?.(data.personId) }} aria-label={`Mở ${data.hiddenBranchCount} người thân đang ẩn`}><ChevronRight size={12} /><span>+{data.hiddenBranchCount}</span></button> : null}
       {data.eventType && <span className={`node-event-marker ${data.eventType}`} title={data.eventType === 'birthday' ? 'Sắp đến sinh nhật' : 'Sắp đến ngày giỗ'} />}
       <Handle id="spouse-right" type="source" position={Position.Right} className="family-handle" />
       <Handle id="spouse-right-target" type="target" position={Position.Right} className="family-handle" />

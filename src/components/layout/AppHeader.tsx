@@ -1,5 +1,5 @@
 import { CalendarDays, Database, LogOut, Network, Plus, RefreshCw } from 'lucide-react'
-import type { FamilyProfile, GoogleUser, KinshipResult, Person, WorkspaceInfo } from '../../types/family'
+import type { FamilyProfile, FamilyScope, GoogleUser, KinshipResult, Person, PersonMedia, WorkspaceInfo } from '../../types/family'
 import { PersonSearch } from '../search/PersonSearch'
 import { BrandLogo } from './BrandLogo'
 
@@ -17,6 +17,9 @@ interface Props {
   view: MainView
   subject?: Person
   kinships?: Map<string, KinshipResult>
+  scopes?: Map<string, FamilyScope>
+  media?: PersonMedia[]
+  workspaceId?: string
   refreshing?: boolean
   onProfileChange: (profileId: string) => void
   onWorkspaceChange?: (workspaceId: string) => void
@@ -35,7 +38,7 @@ function Navigation({ view, onViewChange, mobile = false }: { view: MainView; on
   </nav>
 }
 
-export function AppHeader({ persons, profiles, activeProfileId, workspaces, activeWorkspaceId, canEdit = true, user, mock, view, subject, kinships, refreshing, onProfileChange, onWorkspaceChange, onViewChange, onSearch, onAdd, onRefresh, onSignOut }: Props) {
+export function AppHeader({ persons, profiles, activeProfileId, workspaces, activeWorkspaceId, canEdit = true, user, mock, view, subject, kinships, scopes, media = [], workspaceId, refreshing, onProfileChange, onWorkspaceChange, onViewChange, onSearch, onAdd, onRefresh, onSignOut }: Props) {
   return <>
     <header className="app-header">
       <div className="archive-mark"><BrandLogo compact /></div><div className="header-divider" /><h1>Too many relatives. Not enough memory.</h1>
@@ -43,7 +46,7 @@ export function AppHeader({ persons, profiles, activeProfileId, workspaces, acti
       <div className="header-actions">
         {!mock && workspaces && workspaces.length > 0 && <label className="family-switcher workspace-switcher"><span className="sr-only">Chọn workspace</span><select value={activeWorkspaceId ?? ''} onChange={(event) => onWorkspaceChange?.(event.target.value)}>{workspaces.map((workspace) => <option value={workspace.id} key={workspace.id}>{workspace.name} · {workspace.role}</option>)}</select></label>}
         {profiles.length > 0 && <label className="family-switcher"><span className="sr-only">Chọn gia đình</span><select value={activeProfileId ?? ''} onChange={(event) => onProfileChange(event.target.value)}>{profiles.map((profile) => <option value={profile.id} key={profile.id}>{profile.name}</option>)}</select></label>}
-        {view !== 'data' && <PersonSearch persons={persons} onSelect={onSearch} kinships={kinships} />}
+        {view !== 'data' && <PersonSearch persons={persons} media={media} workspaceId={workspaceId} onSelect={onSearch} kinships={kinships} scopes={scopes} />}
         {view !== 'data' && subject && <span className="subject-badge">Chủ thể: {subject.name}</span>}
         <button className="icon-button refresh-button" type="button" onClick={onRefresh} aria-label="Làm mới dữ liệu"><RefreshCw size={17} className={refreshing ? 'spin' : ''} /></button>
         {view !== 'data' && activeProfileId && canEdit && <button className="primary-button desktop-add" type="button" onClick={onAdd}><Plus size={17} /> Thêm người</button>}

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { sampleFamilyData } from '../data/sampleFamily'
 import { validateRelationship } from '../graph/familyValidation'
-import { requireValidFamilyData } from '../schema/familyDataSchema'
+import { optimizePhoto } from '../media/imageOptimization'
+import { generateNextMediaId } from '../media/mediaSelectors'
+import { CURRENT_SCHEMA_VERSION, requireValidFamilyData } from '../schema/familyDataSchema'
 import { ApiError } from '../services/apiClient'
 import { FamilyRepository, type FamilyDataRevision } from '../services/familyRepository'
 import { MutationGate } from '../services/mutationGate'
@@ -13,6 +15,7 @@ import type {
   FriendlyRelationship,
   Person,
   PersonDraft,
+  PersonMedia,
   Relationship,
   SaveStatus,
   SpouseStatus,
@@ -50,7 +53,7 @@ export function useFamilyData() {
   const mockData = useRef<FamilyData>(cloneData(sampleFamilyData))
   const mockBackups = useRef<MockBackup[]>([])
   const [familyData, setFamilyData] = useState<FamilyData>(() => ({
-    schemaVersion: 1, profiles: [], persons: [], relationships: [],
+    schemaVersion: CURRENT_SCHEMA_VERSION, profiles: [], persons: [], relationships: [], media: [],
     settings: { timezone: 'Asia/Ho_Chi_Minh', locale: 'vi-VN' },
   }))
   const [activeProfileId, setActiveProfileIdState] = useState<string>()
@@ -166,6 +169,7 @@ export function useFamilyData() {
   const activeProfile = familyData.profiles.find((profile) => profile.id === activeProfileId)
   const persons = useMemo(() => familyData.persons.filter((person) => person.profileId === activeProfileId), [activeProfileId, familyData.persons])
   const relationships = useMemo(() => familyData.relationships.filter((relationship) => relationship.profileId === activeProfileId), [activeProfileId, familyData.relationships])
+  const media = useMemo(() => familyData.media.filter((item) => item.profileId === activeProfileId), [activeProfileId, familyData.media])
 
   const setActiveProfileId = useCallback((profileId: string) => {
     if (familyData.profiles.some((profile) => profile.id === profileId)) setActiveProfileIdState(profileId)
@@ -194,15 +198,18 @@ export function useFamilyData() {
 
   const addPerson = useCallback(async (draft: PersonDraft, connection?: NewPersonConnection) => runMutation('Đang lưu thành viên…', async () => {
     if (!activeProfile) throw new Error('Hãy tạo hoặc chọn một gia đình trước.')
-    let uploadedPhotoId: string | undefined
+    const id = generateNextPersonId(familyData.persons.map((person) => person.id))
+    const uploadedPhotoIds: string[] = []
     try {
-      if (draft.photo && !useMockData) {
+      if (draft.photos?.length && !useMockData) {
         if (!workspace) throw new Error('Thư mục ảnh chưa sẵn sàng.')
         if (!repository.current) throw new Error('Workspace Google Drive chưa sẵn sàng.')
-        uploadedPhotoId = await repository.current.uploadPhoto(draft.photo)
+        const optimized = await Promise.all(draft.photos.map(optimizePhoto))
+        for (const photo of optimized) uploadedPhotoIds.push(await repository.current.uploadPhoto(photo, activeProfile.id, id))
+      } else if (draft.photos?.length) {
+        uploadedPhotoIds.push(...draft.photos.map((_, index) => `mock-${Date.now()}-${index}`))
       }
       const now = new Date().toISOString()
-      const id = generateNextPersonId(familyData.persons.map((person) => person.id))
       const created: Person = {
         id,
         profileId: activeProfile.id,
@@ -215,12 +222,22 @@ export function useFamilyData() {
         deathLunar: draft.isDeceased && draft.deathLunarDay && draft.deathLunarMonth
           ? { day: draft.deathLunarDay, month: draft.deathLunarMonth, leapMonth: Boolean(draft.deathLunarLeapMonth) }
           : null,
+        phone1: draft.phone1?.trim() ?? '',
+        phone2: draft.phone2?.trim() ?? '',
+        address: draft.address?.trim() ?? '',
+        note: draft.note?.trim() ?? '',
         ancestralRole: draft.ancestralRole,
         sortOrder: draft.sortOrder,
-        photoFileId: uploadedPhotoId ?? null,
         createdAt: now,
         updatedAt: now,
       }
+      const mediaIds = familyData.media.map((item) => item.id)
+      const createdMedia: PersonMedia[] = uploadedPhotoIds.map((driveFileId, index) => {
+        const mediaId = generateNextMediaId(mediaIds)
+        mediaIds.push(mediaId)
+        const item: PersonMedia = { id: mediaId, profileId: activeProfile.id, personId: id, driveFileId, type: 'photo', isPrimary: index === 0, caption: '', takenDate: null, sortOrder: index + 1, createdAt: now }
+        return item
+      })
       const pending: Relationship[] = []
       for (const relatedId of connection?.relatedPersonIds ?? []) {
         const type = connection!.kind === 'spouse' ? 'spouse' : 'parent'
@@ -245,23 +262,27 @@ export function useFamilyData() {
         ...familyData,
         persons: [...familyData.persons, created],
         relationships: [...familyData.relationships, ...pending],
+        media: [...familyData.media, ...createdMedia],
       })
       return created
     } catch (caught) {
-      if (uploadedPhotoId && !useMockData) await repository.current?.deletePhoto(uploadedPhotoId).catch(console.error)
+      if (!useMockData) await Promise.all(uploadedPhotoIds.map((photoId) => repository.current?.deletePhoto(photoId).catch(console.error)))
       throw caught
     }
   }), [activeProfile, familyData, persons, relationships, runMutation, saveData, useMockData, workspace])
 
-  const updatePerson = useCallback(async (id: string, draft: PersonDraft, removePhoto = false) => runMutation('Đang cập nhật thành viên…', async () => {
+  const updatePerson = useCallback(async (id: string, draft: PersonDraft) => runMutation('Đang cập nhật thành viên…', async () => {
     const current = familyData.persons.find((person) => person.id === id)
     if (!current) throw new Error('Thành viên này không còn tồn tại.')
-    let uploadedPhotoId: string | undefined
+    const uploadedPhotoIds: string[] = []
     try {
-      if (draft.photo && !useMockData) {
+      if (draft.photos?.length && !useMockData) {
         if (!workspace) throw new Error('Thư mục ảnh chưa sẵn sàng.')
         if (!repository.current) throw new Error('Workspace Google Drive chưa sẵn sàng.')
-        uploadedPhotoId = await repository.current.uploadPhoto(draft.photo)
+        const optimized = await Promise.all(draft.photos.map(optimizePhoto))
+        for (const photo of optimized) uploadedPhotoIds.push(await repository.current.uploadPhoto(photo, current.profileId ?? '', current.id))
+      } else if (draft.photos?.length) {
+        uploadedPhotoIds.push(...draft.photos.map((_, index) => `mock-${Date.now()}-${index}`))
       }
       const updated: Person = {
         ...current,
@@ -274,23 +295,81 @@ export function useFamilyData() {
         deathLunar: draft.isDeceased && draft.deathLunarDay && draft.deathLunarMonth
           ? { day: draft.deathLunarDay, month: draft.deathLunarMonth, leapMonth: Boolean(draft.deathLunarLeapMonth) }
           : null,
+        phone1: draft.phone1?.trim() ?? '',
+        phone2: draft.phone2?.trim() ?? '',
+        address: draft.address?.trim() ?? '',
+        note: draft.note?.trim() ?? '',
         ancestralRole: draft.ancestralRole,
         sortOrder: draft.sortOrder,
-        photoFileId: uploadedPhotoId ?? (removePhoto ? null : current.photoFileId ?? null),
         updatedAt: new Date().toISOString(),
       }
+      const existingMedia = familyData.media.filter((item) => item.personId === id)
+      const mediaIds = [...familyData.media.map((item) => item.id)]
+      const addedMedia = uploadedPhotoIds.map((driveFileId, index): PersonMedia => {
+        const mediaId = generateNextMediaId(mediaIds)
+        mediaIds.push(mediaId)
+        return { id: mediaId, profileId: current.profileId ?? '', personId: id, driveFileId, type: 'photo', isPrimary: existingMedia.length === 0 && index === 0, caption: '', takenDate: null, sortOrder: existingMedia.length + index + 1, createdAt: new Date().toISOString() }
+      })
       await saveData({
         ...familyData,
         persons: familyData.persons.map((person) => person.id === id ? updated : person),
+        media: [...familyData.media, ...addedMedia],
       })
-      if (!useMockData && current.photoFileId && (uploadedPhotoId || removePhoto)) {
-        await repository.current?.deletePhoto(current.photoFileId).catch(console.error)
-      }
     } catch (caught) {
-      if (uploadedPhotoId && !useMockData) await repository.current?.deletePhoto(uploadedPhotoId).catch(console.error)
+      if (!useMockData) await Promise.all(uploadedPhotoIds.map((photoId) => repository.current?.deletePhoto(photoId).catch(console.error)))
       throw caught
     }
   }), [familyData, runMutation, saveData, useMockData, workspace])
+
+  const addPersonMedia = useCallback(async (personId: string, files: File[]) => runMutation('Đang tải ảnh…', async () => {
+    const person = familyData.persons.find((candidate) => candidate.id === personId)
+    if (!person || files.length === 0) return
+    const uploadedPhotoIds: string[] = []
+    try {
+      if (useMockData) uploadedPhotoIds.push(...files.map((_, index) => `mock-${Date.now()}-${index}`))
+      else {
+        if (!repository.current) throw new Error('Workspace Google Drive chưa sẵn sàng.')
+        const optimized = await Promise.all(files.map(optimizePhoto))
+        for (const photo of optimized) uploadedPhotoIds.push(await repository.current.uploadPhoto(photo, person.profileId ?? '', person.id))
+      }
+      const existing = familyData.media.filter((item) => item.personId === personId)
+      const mediaIds = familyData.media.map((item) => item.id)
+      const createdAt = new Date().toISOString()
+      const added = uploadedPhotoIds.map((driveFileId, index): PersonMedia => {
+        const id = generateNextMediaId(mediaIds); mediaIds.push(id)
+        return { id, profileId: person.profileId ?? '', personId, driveFileId, type: 'photo', isPrimary: existing.length === 0 && index === 0, caption: '', takenDate: null, sortOrder: existing.length + index + 1, createdAt }
+      })
+      await saveData({ ...familyData, media: [...familyData.media, ...added] })
+    } catch (caught) {
+      if (!useMockData) await Promise.all(uploadedPhotoIds.map((photoId) => repository.current?.deletePhoto(photoId).catch(console.error)))
+      throw caught
+    }
+  }), [familyData, runMutation, saveData, useMockData])
+
+  const setPrimaryMedia = useCallback(async (mediaId: string) => {
+    const target = familyData.media.find((item) => item.id === mediaId)
+    if (!target) throw new Error('Không tìm thấy ảnh này.')
+    await persist('Đang đổi ảnh đại diện…', {
+      ...familyData,
+      media: familyData.media.map((item) => item.personId === target.personId ? { ...item, isPrimary: item.id === mediaId } : item),
+    })
+  }, [familyData, persist])
+
+  const updateMediaCaption = useCallback(async (mediaId: string, caption: string) => {
+    await persist('Đang lưu chú thích…', { ...familyData, media: familyData.media.map((item) => item.id === mediaId ? { ...item, caption: caption.trim() } : item) })
+  }, [familyData, persist])
+
+  const deletePersonMedia = useCallback(async (mediaId: string) => {
+    const target = familyData.media.find((item) => item.id === mediaId)
+    if (!target) return
+    const remainingForPerson = familyData.media.filter((item) => item.personId === target.personId && item.id !== mediaId)
+    const replacementId = target.isPrimary ? remainingForPerson[0]?.id : undefined
+    await persist('Đang xóa ảnh…', {
+      ...familyData,
+      media: familyData.media.filter((item) => item.id !== mediaId).map((item) => item.id === replacementId ? { ...item, isPrimary: true } : item),
+    })
+    if (!useMockData) await repository.current?.deletePhoto(target.driveFileId).catch(console.error)
+  }, [familyData, persist, useMockData])
 
   const addRelationship = useCallback(async (input: Omit<Relationship, 'id' | 'createdAt' | 'updatedAt'>) => {
     if (!activeProfile) throw new Error('Hãy chọn gia đình trước.')
@@ -330,12 +409,14 @@ export function useFamilyData() {
       throw new Error('Hãy gỡ hoặc chuyển các quan hệ gia đình trước khi xóa thành viên này.')
     }
     const person = familyData.persons.find((candidate) => candidate.id === id)
+    const personMedia = familyData.media.filter((item) => item.personId === id)
     await persist('Đang xóa thành viên…', {
       ...familyData,
       persons: familyData.persons.filter((candidate) => candidate.id !== id),
       profiles: familyData.profiles.map((profile) => profile.subjectPersonId === id ? { ...profile, subjectPersonId: null } : profile),
+      media: familyData.media.filter((item) => item.personId !== id),
     })
-    if (!useMockData && person?.photoFileId) await repository.current?.deletePhoto(person.photoFileId).catch(console.error)
+    if (!useMockData && person) await Promise.all(personMedia.map((item) => repository.current?.deletePhoto(item.driveFileId).catch(console.error)))
   }, [familyData, persist, useMockData])
 
   const backupNow = useCallback(async (reason = 'manual'): Promise<FamilyBackup> => {
@@ -430,6 +511,7 @@ export function useFamilyData() {
     activeProfileId,
     persons,
     relationships,
+    media,
     workspace,
     workspaces,
     activeWorkspaceId,
@@ -445,6 +527,10 @@ export function useFamilyData() {
     setSubject,
     addPerson,
     updatePerson,
+    addPersonMedia,
+    setPrimaryMedia,
+    updateMediaCaption,
+    deletePersonMedia,
     addRelationship,
     updateRelationship,
     deleteRelationship,
@@ -459,9 +545,9 @@ export function useFamilyData() {
     updateMember,
     removeMember,
   }), [
-    activeProfile, activeProfileId, activeWorkspaceId, addMember, addPerson, addRelationship, backupNow, busy, createProfile,
-    deletePerson, deleteRelationship, error, familyData, listBackups, loading, persons,
+    activeProfile, activeProfileId, activeWorkspaceId, addMember, addPerson, addPersonMedia, addRelationship, backupNow, busy, createProfile,
+    deletePerson, deletePersonMedia, deleteRelationship, error, familyData, listBackups, loading, media, persons,
     refresh, relationships, replaceAllData, restoreBackup, saveStatus, setActiveProfileId,
-    setSubject, switchWorkspace, updateMember, removeMember, refreshMembers, updatePerson, updateRelationship, useMockData, workspace, workspaces, members,
+    setPrimaryMedia, setSubject, switchWorkspace, updateMediaCaption, updateMember, removeMember, refreshMembers, updatePerson, updateRelationship, useMockData, workspace, workspaces, members,
   ])
 }

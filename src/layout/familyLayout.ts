@@ -4,6 +4,7 @@ import type { FamilyGraph, FamilyUnit, Person } from '../types/family'
 import type { FamilyEventType, KinshipResult } from '../types/family'
 import { calculateAge } from '../calendar/dateUtils'
 import { SPOUSE_STATUS_LABELS } from '../kinship/kinshipRules'
+import { describeGeneration, formatGenerationLabel } from '../generation/generationLabels'
 
 export interface PersonNodeData extends Record<string, unknown> {
   personId: string
@@ -17,10 +18,13 @@ export interface PersonNodeData extends Record<string, unknown> {
   eventType?: FamilyEventType
   photoFileId?: string
   workspaceId?: string
+  hiddenBranchCount?: number
+  onExpandBranch?: (personId: string) => void
 }
 
 export type PersonFlowNode = Node<PersonNodeData, 'person'>
 export type ConnectorFlowNode = Node<Record<string, never>, 'connector'>
+export type GenerationBandFlowNode = Node<{ label: string; description: string }, 'generationBand'>
 
 export const PERSON_WIDTH = 160
 export const PERSON_HEIGHT = 178
@@ -77,6 +81,9 @@ export function createFlowNodes(
     highlightedIds?: Set<string>
     eventTypes?: Map<string, FamilyEventType>
     filterActive?: boolean
+    primaryPhotoIds?: Map<string, string>
+    hiddenCounts?: Map<string, number>
+    onExpandBranch?: (personId: string) => void
   },
 ): Array<PersonFlowNode | ConnectorFlowNode> {
   const nodes: Array<PersonFlowNode | ConnectorFlowNode> = [...graph.personsById.values()].map((person) => ({
@@ -93,8 +100,10 @@ export function createFlowNodes(
       isDeceased: person.isDeceased,
       isDimmed: options?.filterActive && !options.highlightedIds?.has(person.id),
       eventType: options?.eventTypes?.get(person.id),
-      photoFileId: person.photoFileId ?? undefined,
+      photoFileId: options?.primaryPhotoIds?.get(person.id),
       workspaceId,
+      hiddenBranchCount: options?.hiddenCounts?.get(person.id),
+      onExpandBranch: options?.onExpandBranch,
     },
   }))
   nodes.push(...units.filter((unit) => unit.childIds.length > 0).map((unit) => ({
@@ -106,6 +115,36 @@ export function createFlowNodes(
     focusable: false,
   })))
   return nodes
+}
+
+export function addGenerationBands(
+  nodes: Array<PersonFlowNode | ConnectorFlowNode>,
+  generations: Map<string, number>,
+): Array<PersonFlowNode | ConnectorFlowNode | GenerationBandFlowNode> {
+  const people = nodes.filter((node): node is PersonFlowNode => node.type === 'person')
+  const rows = new Map<number, PersonFlowNode[]>()
+  for (const person of people) {
+    const generation = generations.get(person.id)
+    if (generation === undefined) continue
+    rows.set(generation, [...(rows.get(generation) ?? []), person])
+  }
+  const bands: GenerationBandFlowNode[] = [...rows].map(([generation, members]) => {
+    const minX = Math.min(...members.map((member) => member.position.x)) - 96
+    const maxX = Math.max(...members.map((member) => member.position.x + PERSON_WIDTH)) + 96
+    const y = Math.min(...members.map((member) => member.position.y)) - 54
+    return {
+      id: `generation:${generation}`,
+      type: 'generationBand',
+      position: { x: minX, y },
+      data: { label: formatGenerationLabel(generation), description: describeGeneration(generation) },
+      style: { width: maxX - minX, height: PERSON_HEIGHT + 108 },
+      selectable: false,
+      focusable: false,
+      draggable: false,
+      zIndex: -2,
+    }
+  })
+  return [...bands, ...nodes]
 }
 
 export function createFlowEdges(graph: FamilyGraph, units: FamilyUnit[]): Edge[] {

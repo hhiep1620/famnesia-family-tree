@@ -52,8 +52,10 @@ export class FamilyRepository {
     return (await apiRequest<{ data: FamilyData }>(`${workspacePath(this.workspace.id)}/backups?backupId=${encodeURIComponent(id)}`)).data
   }
 
-  async uploadPhoto(file: File): Promise<string> {
+  async uploadPhoto(file: File, profileId?: string, personId?: string): Promise<string> {
     const form = new FormData(); form.append('photo', file)
+    if (profileId) form.append('profileId', profileId)
+    if (personId) form.append('personId', personId)
     return (await apiRequest<{ id: string }>(`${workspacePath(this.workspace.id)}/photos`, { method: 'POST', body: form })).id
   }
 

@@ -75,10 +75,10 @@ async function getFile(accessToken: string, fileId: string): Promise<DriveFile> 
   return googleJson(accessToken, `/files/${encodeURIComponent(fileId)}?fields=${encodeURIComponent(FILE_FIELDS)}`)
 }
 
-async function createFolder(accessToken: string, name: string, resourceType: string, parentId?: string): Promise<DriveFile> {
+async function createFolder(accessToken: string, name: string, resourceType: string, parentId?: string, extra: Record<string, string> = {}): Promise<DriveFile> {
   return googleJson(accessToken, `/files?fields=${encodeURIComponent(FILE_FIELDS)}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, mimeType: FOLDER_MIME, appProperties: props(resourceType), parents: parentId ? [parentId] : undefined }),
+    body: JSON.stringify({ name, mimeType: FOLDER_MIME, appProperties: props(resourceType, extra), parents: parentId ? [parentId] : undefined }),
   })
 }
 
@@ -98,6 +98,10 @@ async function createJsonFile(accessToken: string, name: string, parentId: strin
 
 async function findChild(accessToken: string, parentId: string, type: string): Promise<DriveFile | undefined> {
   return (await listFiles(accessToken, `${propertyQuery(type)} and '${escapeQuery(parentId)}' in parents`))[0]
+}
+
+async function findChildByProperty(accessToken: string, parentId: string, type: string, key: string, value: string): Promise<DriveFile | undefined> {
+  return (await listFiles(accessToken, `${propertyQuery(type)} and appProperties has { key='${escapeQuery(key)}' and value='${escapeQuery(value)}' } and '${escapeQuery(parentId)}' in parents`))[0]
 }
 
 async function ensureOwnerWorkspace(accessToken: string): Promise<DriveFile> {
@@ -215,12 +219,23 @@ export async function loadBackup(accessToken: string, workspaceId: string, backu
   catch { throw new AppError(422, 'BACKUP_INVALID', 'The selected backup is invalid.') }
 }
 
-export async function uploadPhoto(accessToken: string, workspaceId: string, file: Blob, filename: string): Promise<string> {
+export async function uploadPhoto(accessToken: string, workspaceId: string, file: Blob, filename: string, profileId?: string, personId?: string): Promise<string> {
   const resource = await workspaceResources(accessToken, workspaceId, 'editor')
   if (!file.type.startsWith('image/')) throw new AppError(415, 'PHOTO_TYPE_INVALID', 'Only image files can be uploaded.')
   if (file.size > 10 * 1024 * 1024) throw new AppError(413, 'PHOTO_TOO_LARGE', 'Photo must be 10 MB or smaller.')
+  let parentId = resource.photos.id
+  if (profileId) {
+    const profileFolder = await findChildByProperty(accessToken, resource.photos.id, 'photo-profile-folder', 'profileId', profileId)
+      ?? await createFolder(accessToken, profileId, 'photo-profile-folder', resource.photos.id, { profileId })
+    parentId = profileFolder.id
+    if (personId) {
+      const personFolder = await findChildByProperty(accessToken, profileFolder.id, 'photo-person-folder', 'personId', personId)
+        ?? await createFolder(accessToken, personId, 'photo-person-folder', profileFolder.id, { profileId, personId })
+      parentId = personFolder.id
+    }
+  }
   const form = new FormData()
-  form.append('metadata', new Blob([JSON.stringify({ name: `${Date.now()}-${filename}`, parents: [resource.photos.id], appProperties: props('person-photo') })], { type: 'application/json' }))
+  form.append('metadata', new Blob([JSON.stringify({ name: `${Date.now()}-${filename}`, parents: [parentId], appProperties: props('person-photo', { workspaceId, ...(profileId ? { profileId } : {}), ...(personId ? { personId } : {}) }) })], { type: 'application/json' }))
   form.append('file', file, filename)
   const response = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id`, { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: form })
   if (!response.ok) throw new AppError(502, 'PHOTO_UPLOAD_FAILED', 'Photo could not be uploaded to Google Drive.')
@@ -229,17 +244,28 @@ export async function uploadPhoto(accessToken: string, workspaceId: string, file
   return result.id
 }
 
+async function isInsidePhotoFolder(accessToken: string, file: DriveFile, photosFolderId: string, depth = 0): Promise<boolean> {
+  if (file.parents?.includes(photosFolderId)) return true
+  if (depth >= 3 || !file.parents?.length) return false
+  for (const parentId of file.parents) {
+    const parent = await getFile(accessToken, parentId)
+    if (parent.mimeType !== FOLDER_MIME || parent.appProperties?.app !== APP) continue
+    if (await isInsidePhotoFolder(accessToken, parent, photosFolderId, depth + 1)) return true
+  }
+  return false
+}
+
 export async function readPhoto(accessToken: string, workspaceId: string, fileId: string): Promise<Response> {
   const resource = await workspaceResources(accessToken, workspaceId)
   const file = await getFile(accessToken, fileId)
-  if (!file.parents?.includes(resource.photos.id) || file.appProperties?.resourceType !== 'person-photo') throw new AppError(404, 'PHOTO_NOT_FOUND', 'Photo not found in this workspace.')
+  if (file.appProperties?.resourceType !== 'person-photo' || !await isInsidePhotoFolder(accessToken, file, resource.photos.id)) throw new AppError(404, 'PHOTO_NOT_FOUND', 'Photo not found in this workspace.')
   return googleResponse(accessToken, `/files/${encodeURIComponent(fileId)}?alt=media`)
 }
 
 export async function deletePhoto(accessToken: string, workspaceId: string, fileId: string): Promise<void> {
   const resource = await workspaceResources(accessToken, workspaceId, 'editor')
   const file = await getFile(accessToken, fileId)
-  if (!file.parents?.includes(resource.photos.id) || file.appProperties?.resourceType !== 'person-photo') throw new AppError(404, 'PHOTO_NOT_FOUND', 'Photo not found in this workspace.')
+  if (file.appProperties?.resourceType !== 'person-photo' || !await isInsidePhotoFolder(accessToken, file, resource.photos.id)) throw new AppError(404, 'PHOTO_NOT_FOUND', 'Photo not found in this workspace.')
   await googleResponse(accessToken, `/files/${encodeURIComponent(fileId)}`, { method: 'DELETE' })
 }
 

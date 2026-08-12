@@ -8,8 +8,11 @@ export interface Person {
   isDeceased?: boolean
   deathDate?: string | null
   deathLunar?: LunarDate | null
+  phone1?: string
+  phone2?: string
+  address?: string
+  note?: string
   ancestralRole?: AncestralRole
-  photoFileId?: string | null
   sortOrder?: number
   createdAt?: string
   updatedAt?: string
@@ -56,12 +59,26 @@ export interface FamilySettings {
   locale: string
 }
 
+export interface PersonMedia {
+  id: string
+  profileId: string
+  personId: string
+  driveFileId: string
+  type: 'photo'
+  isPrimary: boolean
+  caption?: string
+  takenDate?: string | null
+  sortOrder?: number
+  createdAt?: string
+}
+
 export interface FamilyData {
   schemaVersion: number
   updatedAt?: string
   profiles: FamilyProfile[]
   persons: Person[]
   relationships: Relationship[]
+  media: PersonMedia[]
   settings: FamilySettings
 }
 
@@ -110,7 +127,11 @@ export interface PersonDraft {
   deathLunarLeapMonth?: boolean
   ancestralRole: AncestralRole
   sortOrder?: number
-  photo?: File
+  phone1?: string
+  phone2?: string
+  address?: string
+  note?: string
+  photos?: File[]
 }
 
 export type WorkspaceRole = 'owner' | 'editor' | 'viewer'
@@ -167,6 +188,7 @@ export interface ReminderRule {
 }
 
 export type KinshipBranch = 'direct' | 'paternal' | 'maternal' | 'spouse'
+export type FamilyScope = 'self' | 'paternal' | 'maternal' | 'descendant' | 'spouse' | 'affinal' | 'unclassified'
 
 export interface KinshipResult {
   subjectId: string
@@ -182,6 +204,7 @@ export interface KinshipResult {
   isBloodRelation: boolean
   isMarriageRelation: boolean
   confidence: 'exact' | 'generic'
+  distance: number
 }
 
 export type FriendlyRelationship = 'child' | 'parent' | 'spouse'

@@ -1,3 +1,4 @@
+import { CURRENT_SCHEMA_VERSION } from '../schema/familyDataSchema'
 import type { FamilyData, Person, Relationship } from '../types/family'
 
 export const samplePersons: Person[] = [
@@ -24,7 +25,7 @@ export const sampleRelationships: Relationship[] = [
 ]
 
 export const sampleFamilyData: FamilyData = {
-  schemaVersion: 1,
+  schemaVersion: CURRENT_SCHEMA_VERSION,
   updatedAt: '2026-08-11T03:10:00Z',
   profiles: [{
     id: 'F0001', name: 'Gia đình Nguyễn', description: 'Dữ liệu mẫu dùng khi phát triển giao diện.',
@@ -32,5 +33,6 @@ export const sampleFamilyData: FamilyData = {
   }],
   persons: samplePersons,
   relationships: sampleRelationships,
+  media: [],
   settings: { timezone: 'Asia/Ho_Chi_Minh', locale: 'vi-VN' },
 }

@@ -13,6 +13,7 @@ export function prepareFamilyDataForExport(data: FamilyData, updatedAt = data.up
       subjectPersonId: profile.subjectPersonId ?? null,
     })),
     persons: data.persons.map(normalizePersonForStorage),
+    media: data.media.map((media) => ({ ...media, caption: media.caption ?? '', takenDate: media.takenDate ?? null })),
     relationships: data.relationships.map((relationship) => ({
       ...relationship,
       status: relationship.type === 'spouse' ? relationship.status ?? 'unknown' : undefined,
@@ -43,17 +44,18 @@ export function createFamilyDataTemplate(): FamilyData {
       {
         id: 'P0001', profileId: 'F0001', name: 'Nguyễn Văn An', nickname: 'Ông An', gender: 'male',
         birthDate: '1950-05-10', isDeceased: false, deathDate: null, deathLunar: null,
-        ancestralRole: 'founding_ancestor', photoFileId: null, sortOrder: 1,
+        phone1: '0912345678', phone2: '', address: 'Hà Nội', note: '',
+        ancestralRole: 'founding_ancestor', sortOrder: 1,
       },
       {
         id: 'P0002', profileId: 'F0001', name: 'Trần Thị Bình', nickname: '', gender: 'female',
         birthDate: '1952-08-16', isDeceased: false, deathDate: null, deathLunar: null,
-        ancestralRole: 'none', photoFileId: null, sortOrder: 2,
+        phone1: '', phone2: '', address: '', note: '', ancestralRole: 'none', sortOrder: 2,
       },
       {
         id: 'P0003', profileId: 'F0001', name: 'Nguyễn Minh Châu', nickname: '', gender: 'female',
         birthDate: '1980-01-01', isDeceased: false, deathDate: null, deathLunar: null,
-        ancestralRole: 'none', photoFileId: null, sortOrder: 1,
+        phone1: '', phone2: '', address: '', note: '', ancestralRole: 'none', sortOrder: 1,
       },
     ],
     relationships: [
@@ -70,6 +72,7 @@ export function createFamilyDataTemplate(): FamilyData {
         startDate: null, endDate: null, sortOrder: 2,
       },
     ],
+    media: [],
     settings: { timezone: 'Asia/Ho_Chi_Minh', locale: 'vi-VN' },
   })
 }
