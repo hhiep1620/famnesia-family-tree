@@ -1,6 +1,7 @@
-import { CalendarDays, Database, Leaf, LogOut, Network, Plus, RefreshCw } from 'lucide-react'
+import { CalendarDays, Database, LogOut, Network, Plus, RefreshCw } from 'lucide-react'
 import type { FamilyProfile, GoogleUser, KinshipResult, Person, WorkspaceInfo } from '../../types/family'
 import { PersonSearch } from '../search/PersonSearch'
+import { BrandLogo } from './BrandLogo'
 
 export type MainView = 'tree' | 'calendar' | 'data'
 
@@ -37,7 +38,7 @@ function Navigation({ view, onViewChange, mobile = false }: { view: MainView; on
 export function AppHeader({ persons, profiles, activeProfileId, workspaces, activeWorkspaceId, canEdit = true, user, mock, view, subject, kinships, refreshing, onProfileChange, onWorkspaceChange, onViewChange, onSearch, onAdd, onRefresh, onSignOut }: Props) {
   return <>
     <header className="app-header">
-      <div className="archive-mark"><Leaf size={17} /><span>Famnesia</span></div><div className="header-divider" /><h1>Too many relatives. Not enough memory.</h1>
+      <div className="archive-mark"><BrandLogo compact /></div><div className="header-divider" /><h1>Too many relatives. Not enough memory.</h1>
       <Navigation view={view} onViewChange={onViewChange} />
       <div className="header-actions">
         {!mock && workspaces && workspaces.length > 0 && <label className="family-switcher workspace-switcher"><span className="sr-only">Chọn workspace</span><select value={activeWorkspaceId ?? ''} onChange={(event) => onWorkspaceChange?.(event.target.value)}>{workspaces.map((workspace) => <option value={workspace.id} key={workspace.id}>{workspace.name} · {workspace.role}</option>)}</select></label>}

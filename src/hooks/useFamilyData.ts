@@ -5,6 +5,7 @@ import { requireValidFamilyData, validateFamilyData } from '../schema/familyData
 import { ApiError } from '../services/apiClient'
 import { FamilyRepository, type FamilyDataRevision } from '../services/familyRepository'
 import { MutationGate } from '../services/mutationGate'
+import { canRetryRevisionDrift } from '../services/revisionConflict'
 import type {
   FamilyBackup,
   FamilyData,
@@ -147,9 +148,18 @@ export function useFamilyData() {
     }
     if (!repository.current) throw new Error('Workspace Google Drive chưa sẵn sàng.')
     if (!repository.current.workspace.canEdit) throw new Error('Bạn chỉ có quyền xem workspace này.')
-    const snapshot = await repository.current.save(valid, revision.current)
-    applySnapshot(snapshot.data, snapshot.revision)
-    return snapshot.data
+    try {
+      const snapshot = await repository.current.save(valid, revision.current)
+      applySnapshot(snapshot.data, snapshot.revision)
+      return snapshot.data
+    } catch (caught) {
+      if (!(caught instanceof ApiError) || caught.code !== 'FAMILY_DATA_CONFLICT') throw caught
+      const latest = await repository.current.load()
+      if (!canRetryRevisionDrift(valid, latest.data)) throw caught
+      const snapshot = await repository.current.save(valid, latest.revision)
+      applySnapshot(snapshot.data, snapshot.revision)
+      return snapshot.data
+    }
   }, [applySnapshot, useMockData])
 
   const persist = useCallback((label: string, next: FamilyData): Promise<FamilyData> => (

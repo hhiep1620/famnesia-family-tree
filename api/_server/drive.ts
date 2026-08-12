@@ -164,10 +164,11 @@ async function downloadText(accessToken: string, fileId: string): Promise<string
 
 export async function loadFamily(accessToken: string, workspaceId: string): Promise<{ snapshot: FamilySnapshot; workspace: WorkspaceAccess & { rootFolderUrl: string } }> {
   const resource = await workspaceResources(accessToken, workspaceId)
+  const current = await getFile(accessToken, resource.familyData.id)
   const text = await downloadText(accessToken, resource.familyData.id)
   let value: unknown
   try { value = JSON.parse(text) } catch { throw new AppError(422, 'FAMILY_JSON_INVALID', 'family.json is not valid JSON.') }
-  return { snapshot: { data: requireValidFamilyData(value), revision: revision(resource.familyData) }, workspace: { ...resource.access, rootFolderUrl: resource.root.webViewLink ?? `https://drive.google.com/drive/folders/${resource.root.id}` } }
+  return { snapshot: { data: requireValidFamilyData(value), revision: revision(current) }, workspace: { ...resource.access, rootFolderUrl: resource.root.webViewLink ?? `https://drive.google.com/drive/folders/${resource.root.id}` } }
 }
 
 export async function saveFamily(accessToken: string, workspaceId: string, data: FamilyData, expected: FamilyRevision | undefined, mode: 'save' | 'replace' | 'restore' = 'save'): Promise<FamilySnapshot> {
@@ -187,7 +188,8 @@ export async function saveFamily(accessToken: string, workspaceId: string, data:
     method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json; charset=UTF-8' }, body: serializeFamilyData(next, updatedAt),
   })
   if (!response.ok) throw new AppError(response.status === 403 ? 403 : 502, response.status === 403 ? 'DRIVE_ACCESS_DENIED' : 'GOOGLE_DRIVE_FAILED', 'family.json could not be saved.')
-  return { data: next, revision: revision(await response.json() as DriveFile) }
+  const written = await response.json() as DriveFile
+  return { data: next, revision: revision(written) }
 }
 
 function backupName(): string { return `famnesia_${new Date().toISOString().replace(/[-:]/g, '').replace('T', '_').replace(/\.\d{3}Z$/, '')}.json` }

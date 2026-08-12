@@ -25,6 +25,8 @@ export type ConnectorFlowNode = Node<Record<string, never>, 'connector'>
 export const PERSON_WIDTH = 160
 export const PERSON_HEIGHT = 178
 const UNIT_SIZE = 14
+const COUPLE_GAP = 24
+const FAMILY_GROUP_GAP = 64
 
 function getLifeLabel(person: Person): string | undefined {
   if (person.isDeceased) return `${person.birthDate?.slice(0, 4) ?? '?'} – ${person.deathDate?.slice(0, 4) ?? '?'}`
@@ -193,6 +195,79 @@ export function layoutFamilyTree(
         if (node) node.position = { ...node.position, x: node.position.x + shift }
       }
     })
+  }
+
+  // Manual couple and branch positioning happens after Dagre, so Dagre can no
+  // longer protect cards from overlapping. Resolve every visual row as grouped
+  // family clusters, then re-center its connectors under the final parent cards.
+  const people = positioned.filter((node): node is PersonFlowNode => node.type === 'person')
+  const rows: PersonFlowNode[][] = []
+  for (const person of [...people].sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x)) {
+    const row = rows.find((candidate) => Math.abs(candidate[0].position.y - person.position.y) < 4)
+    if (row) row.push(person)
+    else rows.push([person])
+  }
+
+  const familyPairs = [
+    ...units.flatMap((unit) => unit.parentIds.length > 1
+      ? unit.parentIds.slice(1).map((parentId) => [unit.parentIds[0], parentId] as const)
+      : []),
+    ...edges.filter((edge) => edge.id.startsWith('spouse:')).map((edge) => [edge.source, edge.target] as const),
+  ]
+
+  for (const row of rows) {
+    const rowIds = new Set(row.map((node) => node.id))
+    const parent = new Map(row.map((node) => [node.id, node.id]))
+    const find = (id: string): string => {
+      const current = parent.get(id) ?? id
+      if (current === id) return current
+      const root = find(current)
+      parent.set(id, root)
+      return root
+    }
+    const unite = (a: string, b: string) => {
+      const rootA = find(a); const rootB = find(b)
+      if (rootA !== rootB) parent.set(rootB, rootA)
+    }
+    familyPairs.forEach(([a, b]) => { if (rowIds.has(a) && rowIds.has(b)) unite(a, b) })
+
+    const components = new Map<string, PersonFlowNode[]>()
+    for (const node of row) {
+      const root = find(node.id)
+      const component = components.get(root) ?? []
+      component.push(node)
+      components.set(root, component)
+    }
+
+    const originalLeft = Math.min(...row.map((node) => node.position.x))
+    const originalRight = Math.max(...row.map((node) => node.position.x + PERSON_WIDTH))
+    const groups = [...components.values()].map((component) => {
+      const ordered = [...component].sort((a, b) => a.position.x - b.position.x || a.id.localeCompare(b.id))
+      const originalGroupLeft = Math.min(...ordered.map((node) => node.position.x))
+      ordered.forEach((node, index) => { node.position = { ...node.position, x: originalGroupLeft + index * (PERSON_WIDTH + COUPLE_GAP) } })
+      return { nodes: ordered, left: originalGroupLeft, width: ordered.length * PERSON_WIDTH + (ordered.length - 1) * COUPLE_GAP }
+    }).sort((a, b) => a.left - b.left)
+
+    let cursor = groups[0]?.left ?? 0
+    for (const group of groups) {
+      const left = Math.max(group.left, cursor)
+      const shift = left - group.left
+      group.nodes.forEach((node) => { node.position = { ...node.position, x: node.position.x + shift } })
+      cursor = left + group.width + FAMILY_GROUP_GAP
+    }
+
+    const resolvedLeft = Math.min(...row.map((node) => node.position.x))
+    const resolvedRight = Math.max(...row.map((node) => node.position.x + PERSON_WIDTH))
+    const centerShift = (originalLeft + originalRight - resolvedLeft - resolvedRight) / 2
+    row.forEach((node) => { node.position = { ...node.position, x: node.position.x + centerShift } })
+  }
+
+  for (const unit of units) {
+    const connector = byId.get(unit.id)
+    const parents = unit.parentIds.map((id) => byId.get(id)).filter((node): node is PersonFlowNode => node?.type === 'person')
+    if (!connector || !parents.length) continue
+    const parentCenter = parents.reduce((sum, node) => sum + node.position.x + PERSON_WIDTH / 2, 0) / parents.length
+    connector.position = { ...connector.position, x: parentCenter - UNIT_SIZE / 2 }
   }
 
   return positioned
