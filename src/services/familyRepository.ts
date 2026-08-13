@@ -40,7 +40,7 @@ export class FamilyRepository {
     return result.snapshot
   }
 
-  async listActivity(): Promise<ActivityEvent[]> { return (await apiRequest<{ activity: ActivityEvent[] }>(`${workspacePath(this.workspace.id)}/activity`)).activity }
+  async listActivity(): Promise<ActivityEvent[]> { return (await apiRequest<{ activity: ActivityEvent[] }>(`${workspacePath(this.workspace.id)}/family?resource=activity`)).activity }
 
   async backup(data: FamilyData, reason = 'manual'): Promise<FamilyBackup> {
     return (await apiRequest<{ backup: FamilyBackup }>(`${workspacePath(this.workspace.id)}/backups`, { method: 'POST', ...jsonBody({ data, reason }) })).backup

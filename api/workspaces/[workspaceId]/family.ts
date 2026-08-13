@@ -1,5 +1,5 @@
 import { requireAuth } from '../../_server/auth.js'
-import { appendActivity, loadFamily, saveFamily, type FamilyRevision } from '../../_server/drive.js'
+import { appendActivity, listActivity, loadFamily, saveFamily, type FamilyRevision } from '../../_server/drive.js'
 import { AppError, assertSameOrigin, json, pathParameter, readJsonLimited, requireMethod, withErrors } from '../../_server/http.js'
 import type { FamilyData } from '../../../src/types/family.js'
 import { validateFamilyData } from '../../../src/schema/familyDataSchema.js'
@@ -12,7 +12,10 @@ export default { fetch(request: Request) { return withErrors(async () => {
   if (request.method === 'PUT') assertSameOrigin(request)
   const auth = await requireAuth(request)
   const workspaceId = pathParameter(request, 'workspaces')
-  if (request.method === 'GET') return json(await loadFamily(auth.accessToken, workspaceId))
+  if (request.method === 'GET') {
+    if (new URL(request.url).searchParams.get('resource') === 'activity') return json({ activity: await listActivity(auth.accessToken, workspaceId) })
+    return json(await loadFamily(auth.accessToken, workspaceId))
+  }
   const body = await readJsonLimited<SaveBody>(request, 11 * 1024 * 1024)
   const validationErrors: string[] = []
   const dangerousPath = findDangerousObjectKey(body.data, 'data')

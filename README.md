@@ -129,7 +129,7 @@ Các endpoint quan trọng:
 
 - `/api/auth/login`, `/callback`, `/session`, `/logout`, `/reconnect`
 - `/api/workspaces`
-- `/api/workspaces/:id/family`, `/photos`, `/backups`, `/members`, `/activity`
+- `/api/workspaces/:id/family` (gồm dữ liệu và activity), `/photos`, `/backups`, `/members`
 
 Mọi response API nhạy cảm đều `Cache-Control: no-store`; thao tác thay đổi dữ liệu kiểm tra same-origin để chống CSRF. Save dùng revision để trả `409 FAMILY_DATA_CONFLICT` nếu có phiên khác vừa ghi.
 
