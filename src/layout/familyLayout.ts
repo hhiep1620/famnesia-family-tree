@@ -30,7 +30,7 @@ export type ConnectorFlowNode = Node<Record<string, never>, 'connector'>
 export type GenerationBandFlowNode = Node<{ label: string; description: string }, 'generationBand'>
 
 export const PERSON_WIDTH = 160
-export const PERSON_HEIGHT = 178
+export const PERSON_HEIGHT = 190
 const UNIT_SIZE = 14
 const COUPLE_GAP = 48
 const GROUP_GAP = 96
@@ -92,11 +92,13 @@ export function createFlowNodes(
     primaryPhotoIds?: Map<string, string>
     hiddenCounts?: Map<string, number>
     expandedPersonIds?: Set<string>
+    siblingGroupMemberIds?: Set<string>
     onExpandBranch?: (personId: string) => void
     onCollapseBranch?: (personId: string) => void
   },
 ): Array<PersonFlowNode | ConnectorFlowNode> {
-  const siblingIds = new Set(units.filter((unit) => unit.childIds.length > 1).flatMap((unit) => unit.childIds))
+  const siblingIds = options?.siblingGroupMemberIds
+    ?? new Set(units.filter((unit) => unit.childIds.length > 1).flatMap((unit) => unit.childIds))
   const nodes: Array<PersonFlowNode | ConnectorFlowNode> = [...graph.personsById.values()].map((person) => {
     const kinship = options?.kinships?.get(person.id)
     return {

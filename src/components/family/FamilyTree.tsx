@@ -76,6 +76,9 @@ function FamilyTreeCanvas({ graph, workspaceId, selectedId, subjectId, subjectNa
     ancestorDepth, descendantDepth, collateral, expandedPersonIds, collapsedPersonIds, revealAllBranches,
   }), [ancestorDepth, collapsedPersonIds, collateral, descendantDepth, expandedPersonIds, graph, revealAllBranches, subjectId])
   const units = useMemo(() => createFamilyUnits(visible.graph), [visible.graph])
+  const siblingGroupMemberIds = useMemo(() => new Set(
+    createFamilyUnits(graph).filter((unit) => unit.childIds.length > 1).flatMap((unit) => unit.childIds),
+  ), [graph])
   const primaryPhotoIds = useMemo(() => new Map([...createPrimaryMediaMap(media)].map(([personId, item]) => [personId, item.driveFileId])), [media])
   const generations = useMemo(() => subjectId ? calculateAllGenerations(subjectId, graph) : new Map<string, number>(), [graph, subjectId])
   const generationOrdinals = useMemo(() => calculateGenerationOrdinals(generations), [generations])
@@ -97,12 +100,13 @@ function FamilyTreeCanvas({ graph, workspaceId, selectedId, subjectId, subjectNa
     const nextNodes = createFlowNodes(visible.graph, units, workspaceId, {
       subjectId, kinships, highlightedIds, eventTypes, filterActive, primaryPhotoIds,
       hiddenCounts: visible.hiddenCounts, expandedPersonIds: branchExpandedIds,
+      siblingGroupMemberIds,
       onExpandBranch: expandBranch, onCollapseBranch: collapseBranch,
     })
     const nextEdges = createFlowEdges(visible.graph, units)
     const positioned = layoutFamilyTree(nextNodes, nextEdges, units, { graph, subjectId, kinships })
     return { nodes: addGenerationBands(positioned, generations, generationOrdinals), edges: nextEdges }
-  }, [workspaceId, branchExpandedIds, collapseBranch, eventTypes, expandBranch, filterActive, generationOrdinals, generations, graph, highlightedIds, kinships, primaryPhotoIds, subjectId, units, visible.graph, visible.hiddenCounts])
+  }, [workspaceId, branchExpandedIds, collapseBranch, eventTypes, expandBranch, filterActive, generationOrdinals, generations, graph, highlightedIds, kinships, primaryPhotoIds, siblingGroupMemberIds, subjectId, units, visible.graph, visible.hiddenCounts])
 
   const selectedNodes = useMemo(() => nodes.map((node) => ({ ...node, selected: node.type === 'person' && node.id === selectedId })), [nodes, selectedId])
 

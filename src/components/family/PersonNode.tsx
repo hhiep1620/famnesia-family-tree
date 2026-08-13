@@ -11,15 +11,17 @@ export function PersonNode({ data, selected }: NodeProps<PersonFlowNode>) {
       <Handle id="family-top" type="target" position={Position.Top} className="family-handle" />
       <Handle id="spouse-left" type="target" position={Position.Left} className="family-handle" />
       <Handle id="spouse-left-source" type="source" position={Position.Left} className="family-handle" />
+      {data.siblingOrder !== undefined && <span className="sibling-order-tag" title={`Con thứ ${data.siblingOrder} trong anh chị em`} aria-label={`Con thứ ${data.siblingOrder} trong anh chị em`}>Thứ {data.siblingOrder}</span>}
       <div className="portrait-ring">
         {url ? <img src={url} alt="" /> : <span className={loading ? 'animate-pulse' : ''}>{getInitials(data.name)}</span>}
       </div>
-      <div className="person-node-name">{data.name}</div>
-      {data.nickname && <div className="person-node-nickname">“{data.nickname}”</div>}
-      {data.lifeLabel && <div className="person-node-life">{data.lifeLabel}</div>}
+      <div className="person-node-copy">
+        <div className="person-node-name">{data.name}</div>
+        {data.nickname && <div className="person-node-nickname">“{data.nickname}”</div>}
+        {data.lifeLabel && <div className="person-node-life">{data.lifeLabel}</div>}
+      </div>
       {data.kinshipLabel && <div className="person-node-relationship">
         <div className={`kinship-tag ${data.isSubject ? 'is-subject' : ''}`}>{data.kinshipLabel}</div>
-        {data.siblingOrder !== undefined && <span className="sibling-order-tag" title={`Con thứ ${data.siblingOrder} trong anh chị em`} aria-label={`Con thứ ${data.siblingOrder} trong anh chị em`}>Thứ {data.siblingOrder}</span>}
       </div>}
       {(data.hiddenBranchCount || data.isBranchExpanded) ? <div className="branch-node-controls">
         {data.hiddenBranchCount ? <button className="branch-expand-indicator" type="button" onClick={(event) => { event.stopPropagation(); data.onExpandBranch?.(data.personId) }} aria-label={`Mở ${data.hiddenBranchCount} người thân đang ẩn`} title={`Mở thêm ${data.hiddenBranchCount} người`}><ChevronRight size={12} /><span>+{data.hiddenBranchCount}</span></button> : null}

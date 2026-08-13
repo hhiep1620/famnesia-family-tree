@@ -144,7 +144,7 @@ h1, h2, h3 { font-family: 'Newsreader', serif; }
 .generation-band strong { position: absolute; top: 13px; left: 18px; color: rgba(65, 102, 90, .7); font-size: 9px; font-weight: 850; letter-spacing: .13em; }
 .generation-band span { position: absolute; top: 29px; left: 18px; color: rgba(115, 123, 118, .72); font-size: 7px; }
 
-.person-node { width: 160px; height: 178px; position: relative; display: flex; flex-direction: column; align-items: center; border: 1px solid #d4d0c5; border-radius: 22px; padding: 12px 10px 8px; background: rgba(255, 253, 248, .99); box-shadow: 0 7px 22px rgba(45, 57, 52, .09); transition: opacity .2s ease, filter .2s ease, box-shadow .2s ease, border-color .2s ease, transform .2s ease; }
+.person-node { width: 160px; height: 190px; position: relative; display: flex; flex-direction: column; align-items: center; border: 1px solid #d4d0c5; border-radius: 22px; padding: 12px 10px 9px; background: rgba(255, 253, 248, .99); box-shadow: 0 7px 22px rgba(45, 57, 52, .09); transition: opacity .2s ease, filter .2s ease, box-shadow .2s ease, border-color .2s ease, transform .2s ease; }
 .person-node:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(45, 57, 52, .14); }
 .person-node.is-selected { border-color: var(--moss); box-shadow: 0 0 0 4px rgba(65, 102, 90, .16), 0 12px 28px rgba(45, 57, 52, .15); }
 .person-node.is-dimmed { opacity: .28; filter: grayscale(.55); }
@@ -153,13 +153,14 @@ h1, h2, h3 { font-family: 'Newsreader', serif; }
 .is-deceased .portrait-ring { filter: saturate(.6); }
 .portrait-ring img, .details-portrait img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 .portrait-ring span { width: 100%; height: 100%; display: grid; place-items: center; border-radius: 50%; color: var(--moss); background: var(--moss-soft); font: 500 22px 'Newsreader', serif; }
-.person-node-name { width: 140px; min-height: 32px; display: flex; align-items: center; justify-content: center; margin-top: 6px; color: var(--ink); font: 600 14.5px/1.08 'Newsreader', serif; overflow-wrap: anywhere; text-align: center; white-space: normal; }
-.person-node-nickname { max-width: 135px; margin-top: 2px; overflow: hidden; color: #7c817e; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.person-node-life { margin-top: 3px; color: var(--muted); font-size: 9px; font-weight: 600; }
-.person-node-relationship { max-width: 140px; display: flex; align-items: center; justify-content: center; gap: 3px; margin-top: 5px; }
+.person-node-copy { width: 140px; min-height: 0; display: flex; flex: 1 1 auto; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding-top: 5px; text-align: center; }
+.person-node-name { width: 140px; color: var(--ink); font: 600 14.5px/1.08 'Newsreader', serif; overflow-wrap: anywhere; text-align: center; white-space: normal; }
+.person-node-nickname { max-width: 135px; overflow: hidden; color: #7c817e; font-size: 9px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.person-node-life { color: var(--muted); font-size: 9px; font-weight: 600; line-height: 1.25; }
+.person-node-relationship { max-width: 140px; min-height: 19px; display: flex; flex: 0 0 auto; align-items: center; justify-content: center; margin-top: 3px; }
 .kinship-tag { min-width: 0; max-width: 130px; overflow: hidden; border: 1px solid #cbd8cf; border-radius: 999px; padding: 3px 7px; color: var(--moss); background: #edf3ed; font-size: 9px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 .kinship-tag.is-subject { color: white; background: var(--moss); border-color: var(--moss); }
-.sibling-order-tag { flex: 0 0 auto; border: 1px solid #d5cfc2; border-radius: 999px; padding: 3px 6px; color: #765f54; background: #f7f2eb; font-size: 8px; font-weight: 850; white-space: nowrap; }
+.sibling-order-tag { position: absolute; z-index: 2; top: 11px; left: 11px; border: 1px solid #c9d6cc; border-radius: 999px; padding: 3px 6px; color: var(--moss); background: rgba(237, 243, 237, .96); box-shadow: 0 2px 7px rgba(45, 57, 52, .08); font-size: 8px; font-weight: 850; white-space: nowrap; }
 .node-event-marker { position: absolute; top: 12px; right: 12px; width: 9px; height: 9px; border: 2px solid var(--white); border-radius: 50%; box-shadow: 0 0 0 1px currentColor; }
 .node-event-marker.birthday { color: var(--birthday); background: var(--birthday); }
 .node-event-marker.death_anniversary { color: var(--memorial); background: var(--memorial); }

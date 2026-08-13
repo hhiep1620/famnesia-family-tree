@@ -87,4 +87,18 @@ describe('family tree layout', () => {
     expect(byId.get('P0001')?.data.siblingOrder).toBeUndefined()
     expect(byId.get('P0006')?.data.siblingOrder).toBeUndefined()
   })
+
+  it('keeps the subject birth order when their sibling is hidden from the visible graph', () => {
+    const fullGraph = buildFamilyGraph(people, relationships)
+    const fullUnits = createFamilyUnits(fullGraph)
+    const siblingGroupMemberIds = new Set(fullUnits.filter((unit) => unit.childIds.length > 1).flatMap((unit) => unit.childIds))
+    const visiblePeople = people.filter((person) => person.id !== 'P0011')
+    const visibleRelationships = relationships.filter((relationship) => relationship.person1Id !== 'P0011' && relationship.person2Id !== 'P0011')
+    const visibleGraph = buildFamilyGraph(visiblePeople, visibleRelationships)
+    const visibleUnits = createFamilyUnits(visibleGraph)
+    const subject = createFlowNodes(visibleGraph, visibleUnits, undefined, { subjectId: 'P0005', siblingGroupMemberIds })
+      .find((node) => node.type === 'person' && node.id === 'P0005')
+
+    expect(subject?.data.siblingOrder).toBe(5)
+  })
 })
