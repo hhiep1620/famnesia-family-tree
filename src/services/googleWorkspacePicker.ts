@@ -84,7 +84,7 @@ function loadGooglePicker(): Promise<GooglePicker> {
 }
 
 export async function chooseSharedFamnesiaWorkspace(): Promise<string | undefined> {
-  const session = await apiRequest<PickerSession>('/api/auth/picker', { method: 'POST' })
+  const session = await apiRequest<PickerSession>('/api/auth/session?resource=picker', { method: 'POST' })
   const picker = await loadGooglePicker()
   return new Promise((resolve) => {
     const folders = new picker.DocsView(picker.ViewId.FOLDERS)
