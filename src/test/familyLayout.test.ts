@@ -71,4 +71,18 @@ describe('family tree layout', () => {
     expect(byId.get('P0001')?.position.x).toBeLessThan(byId.get('P0002')?.position.x ?? 0)
     expect(byId.get('P0011')?.position.x).toBeLessThan(byId.get('P0005')?.position.x ?? 0)
   })
+
+  it('shows birth order only for the subject direct siblings', () => {
+    const graph = buildFamilyGraph(people, relationships)
+    const units = createFamilyUnits(graph)
+    const kinships = getAllKinships('P0005', graph)
+    const nodes = createFlowNodes(graph, units, undefined, { subjectId: 'P0005', kinships })
+      .filter((node) => node.type === 'person')
+    const byId = new Map(nodes.map((node) => [node.id, node]))
+
+    expect(kinships.get('P0011')?.relationCode).toMatch(/sibling/)
+    expect(byId.get('P0011')?.data.siblingOrder).toBe(11)
+    expect(byId.get('P0001')?.data.siblingOrder).toBeUndefined()
+    expect(byId.get('P0006')?.data.siblingOrder).toBeUndefined()
+  })
 })

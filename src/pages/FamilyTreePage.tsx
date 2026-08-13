@@ -82,7 +82,13 @@ export function FamilyTreePage({ user, onSignOut }: Props) {
               </> : view === 'calendar' ? <FamilyCalendar persons={data.persons} onOpenPerson={setSelectedId} onViewTree={openFamilyBranch} /> : <FamilyAnalytics data={activeFamilyData} subject={subject} onOpenCalendar={() => setView('calendar')} />
                 : <div className="center-state empty-state"><span className="seed-mark">+</span><span className="eyebrow">{data.activeProfile?.name}</span><h2>Gia đình này chưa có thành viên</h2><p>Thêm người đầu tiên hoặc import một family.json hoàn chỉnh.</p><div className="empty-actions"><button className="primary-button" onClick={() => setModal({ type: 'add' })}><Plus size={17} /> Thêm người đầu tiên</button><button className="secondary-button" onClick={openImport}>Import JSON</button></div></div>}
 
-      {data.error && data.familyData.updatedAt && <div className="toast error-toast">{data.error}</div>}{data.notice && !data.error && <div className="toast">{data.notice}</div>}{data.busy && <div className="toast busy-toast"><span className="mini-spinner" />{data.busy}</div>}
+      {data.error && data.familyData.updatedAt
+        ? <div className="toast error-toast">{data.error}</div>
+        : data.busy
+          ? <div className="toast busy-toast"><span className="mini-spinner" />{data.busy}</div>
+          : data.notice
+            ? <div className="toast">{data.notice}</div>
+            : null}
       {view === 'tree' && !explorerId && data.activeProfileId && canEdit && <button className="mobile-add" aria-label="Thêm người" onClick={() => setModal({ type: 'add' })}><Plus size={24} /></button>}
 
       {selected && <PersonDetails person={selected} persons={data.persons} relationships={data.relationships} media={data.media} workspaceId={data.workspace?.id} readOnly={!canEdit} busy={Boolean(data.busy)} subjectId={persistedSubjectId ?? undefined} kinship={kinships.get(selected.id)} context={view === 'calendar' ? 'calendar' : 'tree'} onClose={() => setSelectedId(undefined)} onSelect={setSelectedId} onSetSubject={(id) => { void data.setSubject(id) }} onViewCalendar={openCalendarPerson} onViewTree={openFamilyBranch} onExploreRelatives={openRelativeExplorer} onAddRelative={() => setModal({ type: 'relative', kind: 'child' })} onEdit={() => setModal({ type: 'edit' })} onAddRelationship={data.addRelationship} onUpdateRelationship={data.updateRelationship} onDeleteRelationship={data.deleteRelationship} onDeletePerson={async () => { await data.deletePerson(selected.id); setSelectedId(undefined) }} onAddMedia={data.addPersonMedia} onSetPrimaryMedia={data.setPrimaryMedia} onUpdateMediaCaption={data.updateMediaCaption} onDeleteMedia={data.deletePersonMedia} />}

@@ -12,6 +12,7 @@ export interface PersonNodeData extends Record<string, unknown> {
   nickname?: string
   lifeLabel?: string
   kinshipLabel?: string
+  siblingOrder?: number
   isSubject?: boolean
   isDeceased?: boolean
   isDimmed?: boolean
@@ -73,6 +74,13 @@ function getLifeLabel(person: Person): string | undefined {
   return age === undefined ? undefined : `${age} tuổi`
 }
 
+const DIRECT_SIBLING_RELATIONS = new Set(['older_sibling', 'younger_sibling', 'sibling'])
+
+function getSiblingOrder(person: Person, kinship?: KinshipResult): number | undefined {
+  if (!kinship || !DIRECT_SIBLING_RELATIONS.has(kinship.relationCode)) return undefined
+  return Number.isInteger(person.sortOrder) && (person.sortOrder ?? 0) > 0 ? person.sortOrder : undefined
+}
+
 export function createFlowNodes(
   graph: FamilyGraph,
   units: FamilyUnit[],
@@ -90,28 +98,32 @@ export function createFlowNodes(
     onCollapseBranch?: (personId: string) => void
   },
 ): Array<PersonFlowNode | ConnectorFlowNode> {
-  const nodes: Array<PersonFlowNode | ConnectorFlowNode> = [...graph.personsById.values()].map((person) => ({
-    id: person.id,
-    type: 'person',
-    position: { x: 0, y: 0 },
-    data: {
-      personId: person.id,
-      name: person.name,
-      nickname: person.nickname ?? undefined,
-      lifeLabel: getLifeLabel(person),
-      kinshipLabel: options?.kinships?.get(person.id)?.shortLabel,
-      isSubject: options?.subjectId === person.id,
-      isDeceased: person.isDeceased,
-      isDimmed: options?.filterActive && !options.highlightedIds?.has(person.id),
-      eventType: options?.eventTypes?.get(person.id),
-      photoFileId: options?.primaryPhotoIds?.get(person.id),
-      workspaceId,
-      hiddenBranchCount: options?.hiddenCounts?.get(person.id),
-      isBranchExpanded: options?.expandedPersonIds?.has(person.id),
-      onExpandBranch: options?.onExpandBranch,
-      onCollapseBranch: options?.onCollapseBranch,
-    },
-  }))
+  const nodes: Array<PersonFlowNode | ConnectorFlowNode> = [...graph.personsById.values()].map((person) => {
+    const kinship = options?.kinships?.get(person.id)
+    return {
+      id: person.id,
+      type: 'person',
+      position: { x: 0, y: 0 },
+      data: {
+        personId: person.id,
+        name: person.name,
+        nickname: person.nickname ?? undefined,
+        lifeLabel: getLifeLabel(person),
+        kinshipLabel: kinship?.shortLabel,
+        siblingOrder: getSiblingOrder(person, kinship),
+        isSubject: options?.subjectId === person.id,
+        isDeceased: person.isDeceased,
+        isDimmed: options?.filterActive && !options.highlightedIds?.has(person.id),
+        eventType: options?.eventTypes?.get(person.id),
+        photoFileId: options?.primaryPhotoIds?.get(person.id),
+        workspaceId,
+        hiddenBranchCount: options?.hiddenCounts?.get(person.id),
+        isBranchExpanded: options?.expandedPersonIds?.has(person.id),
+        onExpandBranch: options?.onExpandBranch,
+        onCollapseBranch: options?.onCollapseBranch,
+      },
+    }
+  })
   nodes.push(...units.filter((unit) => unit.childIds.length > 0).map((unit) => ({
     id: unit.id,
     type: 'connector' as const,

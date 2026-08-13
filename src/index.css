@@ -156,8 +156,10 @@ h1, h2, h3 { font-family: 'Newsreader', serif; }
 .person-node-name { width: 140px; min-height: 32px; display: flex; align-items: center; justify-content: center; margin-top: 6px; color: var(--ink); font: 600 14.5px/1.08 'Newsreader', serif; overflow-wrap: anywhere; text-align: center; white-space: normal; }
 .person-node-nickname { max-width: 135px; margin-top: 2px; overflow: hidden; color: #7c817e; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .person-node-life { margin-top: 3px; color: var(--muted); font-size: 9px; font-weight: 600; }
-.kinship-tag { max-width: 130px; margin-top: 5px; overflow: hidden; border: 1px solid #cbd8cf; border-radius: 999px; padding: 3px 7px; color: var(--moss); background: #edf3ed; font-size: 9px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.person-node-relationship { max-width: 140px; display: flex; align-items: center; justify-content: center; gap: 3px; margin-top: 5px; }
+.kinship-tag { min-width: 0; max-width: 130px; overflow: hidden; border: 1px solid #cbd8cf; border-radius: 999px; padding: 3px 7px; color: var(--moss); background: #edf3ed; font-size: 9px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 .kinship-tag.is-subject { color: white; background: var(--moss); border-color: var(--moss); }
+.sibling-order-tag { flex: 0 0 auto; border: 1px solid #d5cfc2; border-radius: 999px; padding: 3px 6px; color: #765f54; background: #f7f2eb; font-size: 8px; font-weight: 850; white-space: nowrap; }
 .node-event-marker { position: absolute; top: 12px; right: 12px; width: 9px; height: 9px; border: 2px solid var(--white); border-radius: 50%; box-shadow: 0 0 0 1px currentColor; }
 .node-event-marker.birthday { color: var(--birthday); background: var(--birthday); }
 .node-event-marker.death_anniversary { color: var(--memorial); background: var(--memorial); }
@@ -378,7 +380,8 @@ h1, h2, h3 { font-family: 'Newsreader', serif; }
 .empty-actions { display: flex; gap: 8px; margin-top: 17px; }
 .empty-actions .primary-button, .empty-actions .secondary-button { margin-top: 0; }
 .error-state svg { color: var(--danger); }
-.toast { position: absolute; z-index: 60; left: 50%; bottom: 22px; max-width: min(500px, calc(100% - 32px)); display: flex; align-items: center; gap: 8px; transform: translateX(-50%); border-radius: 11px; padding: 10px 13px; box-shadow: 0 12px 40px rgba(38, 46, 43, .18); font-size: 10px; }
+.toast { position: absolute; z-index: 60; left: 50%; bottom: 22px; max-width: min(500px, calc(100% - 32px)); display: flex; align-items: center; gap: 8px; transform: translateX(-50%); border: 1px solid var(--line); border-radius: 11px; padding: 10px 13px; color: var(--ink); background: var(--white); box-shadow: 0 12px 40px rgba(38, 46, 43, .18); font-size: 10px; }
+.tree-stage.view-tree:has(.tree-scope-panel) .toast { top: 70px; right: 16px; bottom: auto; left: auto; transform: none; }
 .error-toast { color: #7f3f3f; border: 1px solid #e9caca; background: #fff8f8; }
 .busy-toast { color: var(--ink); border: 1px solid var(--line); background: var(--white); }
 .mini-spinner { width: 13px; height: 13px; border: 2px solid #d9dfda; border-top-color: var(--moss); border-radius: 50%; animation: spin .8s linear infinite; }
@@ -692,6 +695,7 @@ h1, h2, h3 { font-family: 'Newsreader', serif; }
   .tree-stage:has(.tree-scope-controls) .mobile-add { display: none; }
   .view-calendar .mobile-add { display: none; }
   .toast { bottom: 72px; }
+  .tree-stage.view-tree:has(.tree-scope-panel) .toast { top: 58px; right: auto; left: 50%; transform: translateX(-50%); }
   .calendar-page { padding: 15px 10px 24px; }
   .explorer-toolbar { grid-template-columns: auto minmax(0, 1fr) auto; padding: 8px 10px; }
   .explorer-toolbar > div strong { font-size: 15px; }
