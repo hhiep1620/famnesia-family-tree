@@ -148,7 +148,7 @@ function accessOf(root: DriveFile): WorkspaceAccess {
 
 export async function listWorkspaces(accessToken: string): Promise<WorkspaceAccess[]> {
   let roots = await listFiles(accessToken, propertyQuery('workspace-root'), 'name')
-  if (!roots.some((root) => root.ownedByMe)) {
+  if (roots.length === 0) {
     await ensureResources(accessToken, await ensureOwnerWorkspace(accessToken))
     roots = await listFiles(accessToken, propertyQuery('workspace-root'), 'name')
   }

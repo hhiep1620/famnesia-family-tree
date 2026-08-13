@@ -10,6 +10,7 @@ import { mergePeople } from '../integrity/mergePerson'
 import { CURRENT_SCHEMA_VERSION, requireValidFamilyData } from '../schema/familyDataSchema'
 import { ApiError } from '../services/apiClient'
 import { FamilyRepository, type FamilyDataRevision } from '../services/familyRepository'
+import { sharedWorkspaceForEmptyOwner } from '../services/workspaceSelection'
 import type { ActivityEvent, FamilyBackup, FamilyData, FamilyProfile, FriendlyRelationship, Person, PersonDraft, PersonMedia, Relationship, SaveStatus, SpouseStatus, WorkspaceInfo, WorkspaceMember } from '../types/family'
 import type { FamilyCommitConflictDetails, FamilyOperation, FamilyOperationConflict, StoredFamilyDraft } from '../types/familyOperations'
 import { generateNextPersonId } from '../utils/personId'
@@ -117,9 +118,17 @@ export function useFamilyData(userId = 'mock-user') {
         setWorkspace(undefined); setSavedData(next); setFamilyData(next); selectAvailableProfile(next); setSaveStatus(pendingRef.current.length ? 'unsaved' : 'saved')
       } else {
         if (!repository.current || (activeWorkspaceId && repository.current.workspace.id !== activeWorkspaceId)) repository.current = await FamilyRepository.connect(activeWorkspaceId)
-        const connected = repository.current
+        let connected = repository.current
+        let snapshot = await connected.load()
+        const storedDraft = await loadFamilyDraft(connected.workspace.id, userId).catch(() => undefined)
+        const sharedWorkspace = sharedWorkspaceForEmptyOwner(connected.workspace, connected.workspaces, snapshot.data, Boolean(storedDraft))
+        if (sharedWorkspace) {
+          repository.current = await FamilyRepository.connect(sharedWorkspace.id)
+          connected = repository.current
+          snapshot = await connected.load()
+          setNotice('Đã mở gia đình được chia sẻ với bạn.')
+        }
         setWorkspaces(connected.workspaces); setWorkspace(connected.workspace); setActiveWorkspaceId(connected.workspace.id)
-        const snapshot = await connected.load()
         if (pendingRef.current.length) {
           const merged = mergeFamilyOperations(snapshot.data, pendingRef.current)
           if (merged.conflicts.length) {
@@ -136,7 +145,7 @@ export function useFamilyData(userId = 'mock-user') {
     } catch (caught) {
       console.error(caught); setError(caught instanceof Error ? caught.message : 'Không thể tải dữ liệu gia đình.')
     } finally { setLoading(false) }
-  }, [activeWorkspaceId, restoreDraft, selectAvailableProfile, useMockData])
+  }, [activeWorkspaceId, restoreDraft, selectAvailableProfile, useMockData, userId])
 
   useEffect(() => { repository.current = undefined; revision.current = undefined; draftReady.current = false; void refresh() }, [activeWorkspaceId, refresh])
 

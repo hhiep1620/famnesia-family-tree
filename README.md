@@ -29,6 +29,7 @@ Redis không chứa dữ liệu gia phả. Redis chỉ giữ session có TTL và
 
 - `owner`: đọc/sửa, ảnh, import/replace, restore và quản lý thành viên.
 - `editor`: đọc/sửa, ảnh, xử lý chất lượng dữ liệu và gộp thành viên; không import thay thế, restore hoặc quản lý thành viên.
+- Tài khoản được mời sẽ tự mở workspace được chia sẻ nếu đó là workspace dùng được duy nhất. Famnesia không tạo thêm workspace cá nhân rỗng trong trường hợp này; các workspace cá nhân rỗng đã tạo trước đây cũng tự chuyển sang một workspace được chia sẻ duy nhất nếu không có Draft.
 - `viewer`: chỉ đọc và export.
 
 Giao diện ẩn thao tác không hợp lệ, nhưng Vercel Function luôn kiểm tra lại quyền thật trên Google Drive ở mỗi request. Không dựa vào role do browser gửi lên.
