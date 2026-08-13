@@ -24,6 +24,7 @@ import { validateFamilyData } from '../../schema/familyDataSchema'
 import type { ActivityEvent, FamilyBackup, FamilyData, SaveStatus, WorkspaceInfo, WorkspaceMember } from '../../types/family'
 import { ActivityTimeline } from './ActivityTimeline'
 import { DataQualityCenter } from './DataQualityCenter'
+import { SharedWorkspaceConnector } from './SharedWorkspaceConnector'
 
 interface Props {
   data: FamilyData
@@ -47,6 +48,7 @@ interface Props {
   onOpenPerson?: (id: string) => void
   onSuppressDuplicate?: (leftId: string, rightId: string) => Promise<void>
   onMergePeople?: (canonicalId: string, duplicateId: string) => Promise<void>
+  onConnectSharedWorkspace?: (workspaceId: string) => Promise<void>
 }
 
 const saveLabels: Record<SaveStatus, string> = {
@@ -163,7 +165,7 @@ export function DataManagement(props: Props) {
 
     {tab === 'overview' ? <>
     <section className="workspace-ledger">
-      <div className="workspace-ledger-title"><Database size={20} /><div><strong>{props.workspace?.name ?? 'Famnesia'}</strong><span>{props.mock ? 'Workspace mô phỏng khi phát triển' : `Workspace Google Drive · quyền ${props.workspace?.role ?? 'đang tải'}`}</span></div>{props.workspace?.rootFolderUrl && <a className="secondary-button" href={props.workspace.rootFolderUrl} target="_blank" rel="noreferrer"><FolderOpen size={15} /> Mở thư mục Drive</a>}</div>
+      <div className="workspace-ledger-title"><Database size={20} /><div><strong>{props.workspace?.name ?? 'Famnesia'}</strong><span>{props.mock ? 'Workspace mô phỏng khi phát triển' : `Workspace Google Drive · quyền ${props.workspace?.role ?? 'đang tải'}`}</span></div><div className="workspace-ledger-actions">{!props.mock && props.onConnectSharedWorkspace && <SharedWorkspaceConnector compact onConnect={props.onConnectSharedWorkspace} />}{props.workspace?.rootFolderUrl && <a className="secondary-button" href={props.workspace.rootFolderUrl} target="_blank" rel="noreferrer"><FolderOpen size={15} /> Mở thư mục Drive</a>}</div></div>
       <div className="workspace-files"><div className="is-primary"><FileJson /><strong>family.json</strong><span>Nguồn dữ liệu chính</span></div><div><Archive /><strong>backups/</strong><span>Bản sao trước thay đổi lớn</span></div><div><Image /><strong>photos/</strong><span>Ảnh lưu riêng, JSON chỉ giữ ID</span></div></div>
     </section>
 

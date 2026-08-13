@@ -12,6 +12,20 @@ export function googleOAuthEnv() {
   }
 }
 
+export function googlePickerEnv() {
+  const clientId = googleOAuthEnv().clientId
+  const configuredAppId = process.env.GOOGLE_CLOUD_PROJECT_NUMBER?.trim()
+  const inferredAppId = /^(\d+)-/.exec(clientId)?.[1]
+  const appId = configuredAppId || inferredAppId
+  if (!appId || !/^\d+$/.test(appId)) {
+    throw new Error('GOOGLE_CLOUD_PROJECT_NUMBER must be a valid Google Cloud project number.')
+  }
+  return {
+    apiKey: required('GOOGLE_PICKER_API_KEY'),
+    appId,
+  }
+}
+
 export function sessionSecret(): string {
   const value = required('SESSION_SECRET')
   if (value.length < 32) throw new Error('SESSION_SECRET must contain at least 32 characters.')

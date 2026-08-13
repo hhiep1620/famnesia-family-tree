@@ -85,6 +85,9 @@ Production cần:
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 GOOGLE_REDIRECT_URI=https://famnesia-family-tree.vercel.app/api/auth/callback
+GOOGLE_PICKER_API_KEY=...
+# Tuỳ chọn nếu không thể suy ra từ GOOGLE_CLIENT_ID
+GOOGLE_CLOUD_PROJECT_NUMBER=...
 SESSION_SECRET=...
 TOKEN_ENCRYPTION_KEY=...
 SESSION_MAX_AGE_SECONDS=604800
@@ -96,6 +99,21 @@ VITE_USE_MOCK_DATA=false
 Cài Upstash Redis từ Vercel Marketplace và kết nối vào project `family-tree`; integration sẽ inject URL/token. Production cố ý từ chối chạy auth nếu không có persistent store, tránh session bị mất khi serverless instance restart.
 
 Không đưa `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `TOKEN_ENCRYPTION_KEY` hoặc Redis token vào biến `VITE_*`.
+
+### Kết nối workspace được chia sẻ bằng Google Picker
+
+Famnesia giữ scope OAuth `drive.file`. Người được mời chọn thư mục gốc Famnesia một lần qua Google Picker; backend xác minh đúng workspace trước khi ghi nhớ và chuyển sang gia đình đó.
+
+Trong cùng Google Cloud project đang chứa OAuth Client:
+
+1. Bật **Google Picker API**.
+2. Tạo **API key** loại Browser, giới hạn **Websites** theo HTTP referrer:
+   - `https://famnesia-family-tree.vercel.app/*`
+   - `http://localhost:3000/*`
+3. Giới hạn API key chỉ được gọi **Google Picker API**.
+4. Gán key cho `GOOGLE_PICKER_API_KEY`. `GOOGLE_CLOUD_PROJECT_NUMBER` là Project number trong **IAM & Admin → Settings**; có thể bỏ qua nếu client ID bắt đầu bằng project number.
+
+API key được gửi tới trình duyệt theo yêu cầu của Google Picker, vì vậy giới hạn referrer và API là bắt buộc. OAuth access token chỉ được cấp từ endpoint cùng origin, dùng tức thời cho Picker và không lưu vào localStorage.
 
 ## Deploy
 

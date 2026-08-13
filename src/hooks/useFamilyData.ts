@@ -147,7 +147,12 @@ export function useFamilyData(userId = 'mock-user') {
     } finally { setLoading(false) }
   }, [activeWorkspaceId, restoreDraft, selectAvailableProfile, useMockData, userId])
 
-  useEffect(() => { repository.current = undefined; revision.current = undefined; draftReady.current = false; void refresh() }, [activeWorkspaceId, refresh])
+  useEffect(() => {
+    if (repository.current?.workspace.id !== activeWorkspaceId) {
+      repository.current = undefined; revision.current = undefined; draftReady.current = false
+    }
+    void refresh()
+  }, [activeWorkspaceId, refresh])
 
   useEffect(() => {
     if (!draftReady.current || useMockData || !workspace?.id || draftRecovery) return
@@ -402,6 +407,16 @@ export function useFamilyData(userId = 'mock-user') {
   const mergeDuplicatePeople = useCallback(async (canonicalId: string, duplicateId: string) => { requireNoDraft(); setBusy('Đang gộp thành viên…'); try { await saveFullData(mergePeople(familyData, canonicalId, duplicateId), 'merge') } finally { setBusy(undefined) } }, [familyData, requireNoDraft, saveFullData])
 
   const switchWorkspace = useCallback((id: string) => { if (!workspaces.some((item) => item.id === id) || id === activeWorkspaceId) return; localStorage.setItem('family-tree-workspace', id); repository.current = undefined; revision.current = undefined; setActiveWorkspaceId(id) }, [activeWorkspaceId, workspaces])
+  const connectSharedWorkspace = useCallback(async (id: string) => {
+    if (pendingRef.current.length) throw new Error('Hãy Lưu tất cả hoặc Hủy Draft trước khi kết nối gia đình khác.')
+    setBusy('Đang kết nối gia đình được chia sẻ…'); setError(undefined)
+    try {
+      const connected = await FamilyRepository.connectShared(id)
+      repository.current = connected; revision.current = undefined; draftReady.current = false
+      setWorkspaces(connected.workspaces); setWorkspace(connected.workspace); setActiveWorkspaceId(connected.workspace.id)
+      setNotice('Đã kết nối gia đình được chia sẻ. Những lần sau Famnesia sẽ tự mở gia đình này.')
+    } finally { setBusy(undefined) }
+  }, [])
   const refreshMembers = useCallback(async () => { if (useMockData || !repository.current?.workspace.canManageMembers) { setMembers([]); return [] } const next = await repository.current.listMembers(); setMembers(next); return next }, [useMockData])
   const addMember = useCallback(async (email: string, role: 'editor' | 'viewer') => { if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); await repository.current.addMember(email, role); await refreshMembers() }, [refreshMembers])
   const updateMember = useCallback(async (id: string, role: 'editor' | 'viewer') => { if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); await repository.current.updateMember(id, role); await refreshMembers() }, [refreshMembers])
@@ -411,6 +426,6 @@ export function useFamilyData(userId = 'mock-user') {
   return useMemo(() => ({ familyData, savedData, profiles: familyData.profiles, activeProfile, activeProfileId, persons, relationships, media, workspace, workspaces, activeWorkspaceId, members, activity, loading, busy, error, notice, saveStatus, useMockData,
     pendingOperations, conflictDetails, draftRecovery, refresh, setActiveProfileId, createProfile, updateProfile, setSubject, addPerson, updatePerson, addPersonMedia, setPrimaryMedia, updateMediaCaption, deletePersonMedia, addRelationship, updateRelationship, deleteRelationship, deletePerson,
     saveAll, discardDraft, undoOperation, resolveConflictsAndSave, downloadRecoveryDraft, deleteRecoveryDraft,
-    backupNow, listBackups, restoreBackup, replaceAllData, switchWorkspace, refreshMembers, addMember, updateMember, removeMember, suppressDuplicate, mergeDuplicatePeople, refreshActivity,
-  }), [familyData, savedData, activeProfile, activeProfileId, persons, relationships, media, workspace, workspaces, activeWorkspaceId, members, activity, loading, busy, error, notice, saveStatus, useMockData, pendingOperations, conflictDetails, draftRecovery, refresh, setActiveProfileId, createProfile, updateProfile, setSubject, addPerson, updatePerson, addPersonMedia, setPrimaryMedia, updateMediaCaption, deletePersonMedia, addRelationship, updateRelationship, deleteRelationship, deletePerson, saveAll, discardDraft, undoOperation, resolveConflictsAndSave, downloadRecoveryDraft, deleteRecoveryDraft, backupNow, listBackups, restoreBackup, replaceAllData, switchWorkspace, refreshMembers, addMember, updateMember, removeMember, suppressDuplicate, mergeDuplicatePeople, refreshActivity])
+    backupNow, listBackups, restoreBackup, replaceAllData, switchWorkspace, connectSharedWorkspace, refreshMembers, addMember, updateMember, removeMember, suppressDuplicate, mergeDuplicatePeople, refreshActivity,
+  }), [familyData, savedData, activeProfile, activeProfileId, persons, relationships, media, workspace, workspaces, activeWorkspaceId, members, activity, loading, busy, error, notice, saveStatus, useMockData, pendingOperations, conflictDetails, draftRecovery, refresh, setActiveProfileId, createProfile, updateProfile, setSubject, addPerson, updatePerson, addPersonMedia, setPrimaryMedia, updateMediaCaption, deletePersonMedia, addRelationship, updateRelationship, deleteRelationship, deletePerson, saveAll, discardDraft, undoOperation, resolveConflictsAndSave, downloadRecoveryDraft, deleteRecoveryDraft, backupNow, listBackups, restoreBackup, replaceAllData, switchWorkspace, connectSharedWorkspace, refreshMembers, addMember, updateMember, removeMember, suppressDuplicate, mergeDuplicatePeople, refreshActivity])
 }

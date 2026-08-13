@@ -30,6 +30,16 @@ export class FamilyRepository {
     return new FamilyRepository(workspace, workspaces)
   }
 
+  static async connectShared(workspaceId: string): Promise<FamilyRepository> {
+    const result = await apiRequest<{ workspace: WorkspaceInfo }>('/api/workspaces', {
+      method: 'POST', ...jsonBody({ workspaceId }),
+    })
+    const known = await this.listWorkspaces().catch(() => [])
+    const workspaces = [result.workspace, ...known.filter((item) => item.id !== result.workspace.id)]
+    localStorage.setItem('family-tree-workspace', result.workspace.id)
+    return new FamilyRepository(result.workspace, workspaces)
+  }
+
   async load(): Promise<FamilyDataSnapshot> {
     const result = await apiRequest<{ snapshot: FamilyDataSnapshot; workspace: WorkspaceInfo }>(`${workspacePath(this.workspace.id)}/family`)
     Object.assign(this.workspace, result.workspace)
