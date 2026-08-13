@@ -108,7 +108,9 @@ Trong cùng Google Cloud project đang chứa OAuth Client:
 
 1. Bật **Google Picker API**.
 2. Tạo **API key** loại Browser, giới hạn **Websites** theo HTTP referrer:
+   - `https://famnesia-family-tree.vercel.app`
    - `https://famnesia-family-tree.vercel.app/*`
+   - `http://localhost:3000`
    - `http://localhost:3000/*`
 3. Giới hạn API key chỉ được gọi **Google Picker API**.
 4. Gán key cho `GOOGLE_PICKER_API_KEY`. `GOOGLE_CLOUD_PROJECT_NUMBER` là Project number trong **IAM & Admin → Settings**; có thể bỏ qua nếu client ID bắt đầu bằng project number.
