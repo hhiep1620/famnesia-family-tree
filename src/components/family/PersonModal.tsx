@@ -146,7 +146,7 @@ export function PersonModal({ mode, persons, relationships, person, initialKind 
           </div></fieldset>}
 
           {localError && <p className="form-error">{localError}</p>}
-          <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose} disabled={submitting}>Hủy</button><button type="submit" className="primary-button" disabled={submitting || Boolean(busy)}>{busy ?? (submitting ? 'Đang lưu hồ sơ…' : 'Lưu hồ sơ')}</button></div>
+          <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose} disabled={submitting}>Hủy</button><button type="submit" className="primary-button" disabled={submitting || Boolean(busy)}>{busy ?? (submitting ? 'Đang cập nhật Draft…' : mode === 'edit' ? 'Cập nhật Draft' : 'Thêm vào Draft')}</button></div>
         </form>
       </section>
     </div>

@@ -6,6 +6,7 @@ import { FamilyAnalytics } from '../components/analytics/FamilyAnalytics'
 import { CreateProfileModal } from '../components/data/CreateProfileModal'
 import { DataManagement } from '../components/data/DataManagement'
 import { StartFamilyTree } from '../components/data/StartFamilyTree'
+import { DraftWorkspaceControls } from '../components/draft/DraftWorkspaceControls'
 import { PersonDetails } from '../components/family/PersonDetails'
 import { FamilyTree } from '../components/family/FamilyTree'
 import { PersonModal } from '../components/family/PersonModal'
@@ -22,9 +23,10 @@ import type { FamilyEventType, FriendlyRelationship, GoogleUser } from '../types
 interface Props { user?: GoogleUser; onSignOut?: () => void }
 type ModalState = { type: 'add' } | { type: 'relative'; kind: FriendlyRelationship } | { type: 'edit' } | undefined
 type TreeFilter = FamilyEventType | 'all'
+interface PendingLeave { title: string; run: () => void | Promise<void> }
 
 export function FamilyTreePage({ user, onSignOut }: Props) {
-  const data = useFamilyData()
+  const data = useFamilyData(user?.id ?? user?.email ?? 'mock-user')
   const [view, setView] = useState<MainView>('tree')
   const [selectedId, setSelectedId] = useState<string>()
   const [treeFilter, setTreeFilter] = useState<TreeFilter>('all')
@@ -33,6 +35,7 @@ export function FamilyTreePage({ user, onSignOut }: Props) {
   const [explorerId, setExplorerId] = useState<string>()
   const [profileModal, setProfileModal] = useState<'create' | 'edit'>()
   const [openImportOnMount, setOpenImportOnMount] = useState(false)
+  const [pendingLeave, setPendingLeave] = useState<PendingLeave>()
   const graph = useMemo(() => buildFamilyGraph(data.persons, data.relationships), [data.persons, data.relationships])
   const persistedSubjectId = data.activeProfile?.subjectPersonId ?? undefined
   const viewSubjectId = viewSubjectStack.at(-1) ?? persistedSubjectId
@@ -55,9 +58,18 @@ export function FamilyTreePage({ user, onSignOut }: Props) {
   const openFamilyBranch = (id: string) => { setView('tree'); setSelectedId(undefined); setExplorerId(undefined); setViewSubjectStack((current) => current.at(-1) === id ? current : [...current, id]) }
   const goBackSubject = () => { setSelectedId(undefined); setViewSubjectStack((current) => current.length > 1 ? current.slice(0, -1) : current) }
   const openImport = () => { setOpenImportOnMount(true); setView('data') }
+  const guardLeave = (title: string, run: PendingLeave['run']) => { if (data.pendingOperations.length) setPendingLeave({ title, run }); else void run() }
+  const requestWorkspaceChange = (id: string) => guardLeave('Chuyển sang workspace khác?', () => data.switchWorkspace(id))
+  const requestSignOut = onSignOut ? () => guardLeave('Đăng xuất khỏi Famnesia?', onSignOut) : undefined
+  const continueLeave = async (mode: 'save' | 'discard') => {
+    if (!pendingLeave) return
+    if (mode === 'save' && !await data.saveAll()) return
+    if (mode === 'discard') await data.discardDraft()
+    const action = pendingLeave.run; setPendingLeave(undefined); await action()
+  }
 
   return <main className="app-shell">
-    <AppHeader persons={data.persons} profileMembers={data.familyData.persons} media={data.media} workspaceId={data.workspace?.id} profiles={data.profiles} activeProfileId={data.activeProfileId} workspaces={data.workspaces} activeWorkspaceId={data.activeWorkspaceId} canEdit={canEdit} user={user} mock={data.useMockData} view={view} subject={subject} kinships={kinships} scopes={scopes} refreshing={data.loading} onProfileChange={data.setActiveProfileId} onEditProfile={() => setProfileModal('edit')} onWorkspaceChange={data.switchWorkspace} onViewChange={changeView} onSearch={openRelativeExplorer} onAdd={() => setModal({ type: 'add' })} onRefresh={() => void data.refresh()} onSignOut={onSignOut} />
+    <AppHeader persons={data.persons} profileMembers={data.familyData.persons} media={data.media} workspaceId={data.workspace?.id} profiles={data.profiles} activeProfileId={data.activeProfileId} workspaces={data.workspaces} activeWorkspaceId={data.activeWorkspaceId} canEdit={canEdit} user={user} mock={data.useMockData} view={view} subject={subject} kinships={kinships} scopes={scopes} refreshing={data.loading} onProfileChange={data.setActiveProfileId} onEditProfile={() => setProfileModal('edit')} onWorkspaceChange={requestWorkspaceChange} onViewChange={changeView} onSearch={openRelativeExplorer} onAdd={() => setModal({ type: 'add' })} onRefresh={() => void data.refresh()} onSignOut={requestSignOut} />
     <div className={`tree-stage view-${view}`}>
       {data.loading ? <div className="center-state"><span className="archive-loader" /><h2>Đang mở gia phả</h2><p>Đang tìm workspace và đọc family.json…</p></div>
         : data.error && !data.familyData.updatedAt ? <div className="center-state error-state"><AlertTriangle /><h2>Không thể tải gia phả</h2><p>{data.error}</p><button className="secondary-button" onClick={() => void data.refresh()}><RefreshCw size={16} /> Thử lại</button></div>
@@ -70,7 +82,7 @@ export function FamilyTreePage({ user, onSignOut }: Props) {
               </> : view === 'calendar' ? <FamilyCalendar persons={data.persons} onOpenPerson={setSelectedId} onViewTree={openFamilyBranch} /> : <FamilyAnalytics data={activeFamilyData} subject={subject} onOpenCalendar={() => setView('calendar')} />
                 : <div className="center-state empty-state"><span className="seed-mark">+</span><span className="eyebrow">{data.activeProfile?.name}</span><h2>Gia đình này chưa có thành viên</h2><p>Thêm người đầu tiên hoặc import một family.json hoàn chỉnh.</p><div className="empty-actions"><button className="primary-button" onClick={() => setModal({ type: 'add' })}><Plus size={17} /> Thêm người đầu tiên</button><button className="secondary-button" onClick={openImport}>Import JSON</button></div></div>}
 
-      {data.error && data.familyData.updatedAt && <div className="toast error-toast">{data.error}</div>}{data.busy && <div className="toast busy-toast"><span className="mini-spinner" />{data.busy}</div>}
+      {data.error && data.familyData.updatedAt && <div className="toast error-toast">{data.error}</div>}{data.notice && !data.error && <div className="toast">{data.notice}</div>}{data.busy && <div className="toast busy-toast"><span className="mini-spinner" />{data.busy}</div>}
       {view === 'tree' && !explorerId && data.activeProfileId && canEdit && <button className="mobile-add" aria-label="Thêm người" onClick={() => setModal({ type: 'add' })}><Plus size={24} /></button>}
 
       {selected && <PersonDetails person={selected} persons={data.persons} relationships={data.relationships} media={data.media} workspaceId={data.workspace?.id} readOnly={!canEdit} busy={Boolean(data.busy)} subjectId={persistedSubjectId ?? undefined} kinship={kinships.get(selected.id)} context={view === 'calendar' ? 'calendar' : 'tree'} onClose={() => setSelectedId(undefined)} onSelect={setSelectedId} onSetSubject={(id) => { void data.setSubject(id) }} onViewCalendar={openCalendarPerson} onViewTree={openFamilyBranch} onExploreRelatives={openRelativeExplorer} onAddRelative={() => setModal({ type: 'relative', kind: 'child' })} onEdit={() => setModal({ type: 'edit' })} onAddRelationship={data.addRelationship} onUpdateRelationship={data.updateRelationship} onDeleteRelationship={data.deleteRelationship} onDeletePerson={async () => { await data.deletePerson(selected.id); setSelectedId(undefined) }} onAddMedia={data.addPersonMedia} onSetPrimaryMedia={data.setPrimaryMedia} onUpdateMediaCaption={data.updateMediaCaption} onDeleteMedia={data.deletePersonMedia} />}
@@ -80,5 +92,7 @@ export function FamilyTreePage({ user, onSignOut }: Props) {
     {modal?.type === 'add' && <PersonModal mode="add" persons={data.persons} relationships={data.relationships} busy={data.busy} onClose={() => setModal(undefined)} onCreate={data.addPerson} />}
     {modal?.type === 'relative' && selected && <PersonModal mode="relative" person={selected} initialKind={modal.kind} persons={data.persons} relationships={data.relationships} busy={data.busy} onClose={() => setModal(undefined)} onCreate={data.addPerson} />}
     {modal?.type === 'edit' && selected && <PersonModal mode="edit" person={selected} persons={data.persons} relationships={data.relationships} busy={data.busy} onClose={() => setModal(undefined)} onUpdate={(draft) => data.updatePerson(selected.id, draft)} />}
+    <DraftWorkspaceControls operations={data.pendingOperations} data={data.familyData} saving={data.saveStatus === 'saving'} offline={data.saveStatus === 'offline'} conflict={data.conflictDetails} recovery={data.draftRecovery} onSave={data.saveAll} onDiscard={data.discardDraft} onUndo={data.undoOperation} onResolve={data.resolveConflictsAndSave} onDownloadRecovery={data.downloadRecoveryDraft} onDeleteRecovery={data.deleteRecoveryDraft} />
+    {pendingLeave && <div className="modal-backdrop draft-modal-backdrop" role="presentation"><section className="draft-dialog leave-draft-dialog" role="dialog" aria-modal="true"><header><div><span className="eyebrow">Draft chưa lưu</span><h2>{pendingLeave.title}</h2><p>Bạn có {data.pendingOperations.length} thay đổi chưa lưu. Hãy chọn cách xử lý trước khi tiếp tục.</p></div></header><footer><button className="secondary-button" onClick={() => setPendingLeave(undefined)}>Ở lại</button><button className="danger-button" onClick={() => void continueLeave('discard')}>Hủy Draft</button><button className="primary-button" onClick={() => void continueLeave('save')}>Lưu rồi tiếp tục</button></footer></section></div>}
   </main>
 }

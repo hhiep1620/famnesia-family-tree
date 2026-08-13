@@ -1,7 +1,9 @@
-import { createEmptyFamilyData, CURRENT_SCHEMA_VERSION, requireValidFamilyData } from '../../src/schema/familyDataSchema.js'
+import { createEmptyFamilyData, CURRENT_SCHEMA_VERSION, requireValidFamilyData, validateFamilyData } from '../../src/schema/familyDataSchema.js'
 import { ACTIVITY_RETENTION_LIMIT, parseActivityJsonLines, retainRecentActivity, serializeActivityJsonLines } from '../../src/activity/activityRetention.js'
 import { serializeFamilyData } from '../../src/import/exportFamilyData.js'
+import { compactFamilyOperations, mergeFamilyOperations, operationCounts } from '../../src/draft/familyOperations.js'
 import type { ActivityEvent, FamilyBackup, FamilyData } from '../../src/types/family.js'
+import type { FamilyCommitMeta, FamilyCommitRequest, FamilyOperation } from '../../src/types/familyOperations.js'
 import { AppError } from './http.js'
 import type { WorkspaceAccess, WorkspaceRole } from './types.js'
 
@@ -24,6 +26,8 @@ interface DriveFile {
   ownedByMe?: boolean
   capabilities?: { canEdit?: boolean; canAddChildren?: boolean; canShare?: boolean }
 }
+
+interface DriveFileVersion { file: DriveFile; etag?: string }
 
 export interface WorkspaceResources {
   root: DriveFile
@@ -75,6 +79,11 @@ async function listFiles(accessToken: string, query: string, orderBy = 'modified
 
 async function getFile(accessToken: string, fileId: string): Promise<DriveFile> {
   return googleJson(accessToken, `/files/${encodeURIComponent(fileId)}?fields=${encodeURIComponent(FILE_FIELDS)}`)
+}
+
+async function getFileVersion(accessToken: string, fileId: string): Promise<DriveFileVersion> {
+  const response = await googleResponse(accessToken, `/files/${encodeURIComponent(fileId)}?fields=${encodeURIComponent(FILE_FIELDS)}`)
+  return { file: await response.json() as DriveFile, etag: response.headers.get('etag') ?? undefined }
 }
 
 async function createFolder(accessToken: string, name: string, resourceType: string, parentId?: string, extra: Record<string, string> = {}): Promise<DriveFile> {
@@ -205,6 +214,100 @@ export async function saveFamily(accessToken: string, workspaceId: string, data:
   return { data: next, revision: revision(written) }
 }
 
+function commitCountLabels(operations: FamilyOperation[]): Record<string, number> {
+  const raw = operationCounts(operations)
+  const labels: Record<string, string> = {
+    'profile.create': 'profileCreated', 'profile.update': 'profileUpdated', 'subject.set': 'subjectSet',
+    'person.create': 'personCreated', 'person.update': 'personUpdated', 'person.delete': 'personDeleted',
+    'relationship.create': 'relationshipCreated', 'relationship.update': 'relationshipUpdated', 'relationship.delete': 'relationshipDeleted',
+    'media.attach': 'mediaAttached', 'media.primary.set': 'mediaPrimarySet', 'media.caption.update': 'mediaCaptionUpdated', 'media.delete': 'mediaDeleted',
+    'settings.duplicate_suppression.add': 'duplicateSuppressionAdded',
+  }
+  return Object.fromEntries(Object.entries(raw).map(([key, count]) => [labels[key] ?? key, count]))
+}
+
+async function writeCommittedFamily(accessToken: string, file: DriveFile, etag: string | undefined, data: FamilyData, commitId: string): Promise<DriveFile> {
+  const form = new FormData()
+  form.append('metadata', new Blob([JSON.stringify({ appProperties: { ...(file.appProperties ?? {}), lastCommitId: commitId } })], { type: 'application/json' }))
+  form.append('file', new Blob([serializeFamilyData(data, data.updatedAt)], { type: 'application/json' }))
+  const response = await fetch(`${UPLOAD_API}/files/${encodeURIComponent(file.id)}?uploadType=multipart&fields=${encodeURIComponent(FILE_FIELDS)}`, {
+    method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, ...(etag ? { 'If-Match': etag } : {}) }, body: form,
+  })
+  if (response.status === 412) throw new AppError(409, 'FAMILY_COMMIT_RACE', 'Family data changed while the commit was being prepared.')
+  if (!response.ok) throw new AppError(response.status === 403 ? 403 : 502, response.status === 403 ? 'DRIVE_ACCESS_DENIED' : 'GOOGLE_DRIVE_FAILED', 'family.json could not be committed.')
+  return await response.json() as DriveFile
+}
+
+async function appendCommitActivity(accessToken: string, workspaceId: string, actor: { email: string; name?: string }, commit: FamilyCommitMeta): Promise<void> {
+  const existing = await listActivity(accessToken, workspaceId).catch(() => [])
+  if (existing.some((event) => event.metadata?.commitId === commit.commitId)) return
+  await appendActivity(accessToken, workspaceId, {
+    actorEmail: actor.email,
+    actorName: actor.name,
+    action: 'family.commit',
+    entityType: 'dataset',
+    summary: `${actor.name ?? actor.email} đã lưu ${commit.operationCount} thay đổi`,
+    metadata: { commitId: commit.commitId, operationCount: commit.operationCount, counts: commit.counts },
+  })
+}
+
+async function validateCommitPhotoReferences(accessToken: string, workspaceId: string, photosFolderId: string, operations: FamilyOperation[]): Promise<void> {
+  const ids = [...new Set(operations.filter((item) => item.type === 'media.attach').map((item) => String((item.value as { driveFileId?: unknown } | undefined)?.driveFileId ?? '')).filter(Boolean))]
+  const checks = await Promise.all(ids.map(async (fileId) => {
+    try {
+      const file = await getFile(accessToken, fileId)
+      return file.appProperties?.resourceType === 'person-photo' && file.appProperties?.workspaceId === workspaceId && await isInsidePhotoFolder(accessToken, file, photosFolderId)
+    } catch { return false }
+  }))
+  if (checks.some((valid) => !valid)) throw new AppError(422, 'FAMILY_COMMIT_INVALID', 'One or more photo references do not belong to this Famnesia workspace.')
+}
+
+export async function commitFamily(accessToken: string, workspaceId: string, request: FamilyCommitRequest, actor: { email: string; name?: string }): Promise<{ snapshot: FamilySnapshot; commit: FamilyCommitMeta }> {
+  const operations = compactFamilyOperations(request.operations)
+  const commit: FamilyCommitMeta = { commitId: request.commitId, operationCount: operations.length, counts: commitCountLabels(operations) }
+  const resource = await workspaceResources(accessToken, workspaceId, 'editor')
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const currentVersion = await getFileVersion(accessToken, resource.familyData.id)
+    const currentText = await downloadText(accessToken, resource.familyData.id)
+    let latest: FamilyData
+    try { latest = requireValidFamilyData(JSON.parse(currentText)) }
+    catch { throw new AppError(422, 'FAMILY_JSON_INVALID', 'family.json is not valid Famnesia data.') }
+
+    if (currentVersion.file.appProperties?.lastCommitId === request.commitId) {
+      const idempotentCommit = { ...commit, idempotent: true }
+      await appendCommitActivity(accessToken, workspaceId, actor, idempotentCommit).catch((error) => console.error('Commit activity append failed', error instanceof Error ? error.message : String(error)))
+      return { snapshot: { data: latest, revision: revision(currentVersion.file) }, commit: idempotentCommit }
+    }
+
+    const merged = mergeFamilyOperations(latest, operations)
+    if (merged.conflicts.length) {
+      throw new AppError(409, 'FAMILY_COMMIT_CONFLICT', 'Some changes conflict with the latest Drive version.', {
+        conflicts: merged.conflicts,
+        latestSnapshot: { data: latest, revision: revision(currentVersion.file) },
+      })
+    }
+    const updatedAt = new Date().toISOString()
+    const validation = validateFamilyData({ ...merged.data, updatedAt })
+    if (!validation.data) throw new AppError(422, 'FAMILY_COMMIT_INVALID', 'The combined changes failed genealogy validation.', { errors: validation.errors.slice(0, 50) })
+    await validateCommitPhotoReferences(accessToken, workspaceId, resource.photos.id, operations)
+
+    try {
+      const written = await writeCommittedFamily(accessToken, currentVersion.file, currentVersion.etag, validation.data, request.commitId)
+      await appendCommitActivity(accessToken, workspaceId, actor, commit).catch((error) => console.error('Commit activity append failed', error instanceof Error ? error.message : String(error)))
+      const referenced = new Set(validation.data.media.map((item) => item.driveFileId))
+      const removedPhotoIds = latest.media.filter((item) => !referenced.has(item.driveFileId)).map((item) => item.driveFileId)
+      await Promise.allSettled(removedPhotoIds.map((fileId) => deletePhoto(accessToken, workspaceId, fileId)))
+      await cleanupOrphanPhotos(accessToken, workspaceId, validation.data).catch((error) => { console.error('Photo cleanup failed', error instanceof Error ? error.message : String(error)); return 0 })
+      return { snapshot: { data: validation.data, revision: revision(written) }, commit }
+    } catch (error) {
+      if (error instanceof AppError && error.code === 'FAMILY_COMMIT_RACE' && attempt < 2) continue
+      throw error
+    }
+  }
+  throw new AppError(409, 'FAMILY_COMMIT_CONFLICT', 'Family data kept changing. Please review and save again.')
+}
+
 function describeFamilyMutation(mode: 'save' | 'replace' | 'restore' | 'merge', before: FamilyData | undefined, after: FamilyData): Pick<ActivityEvent, 'action' | 'entityType' | 'entityId' | 'summary' | 'metadata'> {
   if (mode === 'replace') return { action: 'dataset.imported', entityType: 'dataset', summary: 'Imported family dataset', metadata: { people: after.persons.length, relationships: after.relationships.length, media: after.media.length } }
   if (mode === 'restore') return { action: 'backup.restored', entityType: 'dataset', summary: 'Restored a family backup' }
@@ -278,7 +381,7 @@ export async function loadBackup(accessToken: string, workspaceId: string, backu
   catch { throw new AppError(422, 'BACKUP_INVALID', 'The selected backup is invalid.') }
 }
 
-export async function uploadPhoto(accessToken: string, workspaceId: string, file: Blob, filename: string, profileId?: string, personId?: string): Promise<string> {
+export async function uploadPhoto(accessToken: string, workspaceId: string, file: Blob, filename: string, profileId?: string, personId?: string, uploadedBy?: string): Promise<string> {
   const resource = await workspaceResources(accessToken, workspaceId, 'editor')
   if (!file.type.startsWith('image/')) throw new AppError(415, 'PHOTO_TYPE_INVALID', 'Only image files can be uploaded.')
   if (file.size > 10 * 1024 * 1024) throw new AppError(413, 'PHOTO_TOO_LARGE', 'Photo must be 10 MB or smaller.')
@@ -294,13 +397,25 @@ export async function uploadPhoto(accessToken: string, workspaceId: string, file
     }
   }
   const form = new FormData()
-  form.append('metadata', new Blob([JSON.stringify({ name: `${Date.now()}-${filename}`, parents: [parentId], appProperties: props('person-photo', { workspaceId, ...(profileId ? { profileId } : {}), ...(personId ? { personId } : {}) }) })], { type: 'application/json' }))
+  const createdAt = new Date().toISOString()
+  form.append('metadata', new Blob([JSON.stringify({ name: `${Date.now()}-${filename}`, parents: [parentId], appProperties: props('person-photo', { workspaceId, ...(profileId ? { profileId } : {}), ...(personId ? { personId } : {}), ...(uploadedBy ? { uploadedBy } : {}), createdAt }) })], { type: 'application/json' }))
   form.append('file', file, filename)
   const response = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id`, { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: form })
   if (!response.ok) throw new AppError(502, 'PHOTO_UPLOAD_FAILED', 'Photo could not be uploaded to Google Drive.')
   const result = await response.json() as { id?: string }
   if (!result.id) throw new AppError(502, 'PHOTO_UPLOAD_FAILED', 'Google Drive did not return a photo ID.')
   return result.id
+}
+
+export async function cleanupOrphanPhotos(accessToken: string, workspaceId: string, data?: FamilyData, ttlDays = Number(process.env.FAMNESIA_ORPHAN_PHOTO_TTL_DAYS ?? 7)): Promise<number> {
+  await workspaceResources(accessToken, workspaceId, 'editor')
+  const snapshot = data ?? (await loadFamily(accessToken, workspaceId)).snapshot.data
+  const referenced = new Set(snapshot.media.map((item) => item.driveFileId))
+  const cutoff = Date.now() - Math.max(1, ttlDays) * 24 * 60 * 60 * 1000
+  const candidates = await listFiles(accessToken, `${propertyQuery('person-photo')} and appProperties has { key='workspaceId' and value='${escapeQuery(workspaceId)}' }`, 'createdTime')
+  const orphanIds = candidates.filter((file) => !referenced.has(file.id) && Date.parse(file.createdTime ?? file.appProperties?.createdAt ?? '') < cutoff).map((file) => file.id)
+  await Promise.allSettled(orphanIds.map((fileId) => googleResponse(accessToken, `/files/${encodeURIComponent(fileId)}`, { method: 'DELETE' })))
+  return orphanIds.length
 }
 
 async function isInsidePhotoFolder(accessToken: string, file: DriveFile, photosFolderId: string, depth = 0): Promise<boolean> {

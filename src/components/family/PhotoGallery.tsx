@@ -1,4 +1,4 @@
-import { Check, ExternalLink, ImagePlus, Star, Trash2 } from 'lucide-react'
+import { Check, ExternalLink, ImagePlus, RotateCw, Star, Trash2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useDriveImage } from '../../hooks/useDriveImage'
 import type { PersonMedia } from '../../types/family'
@@ -27,7 +27,7 @@ function GalleryItem({ item, workspaceId, readOnly, busy, onSetPrimary, onUpdate
       <div className="gallery-actions">
         {!item.isPrimary && <button type="button" disabled={busy} onClick={() => void onSetPrimary(item.id)}><Check size={13} /> Đặt đại diện</button>}
         {url && <a href={url} target="_blank" rel="noreferrer" aria-label="Mở ảnh gốc"><ExternalLink size={13} /></a>}
-        <button className="gallery-delete" type="button" disabled={busy} onClick={() => { if (window.confirm('Xóa ảnh này khỏi hồ sơ?')) void onDelete(item.id) }} aria-label="Xóa ảnh"><Trash2 size={13} /></button>
+        <button className="gallery-delete" type="button" disabled={busy} onClick={() => { if (window.confirm('Đánh dấu xóa ảnh này trong Draft? File Drive chỉ bị xóa sau khi Lưu tất cả.')) void onDelete(item.id) }} aria-label="Xóa ảnh"><Trash2 size={13} /></button>
       </div>
     </>}
   </article>
@@ -47,11 +47,18 @@ interface Props {
 
 export function PhotoGallery({ personName, media, workspaceId, readOnly, busy, onAdd, onSetPrimary, onUpdateCaption, onDelete }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const [failedFiles, setFailedFiles] = useState<File[]>([])
+  const [uploadError, setUploadError] = useState<string>()
   const sorted = [...media].sort((left, right) => Number(right.isPrimary) - Number(left.isPrimary) || (left.sortOrder ?? 0) - (right.sortOrder ?? 0))
+  const upload = async (files: File[]) => {
+    try { await onAdd(files); setFailedFiles([]); setUploadError(undefined) }
+    catch (caught) { setFailedFiles(files); setUploadError(caught instanceof Error ? caught.message : 'Tải ảnh thất bại.') }
+  }
 
   return <section className="photo-gallery">
     <div className="gallery-heading"><span className="section-label">Thư viện ảnh · {sorted.length}</span>{!readOnly && <button type="button" disabled={busy} onClick={() => inputRef.current?.click()}><ImagePlus size={14} /> Thêm ảnh</button>}</div>
-    {!readOnly && <input ref={inputRef} className="sr-only" type="file" accept="image/*" multiple onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ''; if (files.length) void onAdd(files) }} />}
+    {!readOnly && <input ref={inputRef} className="sr-only" type="file" accept="image/*" multiple onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ''; if (files.length) void upload(files) }} />}
+    {uploadError && <div className="photo-upload-error"><span>{uploadError}</span><button type="button" disabled={busy} onClick={() => void upload(failedFiles)}><RotateCw size={13} /> Thử lại</button></div>}
     {sorted.length ? <div className="gallery-grid">{sorted.map((item) => <GalleryItem key={item.id} item={item} workspaceId={workspaceId} readOnly={readOnly} busy={busy} onSetPrimary={onSetPrimary} onUpdateCaption={onUpdateCaption} onDelete={onDelete} />)}</div> : <p className="gallery-empty">Chưa có ảnh của {personName}.</p>}
   </section>
 }

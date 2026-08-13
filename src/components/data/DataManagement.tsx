@@ -51,6 +51,7 @@ interface Props {
 
 const saveLabels: Record<SaveStatus, string> = {
   saved: 'Đã lưu', saving: 'Đang lưu…', unsaved: 'Có thay đổi chưa lưu', failed: 'Lưu thất bại',
+  conflict: 'Cần xử lý xung đột', offline: 'Ngoại tuyến · Draft an toàn',
 }
 
 function formatBackupTime(value?: string): string {

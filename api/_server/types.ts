@@ -15,6 +15,7 @@ export interface AuthSession {
 }
 
 export interface SafeUser {
+  id: string
   email: string
   name: string
   avatarUrl?: string

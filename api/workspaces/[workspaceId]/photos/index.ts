@@ -11,6 +11,6 @@ export default { fetch(request: Request) { return withErrors(async () => {
   if (!(file instanceof File)) throw new AppError(400, 'PHOTO_REQUIRED', 'A photo file is required.')
   const profileId = form.get('profileId')
   const personId = form.get('personId')
-  const id = await uploadPhoto(auth.accessToken, pathParameter(request, 'workspaces'), file, file.name, typeof profileId === 'string' ? profileId : undefined, typeof personId === 'string' ? personId : undefined)
+  const id = await uploadPhoto(auth.accessToken, pathParameter(request, 'workspaces'), file, file.name, typeof profileId === 'string' ? profileId : undefined, typeof personId === 'string' ? personId : undefined, auth.session.googleSub)
   return json({ id }, { status: 201 })
 }) } }

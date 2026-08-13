@@ -1,17 +1,38 @@
-import { requireAuth } from '../../_server/auth.js'
-import { appendActivity, listActivity, loadFamily, saveFamily, type FamilyRevision } from '../../_server/drive.js'
-import { AppError, assertSameOrigin, json, pathParameter, readJsonLimited, requireMethod, withErrors } from '../../_server/http.js'
-import type { FamilyData } from '../../../src/types/family.js'
-import { validateFamilyData } from '../../../src/schema/familyDataSchema.js'
+import { isFamilyOperation } from '../../../src/draft/familyOperations.js'
 import { findDangerousObjectKey } from '../../../src/import/security/contentSanitization.js'
 import { IMPORT_LIMITS } from '../../../src/import/security/importLimits.js'
+import { validateFamilyData } from '../../../src/schema/familyDataSchema.js'
+import type { FamilyData } from '../../../src/types/family.js'
+import type { FamilyCommitRequest } from '../../../src/types/familyOperations.js'
+import { requireAuth } from '../../_server/auth.js'
+import { appendActivity, commitFamily, listActivity, loadFamily, saveFamily, type FamilyRevision } from '../../_server/drive.js'
+import { AppError, assertSameOrigin, json, pathParameter, readJsonLimited, requireMethod, withErrors } from '../../_server/http.js'
 
 interface SaveBody { data: FamilyData; expectedRevision?: FamilyRevision; mode?: 'save' | 'replace' | 'restore' | 'merge' }
+const MAX_COMMIT_BYTES = 2 * 1024 * 1024
+const MAX_OPERATIONS = 1000
+
+function validCommitId(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(value)
+}
+
 export default { fetch(request: Request) { return withErrors(async () => {
-  requireMethod(request, ['GET', 'PUT'])
-  if (request.method === 'PUT') assertSameOrigin(request)
+  const operation = new URL(request.url).searchParams.get('operation')
+  requireMethod(request, operation === 'commit' ? ['POST'] : ['GET', 'PUT'])
+  if (request.method !== 'GET') assertSameOrigin(request)
   const auth = await requireAuth(request)
   const workspaceId = pathParameter(request, 'workspaces')
+
+  if (operation === 'commit') {
+    const body = await readJsonLimited<FamilyCommitRequest>(request, MAX_COMMIT_BYTES)
+    if (!validCommitId(body.commitId)) throw new AppError(400, 'FAMILY_COMMIT_ID_INVALID', 'A valid commitId is required.')
+    if (!Array.isArray(body.operations) || body.operations.length === 0 || body.operations.length > MAX_OPERATIONS || !body.operations.every(isFamilyOperation)) {
+      throw new AppError(422, 'FAMILY_COMMIT_INVALID', 'Commit operations are invalid or exceed the allowed limit.')
+    }
+    if (typeof body.clientCreatedAt !== 'string' || Number.isNaN(Date.parse(body.clientCreatedAt))) throw new AppError(422, 'FAMILY_COMMIT_INVALID', 'clientCreatedAt must be a valid ISO timestamp.')
+    return json(await commitFamily(auth.accessToken, workspaceId, body, { email: auth.user.email, name: auth.user.name }))
+  }
+
   if (request.method === 'GET') {
     if (new URL(request.url).searchParams.get('resource') === 'activity') return json({ activity: await listActivity(auth.accessToken, workspaceId) })
     return json(await loadFamily(auth.accessToken, workspaceId))

@@ -40,7 +40,7 @@ export function CreateProfileModal({ busy, mode = 'create', profile, suggestedSu
         {suggestedSurnames.length > 0 && <div className="surname-suggestions"><span>Gợi ý từ thành viên nam:</span>{suggestedSurnames.map((surname) => <button type="button" key={surname} onClick={() => setLineageSurname(surname)}>Họ {surname}</button>)}</div>}
         <label className="field"><span>Mô tả</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Nhánh họ, quê quán hoặc ghi chú ngắn" rows={3} /></label>
         {error && <p className="form-error">{error}</p>}
-        <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Hủy</button><button type="submit" className="primary-button" disabled={Boolean(busy)}>{busy ?? (editing ? 'Lưu thay đổi' : 'Tạo gia đình')}</button></div>
+        <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Hủy</button><button type="submit" className="primary-button" disabled={Boolean(busy)}>{busy ?? (editing ? 'Cập nhật Draft' : 'Thêm vào Draft')}</button></div>
       </form>
     </section>
   </div>

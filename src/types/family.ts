@@ -91,7 +91,7 @@ export interface FamilyData {
   settings: FamilySettings
 }
 
-export type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'failed'
+export type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'failed' | 'conflict' | 'offline'
 
 export interface FamilyUnit {
   id: string
@@ -122,6 +122,7 @@ export interface DataAudit {
 }
 
 export interface GoogleUser {
+  id: string
   email: string
   name: string
   picture?: string

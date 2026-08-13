@@ -21,5 +21,5 @@ export async function requireAuth(request: Request): Promise<AuthContext> {
     throw new AppError(401, 'SESSION_EXPIRED', 'Your session has expired. Please sign in again.')
   }
   const accessToken = await googleAccessToken(session, repository)
-  return { session, repository, accessToken, user: { email: session.email, name: session.displayName ?? session.email, avatarUrl: session.avatarUrl } }
+  return { session, repository, accessToken, user: { id: session.googleSub, email: session.email, name: session.displayName ?? session.email, avatarUrl: session.avatarUrl } }
 }

@@ -2,6 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "rewrites": [
+    { "source": "/api/workspaces/:workspaceId/family/commit", "destination": "/api/workspaces/:workspaceId/family?operation=commit" },
     { "source": "/((?!api(?:/|$)|@|src(?:/|$)|node_modules(?:/|$)).*)", "destination": "/index.html" }
   ]
 }
