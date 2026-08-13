@@ -4,7 +4,7 @@ import { convertSolarToLunar } from '../../calendar/lunarCalendar'
 import { buildFamilyGraph } from '../../graph/familyGraph'
 import { getCurrentSpouses } from '../../graph/familySelectors'
 import type { NewPersonConnection } from '../../hooks/useFamilyData'
-import type { FriendlyRelationship, Gender, Person, PersonDraft, Relationship, SpouseStatus } from '../../types/family'
+import type { FactConfidence, FriendlyRelationship, Gender, Person, PersonDraft, Relationship, SpouseStatus } from '../../types/family'
 
 interface Props {
   mode: 'add' | 'relative' | 'edit'
@@ -19,6 +19,7 @@ interface Props {
 }
 
 const relationshipLabels: Record<FriendlyRelationship, string> = { child: 'Con của', parent: 'Cha/mẹ của', spouse: 'Bạn đời của' }
+const confidenceLabels: Record<FactConfidence, string> = { confirmed: 'Đã xác nhận', likely: 'Có khả năng đúng', estimated: 'Ước tính', unknown: 'Chưa rõ' }
 
 export function PersonModal({ mode, persons, relationships, person, initialKind = 'child', busy, onClose, onCreate, onUpdate }: Props) {
   const graph = useMemo(() => buildFamilyGraph(persons, relationships), [persons, relationships])
@@ -27,8 +28,10 @@ export function PersonModal({ mode, persons, relationships, person, initialKind 
   const [nickname, setNickname] = useState(mode === 'edit' ? person?.nickname ?? '' : '')
   const [gender, setGender] = useState<Gender>(mode === 'edit' ? person?.gender ?? 'unknown' : 'unknown')
   const [birthDate, setBirthDate] = useState(mode === 'edit' ? person?.birthDate ?? '' : '')
+  const [birthDateConfidence, setBirthDateConfidence] = useState<FactConfidence>(mode === 'edit' ? person?.confidence?.birthDate ?? 'unknown' : 'unknown')
   const [isDeceased, setIsDeceased] = useState(mode === 'edit' ? person?.isDeceased ?? false : false)
   const [deathDate, setDeathDate] = useState(mode === 'edit' ? person?.deathDate ?? '' : '')
+  const [deathDateConfidence, setDeathDateConfidence] = useState<FactConfidence>(mode === 'edit' ? person?.confidence?.deathDate ?? 'unknown' : 'unknown')
   const [lunarDay, setLunarDay] = useState(mode === 'edit' ? person?.deathLunar?.day.toString() ?? '' : '')
   const [lunarMonth, setLunarMonth] = useState(mode === 'edit' ? person?.deathLunar?.month.toString() ?? '' : '')
   const [lunarLeap, setLunarLeap] = useState(mode === 'edit' ? person?.deathLunar?.leapMonth ?? false : false)
@@ -60,8 +63,9 @@ export function PersonModal({ mode, persons, relationships, person, initialKind 
     if ((lunarDay && !lunarMonth) || (!lunarDay && lunarMonth)) return setLocalError('Ngày và tháng âm lịch cần được nhập cùng nhau.')
     const draft: PersonDraft = {
       name: name.trim(), nickname: nickname.trim() || undefined, gender,
-      birthDate: birthDate || undefined, isDeceased,
+      birthDate: birthDate || undefined, birthDateConfidence, isDeceased,
       deathDate: isDeceased && deathDate ? deathDate : undefined,
+      deathDateConfidence,
       deathLunarDay: isDeceased && lunarDay ? Number(lunarDay) : undefined,
       deathLunarMonth: isDeceased && lunarMonth ? Number(lunarMonth) : undefined,
       deathLunarLeapMonth: isDeceased && lunarLeap,
@@ -105,6 +109,7 @@ export function PersonModal({ mode, persons, relationships, person, initialKind 
               <label className="field"><span>Biệt danh</span><input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="Bé Minh, Ông Ba…" /></label>
               <label className="field"><span>Giới tính</span><select value={gender} onChange={(event) => setGender(event.target.value as Gender)}><option value="unknown">Không xác định</option><option value="male">Nam</option><option value="female">Nữ</option><option value="other">Khác</option></select></label>
               <label className="field"><span>Ngày sinh dương lịch</span><input type="date" value={birthDate} onChange={(event) => setBirthDate(event.target.value)} /></label>
+              <label className="field"><span>Độ tin cậy ngày sinh</span><select value={birthDateConfidence} onChange={(event) => setBirthDateConfidence(event.target.value as FactConfidence)}>{Object.entries(confidenceLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
               <label className="field"><span>Thứ tự trong anh chị em</span><input type="number" min="0" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} placeholder="Ví dụ: 1" /></label>
             </div>
           </fieldset>
@@ -122,6 +127,7 @@ export function PersonModal({ mode, persons, relationships, person, initialKind 
             <label className="toggle-row"><input type="checkbox" checked={isDeceased} onChange={(event) => setIsDeceased(event.target.checked)} /><span><strong>Đã mất</strong><small>Mở phần ngày mất và ngày giỗ</small></span></label>
             {isDeceased && <div className="deceased-fields">
               <label className="field"><span>Ngày mất dương lịch</span><input type="date" value={deathDate} onChange={(event) => setDeathDate(event.target.value)} /></label>
+              <label className="field"><span>Độ tin cậy ngày mất</span><select value={deathDateConfidence} onChange={(event) => setDeathDateConfidence(event.target.value as FactConfidence)}>{Object.entries(confidenceLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
               <div className="lunar-group"><div className="lunar-heading"><span>Ngày giỗ âm lịch</span><button type="button" onClick={calculateLunarDate} disabled={!deathDate}><CalendarSync size={15} /> Tính từ ngày dương</button></div><div className="lunar-inputs"><label className="field"><span>Ngày</span><input type="number" min="1" max="30" value={lunarDay} onChange={(event) => setLunarDay(event.target.value)} /></label><label className="field"><span>Tháng</span><input type="number" min="1" max="12" value={lunarMonth} onChange={(event) => setLunarMonth(event.target.value)} /></label><label className="check-row lunar-leap"><input type="checkbox" checked={lunarLeap} onChange={(event) => setLunarLeap(event.target.checked)} /> Tháng nhuận</label></div></div>
             </div>}
             <label className="toggle-row compact"><input type="checkbox" checked={foundingAncestor} onChange={(event) => setFoundingAncestor(event.target.checked)} /><span><strong>Thủy tổ</strong><small>Người khai sinh dòng họ theo gia phả</small></span></label>

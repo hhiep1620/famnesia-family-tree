@@ -1,11 +1,12 @@
 import { z } from 'zod'
 import type { FamilyData, Person, Relationship } from '../types/family.js'
 
-export const CURRENT_SCHEMA_VERSION = 2
+export const CURRENT_SCHEMA_VERSION = 3
 
 const GENDERS = ['male', 'female', 'other', 'unknown'] as const
 const ANCESTRAL_ROLES = ['none', 'founding_ancestor'] as const
 const SPOUSE_STATUSES = ['married', 'partner', 'separated', 'divorced', 'widowed', 'unknown'] as const
+const FACT_CONFIDENCE = ['confirmed', 'likely', 'estimated', 'unknown'] as const
 
 function isCalendarDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
@@ -53,6 +54,7 @@ export const PersonSchema = z.object({
   sortOrder: z.number().finite().optional(),
   createdAt: IsoDateTimeSchema.optional(),
   updatedAt: IsoDateTimeSchema.optional(),
+  confidence: z.object({ birthDate: z.enum(FACT_CONFIDENCE).optional(), deathDate: z.enum(FACT_CONFIDENCE).optional() }).optional(),
 })
 
 export const PersonMediaSchema = z.object({
@@ -80,6 +82,7 @@ export const RelationshipSchema = z.object({
   sortOrder: z.number().finite().optional(),
   createdAt: IsoDateTimeSchema.optional(),
   updatedAt: IsoDateTimeSchema.optional(),
+  confidence: z.enum(FACT_CONFIDENCE).optional(),
 }).superRefine((relationship, context) => {
   if (relationship.type === 'parent' && relationship.status !== undefined) {
     context.addIssue({ code: 'custom', path: ['status'], message: 'Quan hệ cha/mẹ không được có trạng thái hôn phối.' })
@@ -121,7 +124,8 @@ export const FamilyDataSchema = z.object({
   settings: z.object({
     timezone: z.string().trim().min(1).default('Asia/Ho_Chi_Minh'),
     locale: z.string().trim().min(1).default('vi-VN'),
-  }).default({ timezone: 'Asia/Ho_Chi_Minh', locale: 'vi-VN' }),
+    duplicateSuppressions: z.array(z.string().trim().min(1)).default([]),
+  }).default({ timezone: 'Asia/Ho_Chi_Minh', locale: 'vi-VN', duplicateSuppressions: [] }),
 }).superRefine((data, context) => {
   const duplicateCheck = (values: string[], path: 'profiles' | 'persons' | 'relationships' | 'media', label: string) => {
     const seen = new Set<string>()
@@ -222,7 +226,7 @@ export function createEmptyFamilyData(now = new Date().toISOString()): FamilyDat
     persons: [],
     relationships: [],
     media: [],
-    settings: { timezone: 'Asia/Ho_Chi_Minh', locale: 'vi-VN' },
+    settings: { timezone: 'Asia/Ho_Chi_Minh', locale: 'vi-VN', duplicateSuppressions: [] },
   }
 }
 
@@ -258,7 +262,11 @@ export function migrateFamilyData(input: unknown): unknown {
       }
       return { ...rest, phone1: '', phone2: '', address: '', note: '' }
     })
-    return { ...legacy, schemaVersion: CURRENT_SCHEMA_VERSION, persons, media }
+    return migrateFamilyData({ ...legacy, schemaVersion: 2, persons, media })
+  }
+  if (version === 2) {
+    const legacy = input as Record<string, unknown> & { settings?: Record<string, unknown> }
+    return { ...legacy, schemaVersion: CURRENT_SCHEMA_VERSION, settings: { ...(legacy.settings ?? {}), duplicateSuppressions: [] } }
   }
   throw new Error(`schemaVersion ${version} chưa được hỗ trợ. Phiên bản hiện tại là ${CURRENT_SCHEMA_VERSION}.`)
 }

@@ -8,7 +8,7 @@ import { useDriveImage } from '../../hooks/useDriveImage'
 import { explainKinshipPath } from '../../kinship/kinshipEngine'
 import { SPOUSE_STATUS_LABELS } from '../../kinship/kinshipRules'
 import { getPrimaryMedia, getPersonMedia } from '../../media/mediaSelectors'
-import type { KinshipResult, Person, PersonMedia, Relationship } from '../../types/family'
+import type { FactConfidence, KinshipResult, Person, PersonMedia, Relationship } from '../../types/family'
 import { getInitials } from '../../utils/initials'
 import { ManageRelationships } from './ManageRelationships'
 import { PhotoGallery } from './PhotoGallery'
@@ -43,6 +43,7 @@ interface Props {
 }
 
 const genderLabels = { male: 'Nam', female: 'Nữ', other: 'Khác', unknown: 'Không xác định' }
+const confidenceLabels: Record<FactConfidence, string> = { confirmed: 'đã xác nhận', likely: 'có khả năng đúng', estimated: 'ước tính', unknown: 'chưa rõ' }
 
 export function PersonDetails(props: Props) {
   const { person, persons, relationships, workspaceId } = props
@@ -70,7 +71,7 @@ export function PersonDetails(props: Props) {
     {!props.readOnly && <div className="details-actions"><button className="primary-button" disabled={props.busy} onClick={props.onAddRelative}><Plus size={16} /> Thêm người thân</button><button className="secondary-button" disabled={props.busy} onClick={props.onEdit}><Edit3 size={15} /> Sửa</button></div>}
     <div className="context-actions">{props.subjectId === person.id ? <span className="current-subject"><UserRoundCheck size={15} /> Chủ thể hồ sơ</span> : !props.readOnly && <button disabled={props.busy} onClick={() => props.onSetSubject(person.id)}><UserRoundCheck size={15} /> Đặt làm tôi</button>}{props.context === 'calendar' ? <button onClick={() => props.onViewTree(person.id)}><Network size={15} /> Xem trên cây</button> : <><button onClick={() => props.onViewTree(person.id)}><Network size={15} /> Mở nhánh gia đình</button>{events.length > 0 && <button onClick={() => props.onViewCalendar(person.id)}><CalendarDays size={15} /> Xem lịch</button>}</>}<button onClick={() => props.onExploreRelatives(person.id)}><Compass size={15} /> Khám phá họ hàng</button></div>
 
-    <section className="profile-facts"><span className="section-label">Hồ sơ</span><dl><div><dt>Giới tính</dt><dd>{genderLabels[person.gender ?? 'unknown']}</dd></div>{person.birthDate && <div><dt>Ngày sinh</dt><dd>{formatFamilyDate(person.birthDate)}{age !== undefined && ` · ${age} tuổi`}</dd></div>}{person.isDeceased && person.deathDate && <div><dt>Ngày mất</dt><dd>{formatFamilyDate(person.deathDate)}</dd></div>}{person.isDeceased && person.deathLunar && <div><dt>Ngày giỗ</dt><dd>{person.deathLunar.day}/{person.deathLunar.month} Âm lịch{person.deathLunar.leapMonth ? ' · tháng nhuận' : ''}</dd></div>}{person.ancestralRole === 'founding_ancestor' && <div><dt>Vai trò gia phả</dt><dd>Thủy tổ</dd></div>}</dl></section>
+    <section className="profile-facts"><span className="section-label">Hồ sơ</span><dl><div><dt>Giới tính</dt><dd>{genderLabels[person.gender ?? 'unknown']}</dd></div>{person.birthDate && <div><dt>Ngày sinh</dt><dd>{formatFamilyDate(person.birthDate)}{age !== undefined && ` · ${age} tuổi`}{person.confidence?.birthDate ? <small className="fact-confidence">{confidenceLabels[person.confidence.birthDate]}</small> : null}</dd></div>}{person.isDeceased && person.deathDate && <div><dt>Ngày mất</dt><dd>{formatFamilyDate(person.deathDate)}{person.confidence?.deathDate ? <small className="fact-confidence">{confidenceLabels[person.confidence.deathDate]}</small> : null}</dd></div>}{person.isDeceased && person.deathLunar && <div><dt>Ngày giỗ</dt><dd>{person.deathLunar.day}/{person.deathLunar.month} Âm lịch{person.deathLunar.leapMonth ? ' · tháng nhuận' : ''}</dd></div>}{person.ancestralRole === 'founding_ancestor' && <div><dt>Vai trò gia phả</dt><dd>Thủy tổ</dd></div>}</dl></section>
 
     {(person.phone1 || person.phone2 || person.address || person.note) && <section className="contact-facts"><span className="section-label">Liên hệ & ghi chú</span><div className="contact-list">{[person.phone1, person.phone2].filter(Boolean).map((phone, index) => <a key={`${phone}-${index}`} href={`tel:${phone!.replace(/[^+\d]/g, '')}`}><Phone size={14} /><span>{phone}</span></a>)}{person.address && <p><MapPin size={14} /><span>{person.address}</span></p>}{person.note && <p><NotebookText size={14} /><span>{person.note}</span></p>}</div></section>}
 

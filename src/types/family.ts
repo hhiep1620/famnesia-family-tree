@@ -16,7 +16,13 @@ export interface Person {
   sortOrder?: number
   createdAt?: string
   updatedAt?: string
+  confidence?: {
+    birthDate?: FactConfidence
+    deathDate?: FactConfidence
+  }
 }
+
+export type FactConfidence = 'confirmed' | 'likely' | 'estimated' | 'unknown'
 
 export type Gender = 'male' | 'female' | 'other' | 'unknown'
 export type AncestralRole = 'none' | 'founding_ancestor'
@@ -42,6 +48,7 @@ export interface Relationship {
   sortOrder?: number
   createdAt?: string
   updatedAt?: string
+  confidence?: FactConfidence
 }
 
 export interface FamilyProfile {
@@ -57,6 +64,7 @@ export interface FamilyProfile {
 export interface FamilySettings {
   timezone: string
   locale: string
+  duplicateSuppressions?: string[]
 }
 
 export interface PersonMedia {
@@ -99,6 +107,10 @@ export interface FamilyGraph {
 }
 
 export interface DataIssue {
+  id?: string
+  severity?: 'error' | 'warning' | 'info'
+  code?: string
+  personId?: string
   relationshipId?: string
   message: string
 }
@@ -120,8 +132,10 @@ export interface PersonDraft {
   nickname?: string
   gender: Gender
   birthDate?: string
+  birthDateConfidence?: FactConfidence
   isDeceased: boolean
   deathDate?: string
+  deathDateConfidence?: FactConfidence
   deathLunarDay?: number
   deathLunarMonth?: number
   deathLunarLeapMonth?: boolean
@@ -164,6 +178,19 @@ export interface FamilyBackup {
   createdTime?: string
   modifiedTime?: string
   reason?: string
+}
+
+export interface ActivityEvent {
+  id: string
+  workspaceId: string
+  actorEmail: string
+  actorName?: string
+  action: string
+  entityType?: string
+  entityId?: string
+  timestamp: string
+  summary: string
+  metadata?: Record<string, unknown>
 }
 
 export type FamilyEventType = 'birthday' | 'death_anniversary'

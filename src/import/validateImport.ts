@@ -1,6 +1,8 @@
 import { CURRENT_SCHEMA_VERSION, migrateFamilyData, validateFamilyData } from '../schema/familyDataSchema'
 import type { FamilyData } from '../types/family'
 import { buildImportPreview, type ImportPreview } from './importPreview'
+import { validateImportFileEnvelope } from './security/fileValidation'
+import { validateJsonSecurity } from './security/jsonSecurity'
 
 export interface ImportValidationResult {
   data?: FamilyData
@@ -8,6 +10,7 @@ export interface ImportValidationResult {
   errors: string[]
   preview: ImportPreview
   filename?: string
+  format?: 'json' | 'xlsx'
 }
 
 function previewRawImport(raw: unknown) {
@@ -26,6 +29,8 @@ function previewRawImport(raw: unknown) {
 }
 
 export function validateImportText(text: string, filename?: string): ImportValidationResult {
+  const securityErrors = validateJsonSecurity(text)
+  if (securityErrors.length) return { errors: securityErrors, warnings: [], preview: buildImportPreview(undefined, [], securityErrors), filename, format: 'json' }
   let raw: unknown
   try {
     raw = JSON.parse(text)
@@ -39,6 +44,7 @@ export function validateImportText(text: string, filename?: string): ImportValid
     return {
       ...validation,
       filename,
+      format: 'json',
       preview: buildImportPreview(validation.data ?? previewRawImport(raw), validation.warnings, validation.errors),
     }
   } catch (error) {
@@ -48,5 +54,8 @@ export function validateImportText(text: string, filename?: string): ImportValid
 }
 
 export async function validateImportFile(file: File): Promise<ImportValidationResult> {
+  const envelope = validateImportFileEnvelope(file)
+  if (!envelope.format || envelope.errors.length) return { errors: envelope.errors, warnings: [], preview: buildImportPreview(undefined, [], envelope.errors), filename: file.name, format: envelope.format }
+  if (envelope.format === 'xlsx') return (await import('./excelFamilyData')).validateExcelImportFile(file)
   return validateImportText(await file.text(), file.name)
 }

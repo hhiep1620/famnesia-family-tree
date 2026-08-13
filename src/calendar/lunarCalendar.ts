@@ -27,3 +27,17 @@ export function convertLunarToSolar(day: number, month: number, year: number, le
     return undefined
   }
 }
+
+const STEMS = ['Giáp', 'Ất', 'Bính', 'Đinh', 'Mậu', 'Kỷ', 'Canh', 'Tân', 'Nhâm', 'Quý']
+const BRANCHES = ['Tý', 'Sửu', 'Dần', 'Mão', 'Thìn', 'Tỵ', 'Ngọ', 'Mùi', 'Thân', 'Dậu', 'Tuất', 'Hợi']
+
+export function lunarYearName(year: number): string {
+  return `${STEMS[(year + 6) % 10]} ${BRANCHES[(year + 8) % 12]}`
+}
+
+export function formatLunarDate(isoDate: string, includeYearName = false): string {
+  const lunar = convertSolarToLunar(isoDate)
+  if (!lunar) return ''
+  const value = `${lunar.day}/${lunar.month}${lunar.leapMonth ? ' nhuận' : ''}`
+  return includeYearName ? `${value} ${lunarYearName(lunar.year)}` : `${value} ÂL`
+}

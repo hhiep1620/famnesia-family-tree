@@ -1,7 +1,9 @@
 import { Link2, Save, Trash2 } from 'lucide-react'
 import { useMemo, useState, type FormEvent } from 'react'
 import { SPOUSE_STATUS_LABELS } from '../../kinship/kinshipRules'
-import type { FriendlyRelationship, Person, Relationship, SpouseStatus } from '../../types/family'
+import type { FactConfidence, FriendlyRelationship, Person, Relationship, SpouseStatus } from '../../types/family'
+
+const confidenceLabels: Record<FactConfidence, string> = { confirmed: 'Đã xác nhận', likely: 'Có khả năng đúng', estimated: 'Ước tính', unknown: 'Chưa rõ' }
 
 interface Props {
   person: Person
@@ -19,10 +21,11 @@ function RelationshipEditor({ relationship, otherName, onUpdate, onDelete, busy 
   const [status, setStatus] = useState<SpouseStatus>(relationship.status ?? 'unknown')
   const [startDate, setStartDate] = useState(relationship.startDate ?? '')
   const [endDate, setEndDate] = useState(relationship.endDate ?? '')
+  const [confidence, setConfidence] = useState<FactConfidence>(relationship.confidence ?? 'unknown')
   const spouse = relationship.type === 'spouse'
   return <div className={`relationship-record ${spouse ? `status-${status}` : ''}`}>
     <div className="relationship-row"><span>{otherName}</span>{spouse && <span className="relationship-status">{SPOUSE_STATUS_LABELS[relationship.status ?? 'unknown']}</span>}<button type="button" disabled={busy} aria-label={`Xóa quan hệ với ${otherName}`} onClick={() => { if (window.confirm('Xóa mối quan hệ này? Không ai bị xóa khỏi gia phả.')) void onDelete(relationship.id) }}><Trash2 size={14} /></button></div>
-    {spouse && <details className="relationship-edit"><summary>Chỉnh trạng thái hôn phối</summary><div className="relationship-edit-grid"><label>Trạng thái<select disabled={busy} value={status} onChange={(event) => setStatus(event.target.value as SpouseStatus)}>{Object.entries(SPOUSE_STATUS_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label>Bắt đầu<input disabled={busy} type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label><label>Kết thúc<input disabled={busy} type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></label><button type="button" className="mini-save" disabled={busy} onClick={() => void onUpdate({ ...relationship, status, startDate: startDate || undefined, endDate: endDate || undefined })}><Save size={13} /> Lưu</button></div></details>}
+    <details className="relationship-edit"><summary>{spouse ? 'Chỉnh trạng thái và độ tin cậy' : 'Chỉnh độ tin cậy'}</summary><div className="relationship-edit-grid">{spouse ? <><label>Trạng thái<select disabled={busy} value={status} onChange={(event) => setStatus(event.target.value as SpouseStatus)}>{Object.entries(SPOUSE_STATUS_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label>Bắt đầu<input disabled={busy} type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label><label>Kết thúc<input disabled={busy} type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></label></> : null}<label>Độ tin cậy<select disabled={busy} value={confidence} onChange={(event) => setConfidence(event.target.value as FactConfidence)}>{Object.entries(confidenceLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><button type="button" className="mini-save" disabled={busy} onClick={() => void onUpdate({ ...relationship, status: spouse ? status : undefined, startDate: spouse ? startDate || undefined : undefined, endDate: spouse ? endDate || undefined : undefined, confidence })}><Save size={13} /> Lưu</button></div></details>
   </div>
 }
 
@@ -30,6 +33,7 @@ export function ManageRelationships({ person, persons, relationships, onAdd, onU
   const [kind, setKind] = useState<FriendlyRelationship>('parent')
   const [otherId, setOtherId] = useState('')
   const [status, setStatus] = useState<SpouseStatus>('unknown')
+  const [confidence, setConfidence] = useState<FactConfidence>('unknown')
   const [error, setError] = useState<string>()
   const groups = useMemo(() => ({
     'Cha mẹ': relationships.filter((item) => item.type === 'parent' && item.person2Id === person.id),
@@ -41,8 +45,8 @@ export function ManageRelationships({ person, persons, relationships, onAdd, onU
   async function add(event: FormEvent) {
     event.preventDefault(); if (!otherId) return
     const input: Omit<Relationship, 'id' | 'createdAt' | 'updatedAt'> = kind === 'spouse'
-      ? { person1Id: person.id, person2Id: otherId, type: 'spouse', status }
-      : kind === 'parent' ? { person1Id: otherId, person2Id: person.id, type: 'parent' } : { person1Id: person.id, person2Id: otherId, type: 'parent' }
+      ? { person1Id: person.id, person2Id: otherId, type: 'spouse', status, confidence }
+      : kind === 'parent' ? { person1Id: otherId, person2Id: person.id, type: 'parent', confidence } : { person1Id: person.id, person2Id: otherId, type: 'parent', confidence }
     try { await onAdd(input); setOtherId(''); setError(undefined) }
     catch (caught) { setError(caught instanceof Error ? caught.message : 'Không thể lưu mối quan hệ.') }
   }
@@ -50,6 +54,6 @@ export function ManageRelationships({ person, persons, relationships, onAdd, onU
   return <div className="relationship-manager">
     <span className="section-label">Quản lý quan hệ</span>
     {Object.entries(groups).map(([label, items]) => <div className="relationship-group" key={label}><h4>{label}</h4>{items.length ? items.map((relationship) => <RelationshipEditor key={relationship.id} relationship={relationship} otherName={otherPerson(relationship)?.name ?? 'Không tìm thấy'} onUpdate={onUpdate} onDelete={onDelete} busy={busy} />) : <p>Chưa ghi nhận</p>}</div>)}
-    <form className="add-relationship" onSubmit={add}><div><Link2 size={16} /><strong>Thêm người đã có</strong></div><select disabled={busy} value={kind} onChange={(event) => setKind(event.target.value as FriendlyRelationship)}><option value="parent">làm cha/mẹ</option><option value="spouse">làm bạn đời</option><option value="child">làm con</option></select>{kind === 'spouse' && <select disabled={busy} value={status} onChange={(event) => setStatus(event.target.value as SpouseStatus)}>{Object.entries(SPOUSE_STATUS_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select>}<select disabled={busy} required value={otherId} onChange={(event) => setOtherId(event.target.value)}><option value="">Chọn thành viên</option>{persons.filter((candidate) => candidate.id !== person.id).map((candidate) => <option value={candidate.id} key={candidate.id}>{candidate.name}</option>)}</select><button className="secondary-button" type="submit" disabled={busy}>Thêm quan hệ</button>{error && <p className="form-error">{error}</p>}</form>
+    <form className="add-relationship" onSubmit={add}><div><Link2 size={16} /><strong>Thêm người đã có</strong></div><select disabled={busy} value={kind} onChange={(event) => setKind(event.target.value as FriendlyRelationship)}><option value="parent">làm cha/mẹ</option><option value="spouse">làm bạn đời</option><option value="child">làm con</option></select>{kind === 'spouse' && <select disabled={busy} value={status} onChange={(event) => setStatus(event.target.value as SpouseStatus)}>{Object.entries(SPOUSE_STATUS_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select>}<select disabled={busy} value={confidence} onChange={(event) => setConfidence(event.target.value as FactConfidence)}>{Object.entries(confidenceLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select><select disabled={busy} required value={otherId} onChange={(event) => setOtherId(event.target.value)}><option value="">Chọn thành viên</option>{persons.filter((candidate) => candidate.id !== person.id).map((candidate) => <option value={candidate.id} key={candidate.id}>{candidate.name}</option>)}</select><button className="secondary-button" type="submit" disabled={busy}>Thêm quan hệ</button>{error && <p className="form-error">{error}</p>}</form>
   </div>
 }

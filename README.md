@@ -18,7 +18,9 @@ Google Drive vẫn là nguồn dữ liệu duy nhất:
 Famnesia/
 ├── family.json
 ├── backups/
-└── photos/
+├── photos/
+└── activity/
+    └── YYYY-MM.jsonl
 ```
 
 Redis không chứa dữ liệu gia phả. Redis chỉ giữ session có TTL và Google refresh token đã mã hóa AES-256-GCM.
@@ -26,7 +28,7 @@ Redis không chứa dữ liệu gia phả. Redis chỉ giữ session có TTL và
 ## Quyền cộng tác
 
 - `owner`: đọc/sửa, ảnh, import/replace, restore và quản lý thành viên.
-- `editor`: đọc/sửa, ảnh và tạo backup; không import thay thế, restore hoặc quản lý thành viên.
+- `editor`: đọc/sửa, ảnh, xử lý chất lượng dữ liệu và gộp thành viên; không import thay thế, restore hoặc quản lý thành viên.
 - `viewer`: chỉ đọc và export.
 
 Giao diện ẩn thao tác không hợp lệ, nhưng Vercel Function luôn kiểm tra lại quyền thật trên Google Drive ở mỗi request. Không dựa vào role do browser gửi lên.
@@ -127,14 +129,23 @@ Các endpoint quan trọng:
 
 - `/api/auth/login`, `/callback`, `/session`, `/logout`, `/reconnect`
 - `/api/workspaces`
-- `/api/workspaces/:id/family`, `/photos`, `/backups`, `/members`
+- `/api/workspaces/:id/family`, `/photos`, `/backups`, `/members`, `/activity`
 
 Mọi response API nhạy cảm đều `Cache-Control: no-store`; thao tác thay đổi dữ liệu kiểm tra same-origin để chống CSRF. Save dùng revision để trả `409 FAMILY_DATA_CONFLICT` nếu có phiên khác vừa ghi.
 
+## Dữ liệu và import an toàn
+
+- JSON là định dạng native, Excel `.xlsx` là định dạng nhập liệu hàng loạt. Cả hai được chuẩn hóa về cùng `FamilyData` trước khi kiểm tra.
+- Import chỉ dành cho owner, luôn preview và backup trước khi thay thế. Vercel Function chạy lại schema và genealogy validation trước khi ghi.
+- Không nhận `.xls`, `.xlsm`, `.xlsb` hoặc `.xlam`; chặn macro, OLE/ActiveX, external link, công thức, workbook quá lớn và ZIP có tỷ lệ giải nén bất thường.
+- Text export sang Excel được vô hiệu hóa tiền tố công thức `=`, `+`, `-`, `@`. Nội dung import luôn được render như plain text.
+- Giới hạn mặc định: JSON 10 MB, XLSX 20 MB, 20.000 người, 50.000 quan hệ và 50.000 tham chiếu ảnh.
+
 ## Quy tắc family.json
 
-- `schemaVersion` hiện tại là `1`.
+- `schemaVersion` hiện tại là `3`; dữ liệu v1/v2 được migrate khi đọc.
 - ID profile, person và relationship phải duy nhất; tham chiếu phải tồn tại và cùng profile.
 - Không cho self-parent, self-spouse, quan hệ trùng hoặc vòng lặp tổ tiên.
 - Trạng thái hôn phối: `married`, `partner`, `separated`, `divorced`, `widowed`, `unknown`.
-- Ảnh chỉ lưu `photoFileId`; tuổi, thế hệ và quan hệ với chủ thể được suy diễn khi chạy.
+- Ảnh nằm riêng trong Google Drive; `media` chỉ lưu stable Drive file ID. Tuổi, thế hệ, họ nội/ngoại, vai vế, lịch lặp và analytics được suy diễn khi chạy.
+- `confidence` có thể lưu cho ngày sinh, ngày mất và quan hệ; duplicate score và data-quality score không được persist.

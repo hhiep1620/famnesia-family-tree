@@ -1,6 +1,6 @@
 import { createEmptyFamilyData, CURRENT_SCHEMA_VERSION, requireValidFamilyData } from '../../src/schema/familyDataSchema.js'
 import { serializeFamilyData } from '../../src/import/exportFamilyData.js'
-import type { FamilyBackup, FamilyData } from '../../src/types/family.js'
+import type { ActivityEvent, FamilyBackup, FamilyData } from '../../src/types/family.js'
 import { AppError } from './http.js'
 import type { WorkspaceAccess, WorkspaceRole } from './types.js'
 
@@ -29,6 +29,7 @@ export interface WorkspaceResources {
   familyData: DriveFile
   backups: DriveFile
   photos: DriveFile
+  activity?: DriveFile
   access: WorkspaceAccess
 }
 
@@ -113,16 +114,17 @@ async function ensureOwnerWorkspace(accessToken: string): Promise<DriveFile> {
 
 async function ensureResources(accessToken: string, root: DriveFile): Promise<WorkspaceResources> {
   const access = accessOf(root)
-  let [familyData, backups, photos] = await Promise.all([
-    findChild(accessToken, root.id, 'family-data'), findChild(accessToken, root.id, 'backups'), findChild(accessToken, root.id, 'photos'),
+  let [familyData, backups, photos, activity] = await Promise.all([
+    findChild(accessToken, root.id, 'family-data'), findChild(accessToken, root.id, 'backups'), findChild(accessToken, root.id, 'photos'), findChild(accessToken, root.id, 'activity'),
   ])
   if ((!familyData || !backups || !photos) && access.role !== 'owner') {
     throw new AppError(409, 'WORKSPACE_INCOMPLETE', 'This shared workspace is incomplete. Ask its owner to open it once.')
   }
   backups ??= await createFolder(accessToken, 'backups', 'backups', root.id)
   photos ??= await createFolder(accessToken, 'photos', 'photos', root.id)
+  if (!activity && access.role !== 'viewer') activity = await createFolder(accessToken, 'activity', 'activity', root.id)
   familyData ??= await createJsonFile(accessToken, 'family.json', root.id, 'family-data', `${JSON.stringify(createEmptyFamilyData(), null, 2)}\n`, { schemaVersion: String(CURRENT_SCHEMA_VERSION) })
-  return { root, familyData, backups, photos, access }
+  return { root, familyData, backups, photos, activity, access }
 }
 
 function accessOf(root: DriveFile): WorkspaceAccess {
@@ -175,15 +177,15 @@ export async function loadFamily(accessToken: string, workspaceId: string): Prom
   return { snapshot: { data: requireValidFamilyData(value), revision: revision(current) }, workspace: { ...resource.access, rootFolderUrl: resource.root.webViewLink ?? `https://drive.google.com/drive/folders/${resource.root.id}` } }
 }
 
-export async function saveFamily(accessToken: string, workspaceId: string, data: FamilyData, expected: FamilyRevision | undefined, mode: 'save' | 'replace' | 'restore' = 'save'): Promise<FamilySnapshot> {
-  const minimum: WorkspaceRole = mode === 'save' ? 'editor' : 'owner'
+export async function saveFamily(accessToken: string, workspaceId: string, data: FamilyData, expected: FamilyRevision | undefined, mode: 'save' | 'replace' | 'restore' | 'merge' = 'save', actor?: { email: string; name?: string }): Promise<FamilySnapshot> {
+  const minimum: WorkspaceRole = mode === 'replace' || mode === 'restore' ? 'owner' : 'editor'
   const resource = await workspaceResources(accessToken, workspaceId, minimum)
   const current = await getFile(accessToken, resource.familyData.id)
   if (!sameRevision(expected, current)) throw new AppError(409, 'FAMILY_DATA_CONFLICT', 'Family data changed in another session. Reload before saving.', { currentRevision: revision(current) })
+  const currentContent = await downloadText(accessToken, resource.familyData.id)
   if (mode !== 'save') {
-    const currentContent = await downloadText(accessToken, resource.familyData.id)
     await createJsonFile(accessToken, backupName(), resource.backups.id, 'family-backup', currentContent, {
-      schemaVersion: String(CURRENT_SCHEMA_VERSION), reason: mode === 'restore' ? 'before-restore' : 'before-import',
+      schemaVersion: String(CURRENT_SCHEMA_VERSION), reason: mode === 'restore' ? 'before-restore' : mode === 'merge' ? 'before-merge' : 'before-import',
     })
   }
   const updatedAt = new Date().toISOString()
@@ -193,7 +195,58 @@ export async function saveFamily(accessToken: string, workspaceId: string, data:
   })
   if (!response.ok) throw new AppError(response.status === 403 ? 403 : 502, response.status === 403 ? 'DRIVE_ACCESS_DENIED' : 'GOOGLE_DRIVE_FAILED', 'family.json could not be saved.')
   const written = await response.json() as DriveFile
+  if (actor) {
+    let before: FamilyData | undefined
+    try { before = requireValidFamilyData(JSON.parse(currentContent)) } catch { /* family write already validated independently */ }
+    const action = describeFamilyMutation(mode, before, next)
+    await appendActivity(accessToken, workspaceId, { actorEmail: actor.email, actorName: actor.name, ...action }).catch((error) => console.error('Activity append failed', error instanceof Error ? error.message : String(error)))
+  }
   return { data: next, revision: revision(written) }
+}
+
+function describeFamilyMutation(mode: 'save' | 'replace' | 'restore' | 'merge', before: FamilyData | undefined, after: FamilyData): Pick<ActivityEvent, 'action' | 'entityType' | 'entityId' | 'summary' | 'metadata'> {
+  if (mode === 'replace') return { action: 'dataset.imported', entityType: 'dataset', summary: 'Imported family dataset', metadata: { people: after.persons.length, relationships: after.relationships.length, media: after.media.length } }
+  if (mode === 'restore') return { action: 'backup.restored', entityType: 'dataset', summary: 'Restored a family backup' }
+  if (mode === 'merge') return { action: 'person.merged', entityType: 'person', summary: 'Merged duplicate people', metadata: { peopleBefore: before?.persons.length, peopleAfter: after.persons.length } }
+  if (!before) return { action: 'dataset.updated', entityType: 'dataset', summary: 'Updated family data' }
+  const personDelta = after.persons.length - before.persons.length
+  const relationshipDelta = after.relationships.length - before.relationships.length
+  const mediaDelta = after.media.length - before.media.length
+  if (personDelta === 1) { const added = after.persons.find((person) => !before?.persons.some((old) => old.id === person.id)); return { action: 'person.created', entityType: 'person', entityId: added?.id, summary: `Added ${added?.name ?? 'a person'}` } }
+  if (personDelta === -1) return { action: 'person.deleted', entityType: 'person', summary: 'Deleted a person' }
+  if (relationshipDelta === 1) return { action: 'relationship.created', entityType: 'relationship', summary: 'Added a relationship' }
+  if (relationshipDelta === -1) return { action: 'relationship.deleted', entityType: 'relationship', summary: 'Deleted a relationship' }
+  if (mediaDelta === 1) return { action: 'photo.uploaded', entityType: 'photo', summary: 'Uploaded a photo' }
+  const changed = after.persons.find((person) => JSON.stringify(person) !== JSON.stringify(before?.persons.find((old) => old.id === person.id)))
+  return { action: changed ? 'person.updated' : 'dataset.updated', entityType: changed ? 'person' : 'dataset', entityId: changed?.id, summary: changed ? `Updated ${changed.name}` : 'Updated family data' }
+}
+
+async function writeTextFile(accessToken: string, fileId: string, content: string): Promise<void> {
+  const response = await fetch(`${UPLOAD_API}/files/${encodeURIComponent(fileId)}?uploadType=media&fields=id`, { method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/x-ndjson; charset=UTF-8' }, body: content })
+  if (!response.ok) throw new AppError(502, 'ACTIVITY_WRITE_FAILED', 'Activity history could not be saved.')
+}
+
+export async function appendActivity(accessToken: string, workspaceId: string, input: Pick<ActivityEvent, 'actorEmail' | 'actorName' | 'action' | 'entityType' | 'entityId' | 'summary' | 'metadata'>): Promise<void> {
+  const resource = await workspaceResources(accessToken, workspaceId, 'editor')
+  const folder = resource.activity ?? await createFolder(accessToken, 'activity', 'activity', resource.root.id)
+  const month = new Date().toISOString().slice(0, 7)
+  let file = await findChildByProperty(accessToken, folder.id, 'activity-log', 'month', month)
+  const event: ActivityEvent = { id: crypto.randomUUID(), workspaceId, timestamp: new Date().toISOString(), ...input }
+  if (!file) file = await createJsonFile(accessToken, `${month}.jsonl`, folder.id, 'activity-log', `${JSON.stringify(event)}\n`, { month })
+  else await writeTextFile(accessToken, file.id, `${await downloadText(accessToken, file.id)}${JSON.stringify(event)}\n`)
+}
+
+export async function listActivity(accessToken: string, workspaceId: string, limit = 200): Promise<ActivityEvent[]> {
+  const resource = await workspaceResources(accessToken, workspaceId)
+  if (!resource.activity) return []
+  const files = await listFiles(accessToken, `${propertyQuery('activity-log')} and '${escapeQuery(resource.activity.id)}' in parents`, 'name desc')
+  const events: ActivityEvent[] = []
+  for (const file of files.slice(0, 6)) {
+    const lines = (await downloadText(accessToken, file.id)).split('\n').filter(Boolean)
+    for (const line of lines) { try { events.push(JSON.parse(line) as ActivityEvent) } catch { /* ignore one damaged audit line */ } }
+    if (events.length >= limit) break
+  }
+  return events.sort((left, right) => right.timestamp.localeCompare(left.timestamp)).slice(0, limit)
 }
 
 function backupName(): string { return `famnesia_${new Date().toISOString().replace(/[-:]/g, '').replace('T', '_').replace(/\.\d{3}Z$/, '')}.json` }

@@ -3,6 +3,8 @@ import { sampleFamilyData } from '../data/sampleFamily'
 import { validateRelationship } from '../graph/familyValidation'
 import { optimizePhoto } from '../media/imageOptimization'
 import { generateNextMediaId } from '../media/mediaSelectors'
+import { duplicatePairId } from '../integrity/duplicateDetection'
+import { mergePeople } from '../integrity/mergePerson'
 import { CURRENT_SCHEMA_VERSION, requireValidFamilyData } from '../schema/familyDataSchema'
 import { ApiError } from '../services/apiClient'
 import { FamilyRepository, type FamilyDataRevision } from '../services/familyRepository'
@@ -10,6 +12,7 @@ import { MutationGate } from '../services/mutationGate'
 import { canRetryRevisionDrift } from '../services/revisionConflict'
 import type {
   FamilyBackup,
+  ActivityEvent,
   FamilyData,
   FamilyProfile,
   FriendlyRelationship,
@@ -61,6 +64,7 @@ export function useFamilyData() {
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([])
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>()
   const [members, setMembers] = useState<WorkspaceMember[]>([])
+  const [activity, setActivity] = useState<ActivityEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string>()
   const [error, setError] = useState<string>()
@@ -89,6 +93,7 @@ export function useFamilyData() {
         setActiveWorkspaceId(repository.current.workspace.id)
         const snapshot = await repository.current.load()
         applySnapshot(snapshot.data, snapshot.revision)
+        setActivity(await repository.current.listActivity().catch(() => []))
       }
     } catch (caught) {
       console.error(caught)
@@ -151,6 +156,7 @@ export function useFamilyData() {
     try {
       const snapshot = await repository.current.save(valid, revision.current)
       applySnapshot(snapshot.data, snapshot.revision)
+      void repository.current.listActivity().then(setActivity).catch(() => undefined)
       return snapshot.data
     } catch (caught) {
       if (!(caught instanceof ApiError) || caught.code !== 'FAMILY_DATA_CONFLICT') throw caught
@@ -158,6 +164,7 @@ export function useFamilyData() {
       if (!canRetryRevisionDrift(valid, latest.data)) throw caught
       const snapshot = await repository.current.save(valid, latest.revision)
       applySnapshot(snapshot.data, snapshot.revision)
+      void repository.current.listActivity().then(setActivity).catch(() => undefined)
       return snapshot.data
     }
   }, [applySnapshot, useMockData])
@@ -230,6 +237,7 @@ export function useFamilyData() {
         sortOrder: draft.sortOrder,
         createdAt: now,
         updatedAt: now,
+        confidence: { birthDate: draft.birthDateConfidence, deathDate: draft.deathDateConfidence },
       }
       const mediaIds = familyData.media.map((item) => item.id)
       const createdMedia: PersonMedia[] = uploadedPhotoIds.map((driveFileId, index) => {
@@ -302,6 +310,7 @@ export function useFamilyData() {
         ancestralRole: draft.ancestralRole,
         sortOrder: draft.sortOrder,
         updatedAt: new Date().toISOString(),
+        confidence: { birthDate: draft.birthDateConfidence, deathDate: draft.deathDateConfidence },
       }
       const existingMedia = familyData.media.filter((item) => item.personId === id)
       const mediaIds = [...familyData.media.map((item) => item.id)]
@@ -464,6 +473,7 @@ export function useFamilyData() {
         if (!repository.current) throw new Error('Workspace Google Drive chưa sẵn sàng.')
         const snapshot = await repository.current.save(valid, revision.current, reason === 'restore' ? 'restore' : 'replace')
         applySnapshot(snapshot.data, snapshot.revision)
+        void repository.current.listActivity().then(setActivity).catch(() => undefined)
       }
     })
   }, [applySnapshot, familyData, runMutation, useMockData])
@@ -475,6 +485,32 @@ export function useFamilyData() {
     if (!data) throw new Error('Không tìm thấy bản sao lưu.')
     await replaceAllData(data, 'restore')
   }, [replaceAllData, useMockData])
+
+  const suppressDuplicate = useCallback(async (leftId: string, rightId: string) => {
+    const marker = duplicatePairId(leftId, rightId)
+    if (familyData.settings.duplicateSuppressions?.includes(marker)) return
+    await persist('Đang ghi nhận quyết định…', { ...familyData, settings: { ...familyData.settings, duplicateSuppressions: [...(familyData.settings.duplicateSuppressions ?? []), marker] } })
+  }, [familyData, persist])
+
+  const mergeDuplicatePeople = useCallback(async (canonicalId: string, duplicateId: string) => {
+    const merged = mergePeople(familyData, canonicalId, duplicateId)
+    await runMutation('Đang gộp thành viên…', async () => {
+      if (useMockData) {
+        mockBackups.current.unshift({ id: `mock-${Date.now()}`, name: 'famnesia_before_merge.json', createdTime: new Date().toISOString(), reason: 'before-merge', data: cloneData(familyData) })
+        mockData.current = cloneData(merged); applySnapshot(merged)
+      } else {
+        if (!repository.current) throw new Error('Workspace Google Drive chưa sẵn sàng.')
+        const snapshot = await repository.current.save(merged, revision.current, 'merge')
+        applySnapshot(snapshot.data, snapshot.revision)
+        setActivity(await repository.current.listActivity().catch(() => []))
+      }
+    })
+  }, [applySnapshot, familyData, runMutation, useMockData])
+
+  const refreshActivity = useCallback(async () => {
+    if (useMockData || !repository.current) return activity
+    const events = await repository.current.listActivity(); setActivity(events); return events
+  }, [activity, useMockData])
 
   const switchWorkspace = useCallback((id: string) => {
     if (!workspaces.some((candidate) => candidate.id === id) || id === activeWorkspaceId) return
@@ -516,6 +552,7 @@ export function useFamilyData() {
     workspaces,
     activeWorkspaceId,
     members,
+    activity,
     loading,
     busy,
     error,
@@ -544,10 +581,14 @@ export function useFamilyData() {
     addMember,
     updateMember,
     removeMember,
+    suppressDuplicate,
+    mergeDuplicatePeople,
+    refreshActivity,
   }), [
     activeProfile, activeProfileId, activeWorkspaceId, addMember, addPerson, addPersonMedia, addRelationship, backupNow, busy, createProfile,
     deletePerson, deletePersonMedia, deleteRelationship, error, familyData, listBackups, loading, media, persons,
     refresh, relationships, replaceAllData, restoreBackup, saveStatus, setActiveProfileId,
     setPrimaryMedia, setSubject, switchWorkspace, updateMediaCaption, updateMember, removeMember, refreshMembers, updatePerson, updateRelationship, useMockData, workspace, workspaces, members,
+    activity, suppressDuplicate, mergeDuplicatePeople, refreshActivity,
   ])
 }

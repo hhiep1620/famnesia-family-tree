@@ -1,5 +1,5 @@
 import { requireAuth } from '../../../_server/auth.js'
-import { addMember, listMembers, removeMember, updateMember } from '../../../_server/drive.js'
+import { addMember, appendActivity, listMembers, removeMember, updateMember } from '../../../_server/drive.js'
 import { AppError, assertSameOrigin, json, pathParameter, readJson, requireMethod, withErrors } from '../../../_server/http.js'
 
 export default { fetch(request: Request) { return withErrors(async () => {
@@ -12,14 +12,17 @@ export default { fetch(request: Request) { return withErrors(async () => {
   if (request.method === 'POST') {
     if (!body.email || !/^\S+@\S+\.\S+$/.test(body.email) || !body.role) throw new AppError(400, 'MEMBER_INVALID', 'A valid email and role are required.')
     await addMember(auth.accessToken, workspaceId, body.email.toLowerCase(), body.role)
+    await appendActivity(auth.accessToken, workspaceId, { actorEmail: auth.user.email, actorName: auth.user.name, action: 'member.invited', entityType: 'member', summary: `Invited ${body.email.toLowerCase()} as ${body.role}` })
     return json({ ok: true }, { status: 201 })
   }
   if (!body.permissionId) throw new AppError(400, 'MEMBER_INVALID', 'Permission ID is required.')
   if (request.method === 'DELETE') {
     await removeMember(auth.accessToken, workspaceId, body.permissionId)
+    await appendActivity(auth.accessToken, workspaceId, { actorEmail: auth.user.email, actorName: auth.user.name, action: 'member.removed', entityType: 'member', entityId: body.permissionId, summary: 'Removed a workspace member' })
     return new Response(null, { status: 204 })
   }
   if (!body.role) throw new AppError(400, 'ROLE_INVALID', 'Role must be editor or viewer.')
   await updateMember(auth.accessToken, workspaceId, body.permissionId, body.role)
+  await appendActivity(auth.accessToken, workspaceId, { actorEmail: auth.user.email, actorName: auth.user.name, action: 'member.role_changed', entityType: 'member', entityId: body.permissionId, summary: `Changed a member role to ${body.role}` })
   return json({ ok: true })
 }) } }

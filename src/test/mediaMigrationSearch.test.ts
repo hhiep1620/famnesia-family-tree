@@ -4,7 +4,7 @@ import { PersonSearchIndex } from '../search/personSearchIndex'
 import { requireValidFamilyData, validateFamilyData } from '../schema/familyDataSchema'
 import type { Person } from '../types/family'
 
-describe('schema v2 contact and media migration', () => {
+describe('schema migration for contact, media and quality metadata', () => {
   it('moves a legacy photo into media without losing the Drive ID', () => {
     const migrated = requireValidFamilyData({
       schemaVersion: 1,
@@ -13,7 +13,7 @@ describe('schema v2 contact and media migration', () => {
       relationships: [],
       settings: { timezone: 'Asia/Ho_Chi_Minh', locale: 'vi-VN' },
     })
-    expect(migrated.schemaVersion).toBe(2)
+    expect(migrated.schemaVersion).toBe(3)
     expect(migrated.persons[0]).toMatchObject({ phone1: '', phone2: '', address: '', note: '' })
     expect(migrated.persons[0]).not.toHaveProperty('photoFileId')
     expect(migrated.media[0]).toMatchObject({ personId: 'P0001', driveFileId: 'drive_file-1', isPrimary: true })

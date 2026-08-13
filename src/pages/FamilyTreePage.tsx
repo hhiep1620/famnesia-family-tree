@@ -2,6 +2,7 @@ import { AlertTriangle, CakeSlice, Flower2, Plus, RefreshCw } from 'lucide-react
 import { useEffect, useMemo, useState } from 'react'
 import { getUpcomingFamilyEvents } from '../calendar/familyCalendar'
 import { FamilyCalendar } from '../components/calendar/FamilyCalendar'
+import { FamilyAnalytics } from '../components/analytics/FamilyAnalytics'
 import { CreateProfileModal } from '../components/data/CreateProfileModal'
 import { DataManagement } from '../components/data/DataManagement'
 import { StartFamilyTree } from '../components/data/StartFamilyTree'
@@ -42,6 +43,7 @@ export function FamilyTreePage({ user, onSignOut }: Props) {
   const highlightedIds = useMemo(() => new Set(upcomingEvents.map((event) => event.personId)), [upcomingEvents])
   const eventTypes = useMemo(() => new Map(upcomingEvents.map((event) => [event.personId, event.type])), [upcomingEvents])
   const canEdit = data.useMockData || Boolean(data.workspace?.canEdit)
+  const activeFamilyData = useMemo(() => ({ ...data.familyData, profiles: data.activeProfile ? [data.activeProfile] : [], persons: data.persons, relationships: data.relationships, media: data.media }), [data.activeProfile, data.familyData, data.media, data.persons, data.relationships])
 
   useEffect(() => { setSelectedId(undefined); setModal(undefined); setExplorerId(undefined); setViewSubjectStack(persistedSubjectId ? [persistedSubjectId] : []) }, [data.activeProfileId, persistedSubjectId])
 
@@ -58,12 +60,12 @@ export function FamilyTreePage({ user, onSignOut }: Props) {
       {data.loading ? <div className="center-state"><span className="archive-loader" /><h2>Đang mở gia phả</h2><p>Đang tìm workspace và đọc family.json…</p></div>
         : data.error && !data.familyData.updatedAt ? <div className="center-state error-state"><AlertTriangle /><h2>Không thể tải gia phả</h2><p>{data.error}</p><button className="secondary-button" onClick={() => void data.refresh()}><RefreshCw size={16} /> Thử lại</button></div>
           : explorerId ? <RelativeExplorer targetId={explorerId} graph={graph} media={data.media} workspaceId={data.workspace?.id} onClose={() => setExplorerId(undefined)} onOpenPerson={setExplorerId} onViewFullTree={openFamilyBranch} />
-          : view === 'data' ? <DataManagement data={data.familyData} workspace={data.workspace} mock={data.useMockData} busy={data.busy} saveStatus={data.saveStatus} openImportOnMount={openImportOnMount} onImportOpened={() => setOpenImportOnMount(false)} onCreateProfile={() => setShowCreateProfile(true)} onImport={(replacement) => data.replaceAllData(replacement)} onBackup={() => data.backupNow()} onListBackups={data.listBackups} onRestore={data.restoreBackup} members={data.members} onRefreshMembers={data.refreshMembers} onAddMember={data.addMember} onUpdateMember={data.updateMember} onRemoveMember={data.removeMember} />
+          : view === 'data' ? <DataManagement data={data.familyData} workspace={data.workspace} mock={data.useMockData} busy={data.busy} saveStatus={data.saveStatus} openImportOnMount={openImportOnMount} onImportOpened={() => setOpenImportOnMount(false)} onCreateProfile={() => setShowCreateProfile(true)} onImport={(replacement) => data.replaceAllData(replacement)} onBackup={() => data.backupNow()} onListBackups={data.listBackups} onRestore={data.restoreBackup} members={data.members} activity={data.activity} onRefreshMembers={data.refreshMembers} onAddMember={data.addMember} onUpdateMember={data.updateMember} onRemoveMember={data.removeMember} onOpenPerson={setSelectedId} onSuppressDuplicate={data.suppressDuplicate} onMergePeople={data.mergeDuplicatePeople} />
             : data.profiles.length === 0 ? canEdit ? <StartFamilyTree onCreate={() => setShowCreateProfile(true)} onImport={openImport} onDownloadTemplate={downloadFamilyDataTemplate} /> : <div className="center-state empty-state"><h2>Workspace chưa có dữ liệu</h2><p>Bạn có quyền xem. Hãy nhờ owner hoặc editor thêm gia đình.</p></div>
               : data.persons.length ? view === 'tree' ? <>
                 <div className="tree-filter-bar"><span>Đánh dấu trong 30 ngày:</span><button className={treeFilter === 'all' ? 'active' : ''} onClick={() => setTreeFilter('all')}>Tất cả</button><button className={treeFilter === 'birthday' ? 'active' : ''} onClick={() => setTreeFilter('birthday')}><CakeSlice size={14} /> Sinh nhật</button><button className={treeFilter === 'death_anniversary' ? 'active' : ''} onClick={() => setTreeFilter('death_anniversary')}><Flower2 size={14} /> Ngày giỗ</button></div>
                 <FamilyTree graph={graph} media={data.media} workspaceId={data.workspace?.id} selectedId={selectedId} subjectId={viewSubjectId ?? undefined} subjectName={subject?.name} kinships={kinships} highlightedIds={highlightedIds} eventTypes={eventTypes} filterActive={treeFilter !== 'all'} canGoBack={viewSubjectStack.length > 1} onBack={goBackSubject} onOpenBranch={openFamilyBranch} onSelect={setSelectedId} />
-              </> : <FamilyCalendar persons={data.persons} onOpenPerson={setSelectedId} />
+              </> : view === 'calendar' ? <FamilyCalendar persons={data.persons} onOpenPerson={setSelectedId} onViewTree={openFamilyBranch} /> : <FamilyAnalytics data={activeFamilyData} subject={subject} onOpenCalendar={() => setView('calendar')} />
                 : <div className="center-state empty-state"><span className="seed-mark">+</span><span className="eyebrow">{data.activeProfile?.name}</span><h2>Gia đình này chưa có thành viên</h2><p>Thêm người đầu tiên hoặc import một family.json hoàn chỉnh.</p><div className="empty-actions"><button className="primary-button" onClick={() => setModal({ type: 'add' })}><Plus size={17} /> Thêm người đầu tiên</button><button className="secondary-button" onClick={openImport}>Import JSON</button></div></div>}
 
       {data.error && data.familyData.updatedAt && <div className="toast error-toast">{data.error}</div>}{data.busy && <div className="toast busy-toast"><span className="mini-spinner" />{data.busy}</div>}

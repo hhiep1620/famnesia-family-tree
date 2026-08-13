@@ -1,9 +1,9 @@
-import { CalendarDays, Database, LogOut, Network, Plus, RefreshCw } from 'lucide-react'
+import { BarChart3, CalendarDays, Database, LogOut, Network, Plus, RefreshCw } from 'lucide-react'
 import type { FamilyProfile, FamilyScope, GoogleUser, KinshipResult, Person, PersonMedia, WorkspaceInfo } from '../../types/family'
 import { PersonSearch } from '../search/PersonSearch'
 import { BrandLogo } from './BrandLogo'
 
-export type MainView = 'tree' | 'calendar' | 'data'
+export type MainView = 'tree' | 'calendar' | 'analytics' | 'data'
 
 interface Props {
   persons: Person[]
@@ -34,6 +34,7 @@ function Navigation({ view, onViewChange, mobile = false }: { view: MainView; on
   return <nav className={mobile ? 'mobile-bottom-nav' : 'primary-nav'} aria-label="Điều hướng chính">
     <button className={view === 'tree' ? 'active' : ''} onClick={() => onViewChange('tree')}><Network size={17} /> Cây gia đình</button>
     <button className={view === 'calendar' ? 'active' : ''} onClick={() => onViewChange('calendar')}><CalendarDays size={17} /> Lịch</button>
+    <button className={view === 'analytics' ? 'active' : ''} onClick={() => onViewChange('analytics')}><BarChart3 size={17} /> Phân tích</button>
     <button className={view === 'data' ? 'active' : ''} onClick={() => onViewChange('data')}><Database size={17} /> Dữ liệu</button>
   </nav>
 }

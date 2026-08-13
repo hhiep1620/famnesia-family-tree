@@ -41,6 +41,15 @@ export async function readJson<T>(request: Request): Promise<T> {
   catch { throw new AppError(400, 'INVALID_JSON', 'Request body must be valid JSON.') }
 }
 
+export async function readJsonLimited<T>(request: Request, maxBytes: number): Promise<T> {
+  const declared = Number(request.headers.get('content-length') ?? 0)
+  if (declared > maxBytes) throw new AppError(413, 'REQUEST_TOO_LARGE', 'Import file exceeds allowed size.')
+  const text = await request.text()
+  if (new TextEncoder().encode(text).byteLength > maxBytes) throw new AppError(413, 'REQUEST_TOO_LARGE', 'Import file exceeds allowed size.')
+  try { return JSON.parse(text) as T }
+  catch { throw new AppError(400, 'INVALID_JSON', 'Request body must be valid JSON.') }
+}
+
 export function assertSameOrigin(request: Request): void {
   if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return
   const origin = request.headers.get('origin')

@@ -96,3 +96,13 @@ export function downloadFamilyData(data: FamilyData): void {
 export function downloadFamilyDataTemplate(): void {
   downloadText(`famnesia-template-v${CURRENT_SCHEMA_VERSION}.json`, serializeFamilyData(createFamilyDataTemplate()))
 }
+
+export async function downloadFamilyDataExcel(data: FamilyData): Promise<void> {
+  const { downloadFamilyWorkbook } = await import('./excelFamilyData.js')
+  downloadFamilyWorkbook(prepareFamilyDataForExport(data))
+}
+
+export async function downloadFamilyDataExcelTemplate(): Promise<void> {
+  const { downloadFamilyWorkbook } = await import('./excelFamilyData.js')
+  downloadFamilyWorkbook(createFamilyDataTemplate(), `famnesia-template-v${CURRENT_SCHEMA_VERSION}.xlsx`)
+}

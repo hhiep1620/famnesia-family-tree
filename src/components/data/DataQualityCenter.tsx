@@ -1,0 +1,40 @@
+import { AlertTriangle, CheckCircle2, Merge, Search, ShieldCheck, UserRoundX, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { analyzeFamilyIntegrity, peopleMissingField } from '../../integrity/integrityEngine'
+import type { DuplicateCandidate } from '../../integrity/duplicateDetection'
+import type { FamilyData, Person } from '../../types/family'
+
+type Mode = 'quality' | 'issues' | 'duplicates'
+
+function Metric({ label, value, detail, onClick }: { label: string; value: string | number; detail?: string; onClick?: () => void }) {
+  const content = <><strong>{value}</strong><span>{label}</span>{detail ? <small>{detail}</small> : null}</>
+  return onClick ? <button className="quality-metric actionable" type="button" onClick={onClick}>{content}</button> : <div className="quality-metric">{content}</div>
+}
+function MergeDialog({ candidate, onClose, onMerge }: { candidate: DuplicateCandidate; onClose: () => void; onMerge: (canonicalId: string, duplicateId: string) => Promise<void> }) {
+  const [canonicalId, setCanonicalId] = useState(candidate.personA.id)
+  const canonical = canonicalId === candidate.personA.id ? candidate.personA : candidate.personB
+  const duplicate = canonicalId === candidate.personA.id ? candidate.personB : candidate.personA
+  return <div className="modal-backdrop"><section className="modal-card merge-modal" role="dialog" aria-modal="true" aria-labelledby="merge-title"><div className="modal-heading"><div><span className="eyebrow">Thao tác phá huỷ có backup</span><h2 id="merge-title">Gộp hai thành viên</h2></div><button className="icon-button" onClick={onClose} aria-label="Đóng"><X size={18} /></button></div>
+    <p>Chọn người được giữ làm hồ sơ chính. Thông tin còn thiếu, ảnh và quan hệ của hồ sơ còn lại sẽ được chuyển sang; quan hệ trùng sẽ được loại bỏ.</p>
+    <div className="merge-choice-grid">{[candidate.personA, candidate.personB].map((person) => <label className={canonicalId === person.id ? 'active' : ''} key={person.id}><input type="radio" name="canonical" checked={canonicalId === person.id} onChange={() => setCanonicalId(person.id)} /><strong>{person.name}</strong><small>{person.id} · {person.birthDate || 'Chưa có ngày sinh'}</small><span>{canonicalId === person.id ? 'Giữ hồ sơ này' : 'Gộp vào hồ sơ kia'}</span></label>)}</div>
+    <div className="merge-preview"><ShieldCheck size={17} /><span>Famnesia sẽ backup trước, chuyển {candidate.personA.id === duplicate.id ? candidate.personA.name : candidate.personB.name} vào {canonical.name}, kiểm tra lại graph rồi mới lưu.</span></div>
+    <div className="modal-actions"><button className="secondary-button" onClick={onClose}>Hủy</button><button className="primary-button" onClick={() => void onMerge(canonical.id, duplicate.id)}><Merge size={15} /> Backup và gộp</button></div>
+  </section></div>
+}
+
+export function DataQualityCenter({ data, mode, canEdit, onOpenPerson, onSuppressDuplicate, onMerge }: { data: FamilyData; mode: Mode; canEdit: boolean; onOpenPerson?: (id: string) => void; onSuppressDuplicate?: (left: string, right: string) => Promise<void>; onMerge?: (canonical: string, duplicate: string) => Promise<void> }) {
+  const report = useMemo(() => analyzeFamilyIntegrity(data), [data])
+  const [missing, setMissing] = useState<{ title: string; people: Person[] }>()
+  const [merge, setMerge] = useState<DuplicateCandidate>()
+  const errors = report.issues.filter((issue) => issue.severity === 'error'); const warnings = report.issues.filter((issue) => issue.severity === 'warning')
+
+  if (mode === 'quality') return <div className="quality-center"><section className="quality-hero"><div><span className="eyebrow">Data completeness · không phải độ chính xác</span><h3>{report.completeness.overall}% hoàn thiện</h3><p>Mức độ đầy đủ của thông tin có thể hành động; dữ liệu đầy đủ vẫn cần gia đình xác minh.</p></div><div className="quality-ring" style={{ '--quality': `${report.completeness.overall * 3.6}deg` } as React.CSSProperties}><strong>{report.completeness.overall}</strong><small>%</small></div></section>
+    <div className="quality-metrics"><Metric label="Thành viên" value={data.persons.length} /><Metric label="Quan hệ hợp lệ" value={`${report.relationshipHealth}%`} detail={`${report.validRelationships}/${data.relationships.length}`} /><Metric label="Trùng tiềm năng" value={report.duplicates.length} /><Metric label="Lỗi nghiêm trọng" value={errors.length} /><Metric label="Cảnh báo" value={warnings.length} /></div>
+    <section className="completeness-grid">{([['photo', 'Có ảnh', report.completeness.photo], ['birthDate', 'Có ngày sinh', report.completeness.birthDate], ['phone', 'Có điện thoại', report.completeness.phone], ['address', 'Có địa chỉ', report.completeness.address], ['gender', 'Có giới tính', report.completeness.gender]] as const).map(([field, label, value]) => <button key={field} onClick={() => setMissing({ title: `Thiếu ${label.replace('Có ', '').toLocaleLowerCase('vi')}`, people: peopleMissingField(data, field) })}><span><strong>{label}</strong><small>{data.persons.length - peopleMissingField(data, field).length} / {data.persons.length}</small></span><i><b style={{ width: `${value}%` }} /></i><em>{value}%</em></button>)}</section>
+    {missing ? <section className="quality-drilldown"><header><div><Search size={16} /><strong>{missing.title}</strong><span>{missing.people.length} người</span></div><button className="icon-button" onClick={() => setMissing(undefined)} aria-label="Đóng danh sách"><X size={16} /></button></header><div>{missing.people.map((person) => <button key={person.id} onClick={() => onOpenPerson?.(person.id)}>{person.name}<small>{person.id}</small></button>)}</div></section> : null}
+  </div>
+
+  if (mode === 'duplicates') return <div className="duplicate-center">{report.duplicates.length ? report.duplicates.map((candidate) => <section className="duplicate-card" key={candidate.id}><header><div><span className="eyebrow">Possible duplicate</span><strong>{Math.round(candidate.score * 100)}% tin cậy</strong></div><span>{candidate.personA.id} ↔ {candidate.personB.id}</span></header><div className="duplicate-people"><button onClick={() => onOpenPerson?.(candidate.personA.id)}><strong>{candidate.personA.name}</strong><small>{candidate.personA.birthDate || 'Chưa rõ ngày sinh'}</small></button><button onClick={() => onOpenPerson?.(candidate.personB.id)}><strong>{candidate.personB.name}</strong><small>{candidate.personB.birthDate || 'Chưa rõ ngày sinh'}</small></button></div><div className="duplicate-signals">{candidate.signals.map((signal) => <span className={signal.matched ? 'matched' : ''} key={signal.label}>{signal.matched ? <CheckCircle2 size={12} /> : <UserRoundX size={12} />}{signal.label}</span>)}</div>{canEdit ? <footer><button className="secondary-button" onClick={() => void onSuppressDuplicate?.(candidate.personA.id, candidate.personB.id)}>Không trùng</button><button className="primary-button" onClick={() => setMerge(candidate)}><Merge size={14} /> So sánh và gộp</button></footer> : null}</section>) : <div className="quality-empty"><CheckCircle2 /><h3>Không có cặp trùng nổi bật</h3><p>Famnesia đã so sánh tên, ngày sinh, cha mẹ, bạn đời, điện thoại và địa chỉ.</p></div>}{merge && onMerge ? <MergeDialog candidate={merge} onClose={() => setMerge(undefined)} onMerge={async (canonical, duplicate) => { await onMerge(canonical, duplicate); setMerge(undefined) }} /> : null}</div>
+
+  return <div className="issues-center"><header><div><AlertTriangle /><span><strong>{errors.length} lỗi</strong><small>Cần xử lý trước thao tác phá huỷ</small></span></div><div><AlertTriangle /><span><strong>{warnings.length} cảnh báo</strong><small>Cần kiểm tra, không tự xoá dữ liệu</small></span></div></header><div className="issue-list">{report.issues.filter((issue) => issue.severity !== 'info').map((issue) => <button key={issue.id} className={issue.severity} onClick={() => issue.personId && onOpenPerson?.(issue.personId)}><span>{issue.severity}</span><strong>{issue.message}</strong><small>{issue.code}</small></button>)}</div></div>
+}

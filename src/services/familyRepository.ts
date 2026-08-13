@@ -1,4 +1,4 @@
-import type { FamilyBackup, FamilyData, WorkspaceInfo, WorkspaceMember, WorkspaceRole } from '../types/family'
+import type { ActivityEvent, FamilyBackup, FamilyData, WorkspaceInfo, WorkspaceMember, WorkspaceRole } from '../types/family'
 import { apiRequest, jsonBody } from './apiClient'
 
 export interface FamilyDataRevision { modifiedTime?: string; version?: string }
@@ -35,10 +35,12 @@ export class FamilyRepository {
     return result.snapshot
   }
 
-  async save(data: FamilyData, expectedRevision?: FamilyDataRevision, mode: 'save' | 'replace' | 'restore' = 'save'): Promise<FamilyDataSnapshot> {
+  async save(data: FamilyData, expectedRevision?: FamilyDataRevision, mode: 'save' | 'replace' | 'restore' | 'merge' = 'save'): Promise<FamilyDataSnapshot> {
     const result = await apiRequest<{ snapshot: FamilyDataSnapshot }>(`${workspacePath(this.workspace.id)}/family`, { method: 'PUT', ...jsonBody({ data, expectedRevision, mode }) })
     return result.snapshot
   }
+
+  async listActivity(): Promise<ActivityEvent[]> { return (await apiRequest<{ activity: ActivityEvent[] }>(`${workspacePath(this.workspace.id)}/activity`)).activity }
 
   async backup(data: FamilyData, reason = 'manual'): Promise<FamilyBackup> {
     return (await apiRequest<{ backup: FamilyBackup }>(`${workspacePath(this.workspace.id)}/backups`, { method: 'POST', ...jsonBody({ data, reason }) })).backup
