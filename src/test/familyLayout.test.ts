@@ -72,7 +72,7 @@ describe('family tree layout', () => {
     expect(byId.get('P0011')?.position.x).toBeLessThan(byId.get('P0005')?.position.x ?? 0)
   })
 
-  it('shows birth order only for the subject direct siblings', () => {
+  it('shows recorded birth order for every person who belongs to a sibling group', () => {
     const graph = buildFamilyGraph(people, relationships)
     const units = createFamilyUnits(graph)
     const kinships = getAllKinships('P0005', graph)
@@ -80,8 +80,10 @@ describe('family tree layout', () => {
       .filter((node) => node.type === 'person')
     const byId = new Map(nodes.map((node) => [node.id, node]))
 
-    expect(kinships.get('P0011')?.relationCode).toMatch(/sibling/)
+    expect(byId.get('P0005')?.data.siblingOrder).toBe(5)
     expect(byId.get('P0011')?.data.siblingOrder).toBe(11)
+    expect(byId.get('P0007')?.data.siblingOrder).toBe(7)
+    expect(byId.get('P0008')?.data.siblingOrder).toBe(8)
     expect(byId.get('P0001')?.data.siblingOrder).toBeUndefined()
     expect(byId.get('P0006')?.data.siblingOrder).toBeUndefined()
   })

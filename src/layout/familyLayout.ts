@@ -74,10 +74,8 @@ function getLifeLabel(person: Person): string | undefined {
   return age === undefined ? undefined : `${age} tuổi`
 }
 
-const DIRECT_SIBLING_RELATIONS = new Set(['older_sibling', 'younger_sibling', 'sibling'])
-
-function getSiblingOrder(person: Person, kinship?: KinshipResult): number | undefined {
-  if (!kinship || !DIRECT_SIBLING_RELATIONS.has(kinship.relationCode)) return undefined
+function getSiblingOrder(person: Person, siblingIds: Set<string>): number | undefined {
+  if (!siblingIds.has(person.id)) return undefined
   return Number.isInteger(person.sortOrder) && (person.sortOrder ?? 0) > 0 ? person.sortOrder : undefined
 }
 
@@ -98,6 +96,7 @@ export function createFlowNodes(
     onCollapseBranch?: (personId: string) => void
   },
 ): Array<PersonFlowNode | ConnectorFlowNode> {
+  const siblingIds = new Set(units.filter((unit) => unit.childIds.length > 1).flatMap((unit) => unit.childIds))
   const nodes: Array<PersonFlowNode | ConnectorFlowNode> = [...graph.personsById.values()].map((person) => {
     const kinship = options?.kinships?.get(person.id)
     return {
@@ -110,7 +109,7 @@ export function createFlowNodes(
         nickname: person.nickname ?? undefined,
         lifeLabel: getLifeLabel(person),
         kinshipLabel: kinship?.shortLabel,
-        siblingOrder: getSiblingOrder(person, kinship),
+        siblingOrder: getSiblingOrder(person, siblingIds),
         isSubject: options?.subjectId === person.id,
         isDeceased: person.isDeceased,
         isDimmed: options?.filterActive && !options.highlightedIds?.has(person.id),
