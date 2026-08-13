@@ -5,6 +5,7 @@ import { optimizePhoto } from '../media/imageOptimization'
 import { generateNextMediaId } from '../media/mediaSelectors'
 import { duplicatePairId } from '../integrity/duplicateDetection'
 import { mergePeople } from '../integrity/mergePerson'
+import { deletePersonCascade } from '../family/deletePersonCascade'
 import { CURRENT_SCHEMA_VERSION, requireValidFamilyData } from '../schema/familyDataSchema'
 import { ApiError } from '../services/apiClient'
 import { FamilyRepository, type FamilyDataRevision } from '../services/familyRepository'
@@ -430,17 +431,10 @@ export function useFamilyData() {
   }, [familyData, persist])
 
   const deletePerson = useCallback(async (id: string) => {
-    if (familyData.relationships.some((relationship) => relationship.person1Id === id || relationship.person2Id === id)) {
-      throw new Error('Hãy gỡ hoặc chuyển các quan hệ gia đình trước khi xóa thành viên này.')
-    }
     const person = familyData.persons.find((candidate) => candidate.id === id)
     const personMedia = familyData.media.filter((item) => item.personId === id)
-    await persist('Đang xóa thành viên…', {
-      ...familyData,
-      persons: familyData.persons.filter((candidate) => candidate.id !== id),
-      profiles: familyData.profiles.map((profile) => profile.subjectPersonId === id ? { ...profile, subjectPersonId: null } : profile),
-      media: familyData.media.filter((item) => item.personId !== id),
-    })
+    const deletion = deletePersonCascade(familyData, id)
+    await persist('Đang xóa thành viên và quan hệ…', deletion.data)
     if (!useMockData && person) await Promise.all(personMedia.map((item) => repository.current?.deletePhoto(item.driveFileId).catch(console.error)))
   }, [familyData, persist, useMockData])
 

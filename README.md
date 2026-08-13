@@ -20,7 +20,7 @@ Famnesia/
 ├── backups/
 ├── photos/
 └── activity/
-    └── YYYY-MM.jsonl
+    └── YYYY-MM.jsonl (tối đa 20 hoạt động gần nhất)
 ```
 
 Redis không chứa dữ liệu gia phả. Redis chỉ giữ session có TTL và Google refresh token đã mã hóa AES-256-GCM.
@@ -149,4 +149,5 @@ Mọi response API nhạy cảm đều `Cache-Control: no-store`; thao tác thay
 - Không cho self-parent, self-spouse, quan hệ trùng hoặc vòng lặp tổ tiên.
 - Trạng thái hôn phối: `married`, `partner`, `separated`, `divorced`, `widowed`, `unknown`.
 - Ảnh nằm riêng trong Google Drive; `media` chỉ lưu stable Drive file ID. Tuổi, thế hệ, họ nội/ngoại, vai vế, lịch lặp và analytics được suy diễn khi chạy.
+- Xóa thành viên là thao tác cascade trong một lần lưu: tự xóa quan hệ, tham chiếu ảnh và bỏ chọn chủ thể; activity log tự giới hạn còn 20 sự kiện mới nhất.
 - `confidence` có thể lưu cho ngày sinh, ngày mất và quan hệ; duplicate score và data-quality score không được persist.

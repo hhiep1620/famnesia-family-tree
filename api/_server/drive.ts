@@ -1,4 +1,5 @@
 import { createEmptyFamilyData, CURRENT_SCHEMA_VERSION, requireValidFamilyData } from '../../src/schema/familyDataSchema.js'
+import { ACTIVITY_RETENTION_LIMIT, parseActivityJsonLines, retainRecentActivity, serializeActivityJsonLines } from '../../src/activity/activityRetention.js'
 import { serializeFamilyData } from '../../src/import/exportFamilyData.js'
 import type { ActivityEvent, FamilyBackup, FamilyData } from '../../src/types/family.js'
 import { AppError } from './http.js'
@@ -213,7 +214,13 @@ function describeFamilyMutation(mode: 'save' | 'replace' | 'restore' | 'merge', 
   const relationshipDelta = after.relationships.length - before.relationships.length
   const mediaDelta = after.media.length - before.media.length
   if (personDelta === 1) { const added = after.persons.find((person) => !before?.persons.some((old) => old.id === person.id)); return { action: 'person.created', entityType: 'person', entityId: added?.id, summary: `Added ${added?.name ?? 'a person'}` } }
-  if (personDelta === -1) return { action: 'person.deleted', entityType: 'person', summary: 'Deleted a person' }
+  if (personDelta === -1) {
+    const removed = before.persons.find((person) => !after.persons.some((current) => current.id === person.id))
+    return {
+      action: 'person.deleted', entityType: 'person', entityId: removed?.id, summary: `Deleted ${removed?.name ?? 'a person'}`,
+      metadata: { relationshipsRemoved: Math.max(0, -relationshipDelta), mediaRemoved: Math.max(0, -mediaDelta) },
+    }
+  }
   if (relationshipDelta === 1) return { action: 'relationship.created', entityType: 'relationship', summary: 'Added a relationship' }
   if (relationshipDelta === -1) return { action: 'relationship.deleted', entityType: 'relationship', summary: 'Deleted a relationship' }
   if (mediaDelta === 1) return { action: 'photo.uploaded', entityType: 'photo', summary: 'Uploaded a photo' }
@@ -230,23 +237,22 @@ export async function appendActivity(accessToken: string, workspaceId: string, i
   const resource = await workspaceResources(accessToken, workspaceId, 'editor')
   const folder = resource.activity ?? await createFolder(accessToken, 'activity', 'activity', resource.root.id)
   const month = new Date().toISOString().slice(0, 7)
-  let file = await findChildByProperty(accessToken, folder.id, 'activity-log', 'month', month)
+  const files = await listFiles(accessToken, `${propertyQuery('activity-log')} and '${escapeQuery(folder.id)}' in parents`, 'name desc')
+  const contents = await Promise.all(files.map((file) => downloadText(accessToken, file.id)))
   const event: ActivityEvent = { id: crypto.randomUUID(), workspaceId, timestamp: new Date().toISOString(), ...input }
-  if (!file) file = await createJsonFile(accessToken, `${month}.jsonl`, folder.id, 'activity-log', `${JSON.stringify(event)}\n`, { month })
-  else await writeTextFile(accessToken, file.id, `${await downloadText(accessToken, file.id)}${JSON.stringify(event)}\n`)
+  const retained = retainRecentActivity([...parseActivityJsonLines(contents), event])
+  const target = files.find((file) => file.appProperties?.month === month)
+  if (target) await writeTextFile(accessToken, target.id, serializeActivityJsonLines(retained))
+  else await createJsonFile(accessToken, `${month}.jsonl`, folder.id, 'activity-log', serializeActivityJsonLines(retained), { month })
+  await Promise.allSettled(files.filter((file) => file.id !== target?.id).map((file) => googleResponse(accessToken, `/files/${encodeURIComponent(file.id)}`, { method: 'DELETE' })))
 }
 
-export async function listActivity(accessToken: string, workspaceId: string, limit = 200): Promise<ActivityEvent[]> {
+export async function listActivity(accessToken: string, workspaceId: string, limit = ACTIVITY_RETENTION_LIMIT): Promise<ActivityEvent[]> {
   const resource = await workspaceResources(accessToken, workspaceId)
   if (!resource.activity) return []
   const files = await listFiles(accessToken, `${propertyQuery('activity-log')} and '${escapeQuery(resource.activity.id)}' in parents`, 'name desc')
-  const events: ActivityEvent[] = []
-  for (const file of files.slice(0, 6)) {
-    const lines = (await downloadText(accessToken, file.id)).split('\n').filter(Boolean)
-    for (const line of lines) { try { events.push(JSON.parse(line) as ActivityEvent) } catch { /* ignore one damaged audit line */ } }
-    if (events.length >= limit) break
-  }
-  return events.sort((left, right) => right.timestamp.localeCompare(left.timestamp)).slice(0, limit)
+  const events = parseActivityJsonLines(await Promise.all(files.map((file) => downloadText(accessToken, file.id))))
+  return retainRecentActivity(events, limit)
 }
 
 function backupName(): string { return `famnesia_${new Date().toISOString().replace(/[-:]/g, '').replace('T', '_').replace(/\.\d{3}Z$/, '')}.json` }
