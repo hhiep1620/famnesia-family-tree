@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compactFamilyOperations, mergeFamilyOperations, replayFamilyOperations } from '../draft/familyOperations'
+import { compactFamilyOperations, mergeFamilyOperations, operationReviewClosure, replayFamilyOperations } from '../draft/familyOperations'
 import { createFamilyDataTemplate } from '../import/exportFamilyData'
 import { requireValidFamilyData } from '../schema/familyDataSchema'
 import type { FamilyOperation } from '../types/familyOperations'
@@ -65,5 +65,38 @@ describe('family Draft operations', () => {
     expect(deleted.relationships.some((item) => item.person1Id === 'P0001' || item.person2Id === 'P0001')).toBe(false)
     expect(deleted.media.some((item) => item.personId === 'P0001')).toBe(false)
     expect(() => requireValidFamilyData(deleted)).not.toThrow()
+  })
+
+  it('automatically approves prerequisite person creates for a selected relationship and photo', () => {
+    const template = createFamilyDataTemplate()
+    const first = { ...template.persons[0], id: 'P0101', name: 'Người thứ nhất' }
+    const second = { ...template.persons[0], id: 'P0102', name: 'Người thứ hai' }
+    const relationship = { ...template.relationships[0], id: 'R0101', person1Id: first.id, person2Id: second.id }
+    const media = { id: 'M0101', profileId: first.profileId, personId: first.id, driveFileId: 'draft-photo-1', type: 'photo' as const, isPrimary: true }
+    const operations = [
+      operation({ type: 'person.create', entityId: first.id, profileId: first.profileId, value: first }),
+      operation({ type: 'person.create', entityId: second.id, profileId: second.profileId, value: second }),
+      operation({ type: 'relationship.create', entityId: relationship.id, profileId: relationship.profileId, value: relationship }),
+      operation({ type: 'media.attach', entityId: media.id, profileId: media.profileId, value: media }),
+    ]
+
+    expect(operationReviewClosure(operations, [operations[2].id, operations[3].id], 'approve'))
+      .toEqual(operations.map((item) => item.id))
+  })
+
+  it('automatically rejects every operation that depends on a rejected person create', () => {
+    const template = createFamilyDataTemplate()
+    const person = { ...template.persons[0], id: 'P0201', name: 'Người phụ thuộc' }
+    const relationship = { ...template.relationships[0], id: 'R0201', person2Id: person.id }
+    const media = { id: 'M0201', profileId: person.profileId, personId: person.id, driveFileId: 'draft-photo-2', type: 'photo' as const, isPrimary: true }
+    const operations = [
+      operation({ type: 'person.create', entityId: person.id, profileId: person.profileId, value: person }),
+      operation({ type: 'relationship.create', entityId: relationship.id, profileId: relationship.profileId, value: relationship }),
+      operation({ type: 'media.attach', entityId: media.id, profileId: media.profileId, value: media }),
+      operation({ type: 'person.update', entityId: template.persons[0].id, profileId: template.persons[0].profileId, changes: { nickname: 'Không phụ thuộc' }, baseValues: { nickname: template.persons[0].nickname } }),
+    ]
+
+    expect(operationReviewClosure(operations, [operations[0].id], 'reject'))
+      .toEqual(operations.slice(0, 3).map((item) => item.id))
   })
 })

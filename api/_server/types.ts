@@ -1,4 +1,4 @@
-export type WorkspaceRole = 'owner' | 'editor' | 'viewer'
+export type WorkspaceRole = 'owner' | 'contributor' | 'viewer'
 
 export interface AuthSession {
   id: string
@@ -29,6 +29,10 @@ export interface WorkspaceAccess {
   canEdit: boolean
   canUpload: boolean
   canManageMembers: boolean
+  canCommitDirectly: boolean
+  canSubmitDraft: boolean
+  canReviewDrafts: boolean
+  migrationRequired?: boolean
   ownedByMe: boolean
   webViewLink?: string
 }

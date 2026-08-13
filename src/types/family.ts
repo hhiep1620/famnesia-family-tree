@@ -150,7 +150,7 @@ export interface PersonDraft {
   photos?: File[]
 }
 
-export type WorkspaceRole = 'owner' | 'editor' | 'viewer'
+export type WorkspaceRole = 'owner' | 'contributor' | 'viewer'
 
 export interface WorkspaceInfo {
   id: string
@@ -160,6 +160,10 @@ export interface WorkspaceInfo {
   canEdit: boolean
   canUpload: boolean
   canManageMembers: boolean
+  canCommitDirectly: boolean
+  canSubmitDraft: boolean
+  canReviewDrafts: boolean
+  migrationRequired?: boolean
   ownedByMe: boolean
   webViewLink?: string
   rootFolderUrl?: string
@@ -172,6 +176,7 @@ export interface WorkspaceMember {
   photoUrl?: string
   role: WorkspaceRole
   inherited: boolean
+  migrationRequired?: boolean
 }
 
 export interface FamilyBackup {

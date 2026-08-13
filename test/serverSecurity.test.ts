@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createOAuthState, readCookie, SESSION_COOKIE, sessionCookie, validateOAuthState } from '../api/_server/cookies.js'
 import { assertSameOrigin } from '../api/_server/http.js'
+import { collaborationApprovalEnabled, googlePickerEnv } from '../api/_server/env.js'
 import { sessions } from '../api/_server/sessionRepository.js'
 import { decryptToken, encryptToken } from '../api/_server/tokenEncryption.js'
 import type { AuthSession } from '../api/_server/types.js'
@@ -52,5 +53,20 @@ describe('server security boundary', () => {
   it('rejects cross-origin state-changing requests', () => {
     expect(() => assertSameOrigin(new Request('https://family.example/api/data', { method: 'POST', headers: { origin: 'https://evil.example' } }))).toThrow()
     expect(() => assertSameOrigin(new Request('https://family.example/api/data', { method: 'POST', headers: { origin: 'https://family.example' } }))).not.toThrow()
+  })
+
+  it('requires a real-looking Google Picker browser key and keeps approval disabled by default', () => {
+    process.env.GOOGLE_CLIENT_ID = '123456789012-example.apps.googleusercontent.com'
+    process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret'
+    process.env.GOOGLE_REDIRECT_URI = 'http://localhost:3000/api/auth/callback'
+    process.env.GOOGLE_PICKER_API_KEY = 'not-a-google-api-key'
+    delete process.env.COLLAB_APPROVAL_V2_ENABLED
+    expect(() => googlePickerEnv()).toThrow(/beginning with AIza/)
+    process.env.GOOGLE_PICKER_API_KEY = `AIza${'A'.repeat(32)}`
+    expect(googlePickerEnv()).toMatchObject({ apiKey: process.env.GOOGLE_PICKER_API_KEY, appId: '123456789012' })
+    expect(collaborationApprovalEnabled()).toBe(false)
+    process.env.COLLAB_APPROVAL_V2_ENABLED = 'true'
+    expect(collaborationApprovalEnabled()).toBe(true)
+    delete process.env.COLLAB_APPROVAL_V2_ENABLED
   })
 })

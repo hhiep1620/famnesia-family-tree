@@ -9,7 +9,7 @@
 ```text
 React browser ──cookie HttpOnly──> Vercel Functions ──OAuth token──> Google Drive
                                      │
-                                     └── Upstash Redis: session + token đã mã hóa
+                                     └── Upstash Redis: session + workflow metadata
 ```
 
 Google Drive vẫn là nguồn dữ liệu duy nhất:
@@ -19,20 +19,28 @@ Famnesia/
 ├── family.json
 ├── backups/
 ├── photos/
-└── activity/
-    └── YYYY-MM.jsonl (tối đa 20 hoạt động gần nhất)
+├── activity/
+│   └── YYYY-MM.jsonl (tối đa 20 hoạt động gần nhất)
+└── drafts/
+    └── <member-key>/ (Limited Access)
+        ├── active-draft.json
+        └── assets/
 ```
 
-Redis không chứa dữ liệu gia phả. Redis chỉ giữ session có TTL và Google refresh token đã mã hóa AES-256-GCM.
+Redis không chứa dữ liệu gia phả hay ảnh. Redis giữ session có TTL, Google refresh token đã mã hóa AES-256-GCM, draft index/checksum/revision, trạng thái review và mirror generation.
 
 ## Quyền cộng tác
 
 - `owner`: đọc/sửa, ảnh, import/replace, restore và quản lý thành viên.
-- `editor`: đọc/sửa, ảnh, xử lý chất lượng dữ liệu và gộp thành viên; không import thay thế, restore hoặc quản lý thành viên.
+- `contributor` (hiển thị **Editor cần duyệt**): được chỉnh sửa Draft cục bộ, tải ảnh tạm và gửi owner duyệt; không thể ghi trực tiếp vào `family.json`.
 - Tài khoản được mời sẽ tự mở workspace được chia sẻ nếu đó là workspace dùng được duy nhất. Famnesia không tạo thêm workspace cá nhân rỗng trong trường hợp này; các workspace cá nhân rỗng đã tạo trước đây cũng tự chuyển sang một workspace được chia sẻ duy nhất nếu không có Draft.
 - `viewer`: chỉ đọc và export.
 
 Giao diện ẩn thao tác không hợp lệ, nhưng Vercel Function luôn kiểm tra lại quyền thật trên Google Drive ở mỗi request. Không dựa vào role do browser gửi lên.
+
+Khi approval V2 được bật, contributor chỉ có `reader` trên workspace gốc và `writer` trực tiếp trên folder Draft Limited Access của chính họ. Owner có thể duyệt/từ chối toàn bộ hoặc từng operation; từ chối luôn cần lý do, còn operation phụ thuộc được tự động chọn để dữ liệu sau duyệt vẫn hợp lệ. Một khóa workflow ngắn hạn trong Redis ngăn revision mới chen vào lúc owner đang duyệt; nội dung hoặc ảnh bị sửa trực tiếp trong Drive sẽ thất bại kiểm tra checksum.
+
+Mỗi contributor có mirror do chính họ sở hữu tại `Famnesia Mirrors/<family-name>`. Mirror chỉ chứa dữ liệu chính thức, đồng bộ tăng dần tối đa 20 file hoặc 7 giây mỗi request và giữ 20 snapshot JSON/manifest. Thu hồi quyền workspace chỉ dừng đồng bộ; owner không thể xóa mirror đã nằm trong Drive contributor.
 
 ## Google OAuth
 
@@ -91,6 +99,7 @@ GOOGLE_CLOUD_PROJECT_NUMBER=...
 SESSION_SECRET=...
 TOKEN_ENCRYPTION_KEY=...
 SESSION_MAX_AGE_SECONDS=604800
+COLLAB_APPROVAL_V2_ENABLED=false
 UPSTASH_REDIS_REST_URL=...
 UPSTASH_REDIS_REST_TOKEN=...
 VITE_USE_MOCK_DATA=false
@@ -116,6 +125,19 @@ Trong cùng Google Cloud project đang chứa OAuth Client:
 4. Gán key cho `GOOGLE_PICKER_API_KEY`. `GOOGLE_CLOUD_PROJECT_NUMBER` là Project number trong **IAM & Admin → Settings**; có thể bỏ qua nếu client ID bắt đầu bằng project number.
 
 API key được gửi tới trình duyệt theo yêu cầu của Google Picker, vì vậy giới hạn referrer và API là bắt buộc. OAuth access token chỉ được cấp từ endpoint cùng origin, dùng tức thời cho Picker và không lưu vào localStorage.
+
+`GOOGLE_PICKER_API_KEY` phải là Browser API key thật bắt đầu bằng `AIza`; placeholder hoặc OAuth client secret sẽ bị server từ chối trước khi mở Picker.
+
+### Bật Draft Approval V2
+
+Tính năng được deploy mặc định ở trạng thái tắt. Sau khi kiểm tra Picker bằng hai tài khoản và cấu hình Redis Production:
+
+1. Giữ `COLLAB_APPROVAL_V2_ENABLED=false`, deploy và smoke test đăng nhập/Pick workspace.
+2. Đổi biến Production thành `true` rồi redeploy.
+3. Owner mở app để migration idempotent các writer cũ: tạo Draft Limited Access, cấp writer trực tiếp và hạ quyền root xuống reader.
+4. Kiểm tra bằng ba tài khoản owner/contributor A/contributor B; mỗi contributor chỉ được mở Draft của chính mình.
+
+Nếu migration một thành viên thất bại, backend vẫn chặn commit trực tiếp và giao diện đánh dấu `cần migration lại`; owner mở lại mục thành viên để retry.
 
 ## Deploy
 
@@ -151,6 +173,8 @@ Các endpoint quan trọng:
 - `/api/auth/login`, `/callback`, `/session`, `/logout`, `/reconnect`
 - `/api/workspaces`
 - `/api/workspaces/:id/family` (gồm dữ liệu và activity), `/photos`, `/backups`, `/members`
+- `/api/workspaces/:id/family?resource=drafts|collaboration-status`
+- `/api/workspaces/:id/family?operation=draft-submit|draft-review|mirror-sync`
 
 Mọi response API nhạy cảm đều `Cache-Control: no-store`; thao tác thay đổi dữ liệu kiểm tra same-origin để chống CSRF. Save dùng revision để trả `409 FAMILY_DATA_CONFLICT` nếu có phiên khác vừa ghi.
 

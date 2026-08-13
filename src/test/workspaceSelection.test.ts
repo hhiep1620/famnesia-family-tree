@@ -5,11 +5,14 @@ import type { FamilyData, WorkspaceInfo } from '../types/family'
 const workspace = (id: string, ownedByMe: boolean): WorkspaceInfo => ({
   id,
   name: id,
-  role: ownedByMe ? 'owner' : 'editor',
+  role: ownedByMe ? 'owner' : 'contributor',
   canRead: true,
   canEdit: true,
   canUpload: true,
   canManageMembers: ownedByMe,
+  canCommitDirectly: ownedByMe,
+  canSubmitDraft: !ownedByMe,
+  canReviewDrafts: ownedByMe,
   ownedByMe,
 })
 

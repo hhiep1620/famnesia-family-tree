@@ -10,6 +10,8 @@ interface Props {
   offline: boolean
   conflict?: FamilyCommitConflictDetails
   recovery?: { draft: StoredFamilyDraft; reason: string }
+  submitForApproval?: boolean
+  submittedStatus?: 'pending' | 'partially_reviewed' | 'needs_changes' | 'approved' | 'rejected' | 'invalid'
   onSave: () => Promise<boolean>
   onDiscard: () => Promise<void>
   onUndo: (operationId: string) => Promise<void>
@@ -81,7 +83,7 @@ export function DraftWorkspaceControls(props: Props) {
   const countText = useMemo(() => `${props.operations.length} thay đổi chưa lưu`, [props.operations.length])
   const discard = async () => { if (window.confirm('Hủy toàn bộ thay đổi trong Draft? family.json trên Drive sẽ không bị thay đổi.')) await props.onDiscard() }
   return <>
-    {props.operations.length > 0 && <aside className="draft-save-bar" aria-live="polite"><div className="draft-save-state">{props.offline ? <CloudOff size={18} /> : <i />}<span><strong>{countText}</strong><small>{props.offline ? 'Ngoại tuyến · Draft đã lưu trên thiết bị' : props.saving ? 'Đang ghi một lần vào Google Drive…' : 'Chưa ghi vào family.json'}</small></span></div><div className="draft-save-actions"><button onClick={() => setReviewing(true)}><Eye size={15} /> Xem thay đổi</button><button onClick={() => void discard()} disabled={props.saving}><RotateCcw size={15} /> Hủy Draft</button><button className="save-all-button" onClick={() => void props.onSave()} disabled={props.saving || props.offline}><Save size={16} /> {props.saving ? 'Đang lưu…' : 'Lưu tất cả'}</button></div></aside>}
+    {props.operations.length > 0 && <aside className="draft-save-bar" aria-live="polite"><div className="draft-save-state">{props.offline ? <CloudOff size={18} /> : <i />}<span><strong>{countText}</strong><small>{props.offline ? 'Ngoại tuyến · Draft đã lưu trên thiết bị' : props.saving ? (props.submitForApproval ? 'Đang gửi owner duyệt…' : 'Đang ghi một lần vào Google Drive…') : props.submitForApproval ? (props.submittedStatus === 'needs_changes' ? 'Owner yêu cầu chỉnh sửa · Gửi lại khi hoàn tất' : props.submittedStatus === 'partially_reviewed' ? 'Một phần đã duyệt · Có thể bổ sung rồi gửi lại' : props.submittedStatus === 'pending' ? 'Đã gửi · Thay đổi mới sẽ tạo revision tiếp theo' : 'Chưa gửi owner') : 'Chưa ghi vào family.json'}</small></span></div><div className="draft-save-actions"><button onClick={() => setReviewing(true)}><Eye size={15} /> Xem thay đổi</button><button onClick={() => void discard()} disabled={props.saving}><RotateCcw size={15} /> Hủy Draft</button><button className="save-all-button" onClick={() => void props.onSave()} disabled={props.saving || props.offline}><Save size={16} /> {props.saving ? 'Đang gửi…' : props.submitForApproval ? (props.submittedStatus ? 'Gửi revision mới' : 'Gửi owner duyệt') : 'Lưu tất cả'}</button></div></aside>}
     {reviewing && <ReviewDialog operations={props.operations} data={props.data} onUndo={props.onUndo} onClose={() => setReviewing(false)} />}
     {props.conflict && <ConflictDialog details={props.conflict} onResolve={async (resolutions) => { const done = await props.onResolve(resolutions); if (!done) return props.onSave(); return done }} />}
     {props.recovery && <RecoveryDialog recovery={props.recovery} onDownload={props.onDownloadRecovery} onDelete={props.onDeleteRecovery} />}

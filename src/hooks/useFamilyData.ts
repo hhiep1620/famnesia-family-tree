@@ -13,6 +13,7 @@ import { FamilyRepository, type FamilyDataRevision } from '../services/familyRep
 import { sharedWorkspaceForEmptyOwner } from '../services/workspaceSelection'
 import type { ActivityEvent, FamilyBackup, FamilyData, FamilyProfile, FriendlyRelationship, Person, PersonDraft, PersonMedia, Relationship, SaveStatus, SpouseStatus, WorkspaceInfo, WorkspaceMember } from '../types/family'
 import type { FamilyCommitConflictDetails, FamilyOperation, FamilyOperationConflict, StoredFamilyDraft } from '../types/familyOperations'
+import type { CollaborationStatus, DraftReviewRequest, DraftReviewResult, MirrorSyncResult, ReviewDraft } from '../types/collaboration'
 import { generateNextPersonId } from '../utils/personId'
 import { generateNextRelationshipId } from '../utils/relationshipId'
 
@@ -56,6 +57,9 @@ export function useFamilyData(userId = 'mock-user') {
   const pendingRef = useRef<FamilyOperation[]>([])
   const draftReady = useRef(false)
   const commitId = useRef<string | undefined>(undefined)
+  const submittedDraftRevision = useRef<number | undefined>(undefined)
+  const submittedOperationIds = useRef<Set<string>>(new Set())
+  const collaborationRefreshing = useRef(false)
   const mockData = useRef<FamilyData>(cloneData(sampleFamilyData))
   const mockBackups = useRef<MockBackup[]>([])
   const [savedData, setSavedData] = useState<FamilyData>(emptyFamilyData)
@@ -74,6 +78,9 @@ export function useFamilyData(userId = 'mock-user') {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
   const [conflictDetails, setConflictDetails] = useState<FamilyCommitConflictDetails>()
   const [draftRecovery, setDraftRecovery] = useState<DraftRecovery>()
+  const [collaborationState, setCollaborationState] = useState<CollaborationStatus>()
+  const [reviewDrafts, setReviewDrafts] = useState<ReviewDraft[]>([])
+  const [mirrorSync, setMirrorSync] = useState<MirrorSyncResult>()
 
   const setOperations = useCallback((operations: FamilyOperation[]) => {
     pendingRef.current = operations
@@ -150,6 +157,7 @@ export function useFamilyData(userId = 'mock-user') {
   useEffect(() => {
     if (repository.current?.workspace.id !== activeWorkspaceId) {
       repository.current = undefined; revision.current = undefined; draftReady.current = false
+      submittedDraftRevision.current = undefined; submittedOperationIds.current = new Set(); setCollaborationState(undefined); setReviewDrafts([]); setMirrorSync(undefined)
     }
     void refresh()
   }, [activeWorkspaceId, refresh])
@@ -186,6 +194,85 @@ export function useFamilyData(userId = 'mock-user') {
     channel.onmessage = (event) => { if (event.data?.type === 'family-committed') void rebaseFromRemote() }
     return () => channel.close()
   }, [rebaseFromRemote, useMockData, userId, workspace?.id])
+
+  const continueMirrorSync = useCallback(async (status: CollaborationStatus) => {
+    if (!repository.current || status.workspaceRole !== 'contributor' || !navigator.onLine) return
+    const synced = status.mirror?.syncedGeneration ?? -1
+    if (synced >= status.mirrorGeneration && status.mirror?.status !== 'failed') return
+    try {
+      let result = await repository.current.syncMirror()
+      setMirrorSync(result)
+      for (let chunk = 1; result.remaining > 0 && chunk < 3; chunk += 1) {
+        result = await repository.current.syncMirror(); setMirrorSync(result)
+      }
+    } catch (caught) {
+      setMirrorSync({ status: 'failed', generation: status.mirrorGeneration, processed: 0, remaining: 0 })
+      setNotice(caught instanceof Error ? `Mirror Drive chưa đồng bộ: ${caught.message}` : 'Mirror Drive chưa đồng bộ; Famnesia sẽ thử lại sau.')
+    }
+  }, [])
+
+  const refreshCollaboration = useCallback(async () => {
+    if (useMockData || !workspace?.id || !repository.current || collaborationRefreshing.current) return
+    collaborationRefreshing.current = true
+    try {
+      const status = await repository.current.collaborationStatus()
+      setCollaborationState(status)
+      if (!status.enabled) { setReviewDrafts([]); return }
+      if (status.workspaceRole === 'owner') {
+        setReviewDrafts(await repository.current.listDrafts())
+      } else if (status.workspaceRole === 'contributor') {
+        const serverDraft = status.ownDraft
+        if (serverDraft && serverDraft.revision !== submittedDraftRevision.current) {
+          const reviewedIds = new Set(serverDraft.reviewHistory.flatMap((event) => event.operationIds))
+          const localOnly = pendingRef.current.filter((operation) => !submittedOperationIds.current.has(operation.id) && !reviewedIds.has(operation.id))
+          if (serverDraft.status === 'invalid') {
+            const latest = await repository.current.load()
+            const preserved = compactFamilyOperations(pendingRef.current)
+            setSavedData(latest.data); revision.current = latest.revision; setFamilyData(requireValidFamilyData(replayFamilyOperations(latest.data, preserved))); setOperations(preserved); setSaveStatus('unsaved')
+            setNotice(serverDraft.note ? `Draft trên Drive không hợp lệ: ${serverDraft.note} Thay đổi cục bộ vẫn được giữ để gửi lại.` : 'Draft trên Drive không hợp lệ. Thay đổi cục bộ vẫn được giữ để gửi lại.')
+          } else if (serverDraft.status === 'approved') {
+            const latest = await repository.current.load()
+            if (localOnly.length) {
+              setSavedData(latest.data); revision.current = latest.revision; setFamilyData(requireValidFamilyData(replayFamilyOperations(latest.data, localOnly))); setOperations(localOnly); setSaveStatus('unsaved')
+              setNotice('Owner đã duyệt revision trước. Các thay đổi mới của bạn vẫn được giữ lại.')
+            } else {
+              applyCommittedSnapshot(latest.data, latest.revision)
+              if (workspace.id) await deleteFamilyDraft(workspace.id, userId).catch(() => undefined)
+              setNotice('Owner đã duyệt toàn bộ thay đổi của bạn.')
+            }
+          } else if (serverDraft.status === 'rejected') {
+            const latest = await repository.current.load()
+            setSavedData(latest.data); revision.current = latest.revision; setFamilyData(requireValidFamilyData(replayFamilyOperations(latest.data, localOnly))); setOperations(localOnly); setSaveStatus(localOnly.length ? 'unsaved' : 'saved')
+            setNotice(serverDraft.note ? `Owner đã từ chối Draft: ${serverDraft.note}` : 'Owner đã từ chối Draft.')
+          } else {
+            const unique = [...serverDraft.operations, ...localOnly.filter((operation) => !serverDraft.operations.some((remote) => remote.id === operation.id))]
+            const operations = compactFamilyOperations(unique)
+            const latest = await repository.current.load()
+            const merged = mergeFamilyOperations(latest.data, operations)
+            setSavedData(latest.data); revision.current = latest.revision
+            if (merged.conflicts.length) { setConflictDetails({ conflicts: merged.conflicts, latestSnapshot: latest }); setSaveStatus('conflict') }
+            else { setFamilyData(requireValidFamilyData(replayFamilyOperations(latest.data, operations))); setOperations(operations); setSaveStatus(serverDraft.status === 'needs_changes' ? 'conflict' : 'saved') }
+            if (serverDraft.status === 'partially_reviewed') setNotice(serverDraft.note ? `Owner đã xử lý một phần Draft: ${serverDraft.note}` : 'Owner đã xử lý một phần; phần còn lại vẫn đang chờ.')
+            if (serverDraft.status === 'needs_changes') setNotice(serverDraft.note ? `Draft cần chỉnh sửa: ${serverDraft.note}` : 'Draft cần chỉnh sửa trước khi gửi lại.')
+          }
+          submittedDraftRevision.current = serverDraft.revision
+          submittedOperationIds.current = new Set(serverDraft.operations.map((operation) => operation.id))
+        }
+        void continueMirrorSync(status)
+      }
+    } catch (caught) {
+      if (!(caught instanceof ApiError && caught.code === 'COLLAB_APPROVAL_DISABLED')) console.error(caught)
+    } finally { collaborationRefreshing.current = false }
+  }, [applyCommittedSnapshot, continueMirrorSync, setOperations, useMockData, userId, workspace?.id])
+
+  useEffect(() => {
+    if (useMockData || !workspace?.id) return
+    void refreshCollaboration()
+    const poll = window.setInterval(() => { if (document.visibilityState === 'visible') void refreshCollaboration() }, 60_000)
+    const focus = () => void refreshCollaboration()
+    window.addEventListener('focus', focus)
+    return () => { window.clearInterval(poll); window.removeEventListener('focus', focus) }
+  }, [refreshCollaboration, useMockData, workspace?.id])
 
   const stageOperations = useCallback((incoming: FamilyOperation[]) => {
     if (!useMockData && !workspace?.canEdit) throw new Error('Bạn chỉ có quyền xem workspace này.')
@@ -326,25 +413,34 @@ export function useFamilyData(userId = 'mock-user') {
   const saveAll = useCallback(async () => {
     const operations = compactFamilyOperations(pendingRef.current); if (!operations.length) return true
     if (!useMockData && typeof navigator !== 'undefined' && !navigator.onLine) { setSaveStatus('offline'); setError('Đang ngoại tuyến — Draft vẫn an toàn trên thiết bị.'); return false }
-    setBusy('Đang lưu tất cả thay đổi…'); setSaveStatus('saving'); setError(undefined)
+    const submitting = !useMockData && Boolean(workspace?.canSubmitDraft)
+    setBusy(submitting ? 'Đang gửi owner duyệt…' : 'Đang lưu tất cả thay đổi…'); setSaveStatus('saving'); setError(undefined)
     try {
       if (useMockData) {
         const saved = requireValidFamilyData({ ...replayFamilyOperations(mockData.current, operations), updatedAt: new Date().toISOString() }); mockData.current = cloneData(saved); applyCommittedSnapshot(saved)
       } else {
         if (!repository.current) throw new Error('Workspace Google Drive chưa sẵn sàng.')
         commitId.current ??= `commit_${crypto.randomUUID()}`
-        const result = await repository.current.commit({ commitId: commitId.current, baseRevision: revision.current, operations, clientCreatedAt: new Date().toISOString() })
+        const request = { commitId: commitId.current, baseRevision: revision.current, operations, clientCreatedAt: new Date().toISOString() }
+        if (submitting) {
+          const result = await repository.current.submitDraft(request)
+          submittedDraftRevision.current = result.draft.revision; submittedOperationIds.current = new Set(result.draft.operations.map((item) => item.id))
+          setCollaborationState((current) => current ? { ...current, ownDraft: result.draft, mirrorGeneration: result.mirrorGeneration } : current)
+          setSaveStatus('saved'); setNotice(`Đã gửi ${operations.length} thay đổi cho owner duyệt.`)
+          return true
+        }
+        const result = await repository.current.commit(request)
         applyCommittedSnapshot(result.snapshot.data, result.snapshot.revision); setActivity(await repository.current.listActivity().catch(() => activity))
         if (workspace?.id && typeof BroadcastChannel !== 'undefined') { const channel = new BroadcastChannel(`famnesia:${workspace.id}:${userId}`); channel.postMessage({ type: 'family-committed', revision: result.snapshot.revision }); channel.close() }
       }
-      if (workspace?.id) await deleteFamilyDraft(workspace.id, userId).catch(() => undefined)
+      if (workspace?.id && !submitting) await deleteFamilyDraft(workspace.id, userId).catch(() => undefined)
       setNotice(`Đã lưu ${operations.length} thay đổi.`); return true
     } catch (caught) {
       console.error(caught)
       if (caught instanceof ApiError && caught.code === 'FAMILY_COMMIT_CONFLICT') { setConflictDetails(caught.details as FamilyCommitConflictDetails); setSaveStatus('conflict'); setError('Có thay đổi trùng nhau cần bạn chọn phiên bản.'); return false }
       setSaveStatus('failed'); setError(caught instanceof Error ? `${caught.message} Draft vẫn an toàn.` : 'Lưu thất bại — Draft vẫn an toàn.'); return false
     } finally { setBusy(undefined) }
-  }, [activity, applyCommittedSnapshot, useMockData, userId, workspace?.id])
+  }, [activity, applyCommittedSnapshot, useMockData, userId, workspace?.canSubmitDraft, workspace?.id])
 
   const discardDraft = useCallback(async () => {
     const photoIds = pendingRef.current.map(operationReferencesNewPhoto).filter((value): value is string => Boolean(value))
@@ -418,14 +514,34 @@ export function useFamilyData(userId = 'mock-user') {
     } finally { setBusy(undefined) }
   }, [])
   const refreshMembers = useCallback(async () => { if (useMockData || !repository.current?.workspace.canManageMembers) { setMembers([]); return [] } const next = await repository.current.listMembers(); setMembers(next); return next }, [useMockData])
-  const addMember = useCallback(async (email: string, role: 'editor' | 'viewer') => { if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); await repository.current.addMember(email, role); await refreshMembers() }, [refreshMembers])
-  const updateMember = useCallback(async (id: string, role: 'editor' | 'viewer') => { if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); await repository.current.updateMember(id, role); await refreshMembers() }, [refreshMembers])
+  const addMember = useCallback(async (email: string, role: 'contributor' | 'viewer') => { if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); await repository.current.addMember(email, role); await refreshMembers() }, [refreshMembers])
+  const updateMember = useCallback(async (id: string, role: 'contributor' | 'viewer') => { if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); await repository.current.updateMember(id, role); await refreshMembers() }, [refreshMembers])
   const removeMember = useCallback(async (id: string) => { if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); await repository.current.removeMember(id); await refreshMembers() }, [refreshMembers])
   const refreshActivity = useCallback(async () => { if (useMockData || !repository.current) return activity; const events = await repository.current.listActivity(); setActivity(events); return events }, [activity, useMockData])
+  const reviewDraft = useCallback(async (request: DraftReviewRequest): Promise<DraftReviewResult> => {
+    if (!repository.current) throw new Error('Workspace chưa sẵn sàng.')
+    if (pendingRef.current.length) throw new Error('Hãy lưu hoặc hủy Draft cục bộ của owner trước khi duyệt đề xuất.')
+    setBusy(request.decision === 'approve' ? 'Đang duyệt Draft…' : 'Đang từ chối Draft…'); setError(undefined)
+    try {
+      const result = await repository.current.reviewDraft(request)
+      if (result.snapshot) applyCommittedSnapshot(result.snapshot.data, result.snapshot.revision)
+      await refreshCollaboration(); setActivity(await repository.current.listActivity().catch(() => activity))
+      setNotice(request.decision === 'approve' ? `Đã duyệt ${result.appliedOperationIds.length} thay đổi.` : `Đã từ chối ${result.appliedOperationIds.length} thay đổi.`)
+      return result
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Không thể xử lý Draft.'); throw caught }
+    finally { setBusy(undefined) }
+  }, [activity, applyCommittedSnapshot, refreshCollaboration])
+  const retryMirrorSync = useCallback(async () => {
+    if (!repository.current) throw new Error('Workspace chưa sẵn sàng.')
+    setBusy('Đang đồng bộ Drive mirror…')
+    try { const result = await repository.current.syncMirror(); setMirrorSync(result); await refreshCollaboration(); return result }
+    finally { setBusy(undefined) }
+  }, [refreshCollaboration])
 
   return useMemo(() => ({ familyData, savedData, profiles: familyData.profiles, activeProfile, activeProfileId, persons, relationships, media, workspace, workspaces, activeWorkspaceId, members, activity, loading, busy, error, notice, saveStatus, useMockData,
     pendingOperations, conflictDetails, draftRecovery, refresh, setActiveProfileId, createProfile, updateProfile, setSubject, addPerson, updatePerson, addPersonMedia, setPrimaryMedia, updateMediaCaption, deletePersonMedia, addRelationship, updateRelationship, deleteRelationship, deletePerson,
     saveAll, discardDraft, undoOperation, resolveConflictsAndSave, downloadRecoveryDraft, deleteRecoveryDraft,
     backupNow, listBackups, restoreBackup, replaceAllData, switchWorkspace, connectSharedWorkspace, refreshMembers, addMember, updateMember, removeMember, suppressDuplicate, mergeDuplicatePeople, refreshActivity,
-  }), [familyData, savedData, activeProfile, activeProfileId, persons, relationships, media, workspace, workspaces, activeWorkspaceId, members, activity, loading, busy, error, notice, saveStatus, useMockData, pendingOperations, conflictDetails, draftRecovery, refresh, setActiveProfileId, createProfile, updateProfile, setSubject, addPerson, updatePerson, addPersonMedia, setPrimaryMedia, updateMediaCaption, deletePersonMedia, addRelationship, updateRelationship, deleteRelationship, deletePerson, saveAll, discardDraft, undoOperation, resolveConflictsAndSave, downloadRecoveryDraft, deleteRecoveryDraft, backupNow, listBackups, restoreBackup, replaceAllData, switchWorkspace, connectSharedWorkspace, refreshMembers, addMember, updateMember, removeMember, suppressDuplicate, mergeDuplicatePeople, refreshActivity])
+    collaborationState, reviewDrafts, mirrorSync, refreshCollaboration, reviewDraft, retryMirrorSync,
+  }), [familyData, savedData, activeProfile, activeProfileId, persons, relationships, media, workspace, workspaces, activeWorkspaceId, members, activity, loading, busy, error, notice, saveStatus, useMockData, pendingOperations, conflictDetails, draftRecovery, refresh, setActiveProfileId, createProfile, updateProfile, setSubject, addPerson, updatePerson, addPersonMedia, setPrimaryMedia, updateMediaCaption, deletePersonMedia, addRelationship, updateRelationship, deleteRelationship, deletePerson, saveAll, discardDraft, undoOperation, resolveConflictsAndSave, downloadRecoveryDraft, deleteRecoveryDraft, backupNow, listBackups, restoreBackup, replaceAllData, switchWorkspace, connectSharedWorkspace, refreshMembers, addMember, updateMember, removeMember, suppressDuplicate, mergeDuplicatePeople, refreshActivity, collaborationState, reviewDrafts, mirrorSync, refreshCollaboration, reviewDraft, retryMirrorSync])
 }

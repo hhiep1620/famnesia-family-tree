@@ -2,6 +2,7 @@ import { requireAuth } from '../../../_server/auth.js'
 import { createBackup, listBackups, loadBackup } from '../../../_server/drive.js'
 import { assertSameOrigin, json, pathParameter, readJson, requireMethod, withErrors } from '../../../_server/http.js'
 import type { FamilyData } from '../../../../src/types/family.js'
+import { markMirrorChanged } from '../../../_server/collaboration.js'
 
 export default { fetch(request: Request) { return withErrors(async () => {
   requireMethod(request, ['GET', 'POST'])
@@ -14,5 +15,7 @@ export default { fetch(request: Request) { return withErrors(async () => {
     return json({ backups: await listBackups(auth.accessToken, workspaceId) })
   }
   const body = await readJson<{ data: FamilyData; reason?: string }>(request)
-  return json({ backup: await createBackup(auth.accessToken, workspaceId, body.data, body.reason) }, { status: 201 })
+  const backup = await createBackup(auth.accessToken, workspaceId, body.data, body.reason)
+  await markMirrorChanged(workspaceId)
+  return json({ backup }, { status: 201 })
 }) } }

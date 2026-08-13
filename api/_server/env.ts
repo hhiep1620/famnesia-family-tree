@@ -20,10 +20,18 @@ export function googlePickerEnv() {
   if (!appId || !/^\d+$/.test(appId)) {
     throw new Error('GOOGLE_CLOUD_PROJECT_NUMBER must be a valid Google Cloud project number.')
   }
+  const apiKey = required('GOOGLE_PICKER_API_KEY')
+  if (!/^AIza[0-9A-Za-z_-]{30,}$/.test(apiKey)) {
+    throw new Error('GOOGLE_PICKER_API_KEY must be a valid Google browser API key beginning with AIza.')
+  }
   return {
-    apiKey: required('GOOGLE_PICKER_API_KEY'),
+    apiKey,
     appId,
   }
+}
+
+export function collaborationApprovalEnabled(): boolean {
+  return process.env.COLLAB_APPROVAL_V2_ENABLED?.trim().toLowerCase() === 'true'
 }
 
 export function sessionSecret(): string {

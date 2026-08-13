@@ -6,14 +6,15 @@ import type { ActivityEvent, FamilyBackup, FamilyData } from '../../src/types/fa
 import type { FamilyCommitMeta, FamilyCommitRequest, FamilyOperation } from '../../src/types/familyOperations.js'
 import { AppError } from './http.js'
 import type { WorkspaceAccess, WorkspaceRole } from './types.js'
+import { collaborationApprovalEnabled } from './env.js'
 
-const DRIVE_API = 'https://www.googleapis.com/drive/v3'
-const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3'
-const FOLDER_MIME = 'application/vnd.google-apps.folder'
-const APP = 'family-tree'
-const FILE_FIELDS = 'id,name,mimeType,parents,appProperties,createdTime,modifiedTime,version,webViewLink,ownedByMe,capabilities(canEdit,canAddChildren,canShare)'
+export const DRIVE_API = 'https://www.googleapis.com/drive/v3'
+export const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3'
+export const FOLDER_MIME = 'application/vnd.google-apps.folder'
+export const DRIVE_APP = 'family-tree'
+export const FILE_FIELDS = 'id,name,mimeType,parents,appProperties,createdTime,modifiedTime,version,webViewLink,ownedByMe,inheritedPermissionsDisabled,md5Checksum,size,capabilities(canEdit,canAddChildren,canShare,canCopy,canListChildren,canDisableInheritedPermissions,canEnableInheritedPermissions)'
 
-interface DriveFile {
+export interface DriveFile {
   id: string
   name: string
   mimeType?: string
@@ -24,7 +25,10 @@ interface DriveFile {
   version?: string
   webViewLink?: string
   ownedByMe?: boolean
-  capabilities?: { canEdit?: boolean; canAddChildren?: boolean; canShare?: boolean }
+  inheritedPermissionsDisabled?: boolean
+  md5Checksum?: string
+  size?: string
+  capabilities?: { canEdit?: boolean; canAddChildren?: boolean; canShare?: boolean; canCopy?: boolean; canListChildren?: boolean; canDisableInheritedPermissions?: boolean; canEnableInheritedPermissions?: boolean }
 }
 
 interface DriveFileVersion { file: DriveFile; etag?: string }
@@ -42,7 +46,7 @@ export interface FamilyRevision { modifiedTime?: string; version?: string }
 export interface FamilySnapshot { data: FamilyData; revision: FamilyRevision }
 export interface WorkspaceMember { id: string; email?: string; name?: string; photoUrl?: string; role: WorkspaceRole; inherited: boolean }
 
-async function googleResponse(accessToken: string, path: string, init?: RequestInit): Promise<Response> {
+export async function googleResponse(accessToken: string, path: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(`${DRIVE_API}${path}`, {
     ...init,
     headers: { Authorization: `Bearer ${accessToken}`, ...init?.headers },
@@ -59,43 +63,43 @@ async function googleResponse(accessToken: string, path: string, init?: RequestI
   return response
 }
 
-async function googleJson<T>(accessToken: string, path: string, init?: RequestInit): Promise<T> {
+export async function googleJson<T>(accessToken: string, path: string, init?: RequestInit): Promise<T> {
   const response = await googleResponse(accessToken, path, init)
   if (response.status === 204) return undefined as T
   return await response.json() as T
 }
 
-function escapeQuery(value: string): string { return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'") }
-function propertyQuery(type: string): string {
-  return `trashed = false and appProperties has { key='app' and value='${APP}' } and appProperties has { key='resourceType' and value='${type}' }`
+export function escapeQuery(value: string): string { return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'") }
+export function propertyQuery(type: string): string {
+  return `trashed = false and appProperties has { key='app' and value='${DRIVE_APP}' } and appProperties has { key='resourceType' and value='${type}' }`
 }
-function props(resourceType: string, extra: Record<string, string> = {}) { return { app: APP, resourceType, ...extra } }
+export function driveProps(resourceType: string, extra: Record<string, string> = {}) { return { app: DRIVE_APP, resourceType, ...extra } }
 
-async function listFiles(accessToken: string, query: string, orderBy = 'modifiedTime desc'): Promise<DriveFile[]> {
+export async function listFiles(accessToken: string, query: string, orderBy = 'modifiedTime desc'): Promise<DriveFile[]> {
   const params = new URLSearchParams({ q: query, spaces: 'drive', orderBy, pageSize: '1000', fields: `files(${FILE_FIELDS})` })
   const result = await googleJson<{ files?: DriveFile[] }>(accessToken, `/files?${params}`)
   return result.files ?? []
 }
 
-async function getFile(accessToken: string, fileId: string): Promise<DriveFile> {
+export async function getFile(accessToken: string, fileId: string): Promise<DriveFile> {
   return googleJson(accessToken, `/files/${encodeURIComponent(fileId)}?fields=${encodeURIComponent(FILE_FIELDS)}`)
 }
 
-async function getFileVersion(accessToken: string, fileId: string): Promise<DriveFileVersion> {
+export async function getFileVersion(accessToken: string, fileId: string): Promise<DriveFileVersion> {
   const response = await googleResponse(accessToken, `/files/${encodeURIComponent(fileId)}?fields=${encodeURIComponent(FILE_FIELDS)}`)
   return { file: await response.json() as DriveFile, etag: response.headers.get('etag') ?? undefined }
 }
 
-async function createFolder(accessToken: string, name: string, resourceType: string, parentId?: string, extra: Record<string, string> = {}): Promise<DriveFile> {
+export async function createFolder(accessToken: string, name: string, resourceType: string, parentId?: string, extra: Record<string, string> = {}): Promise<DriveFile> {
   return googleJson(accessToken, `/files?fields=${encodeURIComponent(FILE_FIELDS)}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, mimeType: FOLDER_MIME, appProperties: props(resourceType, extra), parents: parentId ? [parentId] : undefined }),
+    body: JSON.stringify({ name, mimeType: FOLDER_MIME, appProperties: driveProps(resourceType, extra), parents: parentId ? [parentId] : undefined }),
   })
 }
 
-async function createJsonFile(accessToken: string, name: string, parentId: string, resourceType: string, content: string, extra: Record<string, string> = {}): Promise<DriveFile> {
+export async function createJsonFile(accessToken: string, name: string, parentId: string, resourceType: string, content: string, extra: Record<string, string> = {}): Promise<DriveFile> {
   const form = new FormData()
-  form.append('metadata', new Blob([JSON.stringify({ name, parents: [parentId], mimeType: 'application/json', appProperties: props(resourceType, extra) })], { type: 'application/json' }))
+  form.append('metadata', new Blob([JSON.stringify({ name, parents: [parentId], mimeType: 'application/json', appProperties: driveProps(resourceType, extra) })], { type: 'application/json' }))
   form.append('file', new Blob([content], { type: 'application/json' }))
   const response = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=${encodeURIComponent(FILE_FIELDS)}`, {
     method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: form,
@@ -107,11 +111,11 @@ async function createJsonFile(accessToken: string, name: string, parentId: strin
   return await response.json() as DriveFile
 }
 
-async function findChild(accessToken: string, parentId: string, type: string): Promise<DriveFile | undefined> {
+export async function findChild(accessToken: string, parentId: string, type: string): Promise<DriveFile | undefined> {
   return (await listFiles(accessToken, `${propertyQuery(type)} and '${escapeQuery(parentId)}' in parents`))[0]
 }
 
-async function findChildByProperty(accessToken: string, parentId: string, type: string, key: string, value: string): Promise<DriveFile | undefined> {
+export async function findChildByProperty(accessToken: string, parentId: string, type: string, key: string, value: string): Promise<DriveFile | undefined> {
   return (await listFiles(accessToken, `${propertyQuery(type)} and appProperties has { key='${escapeQuery(key)}' and value='${escapeQuery(value)}' } and '${escapeQuery(parentId)}' in parents`))[0]
 }
 
@@ -138,10 +142,13 @@ async function ensureResources(accessToken: string, root: DriveFile): Promise<Wo
 }
 
 function accessOf(root: DriveFile): WorkspaceAccess {
-  const role: WorkspaceRole = root.ownedByMe ? 'owner' : root.capabilities?.canEdit ? 'editor' : 'viewer'
+  const approval = collaborationApprovalEnabled()
+  const role: WorkspaceRole = root.ownedByMe ? 'owner' : root.capabilities?.canEdit ? 'contributor' : 'viewer'
   return {
     id: root.id, name: root.name, role, canRead: true,
     canEdit: role !== 'viewer', canUpload: role !== 'viewer', canManageMembers: role === 'owner',
+    canCommitDirectly: role === 'owner' || (!approval && role === 'contributor'),
+    canSubmitDraft: approval && role === 'contributor', canReviewDrafts: approval && role === 'owner',
     ownedByMe: Boolean(root.ownedByMe), webViewLink: root.webViewLink,
   }
 }
@@ -157,11 +164,11 @@ export async function listWorkspaces(accessToken: string): Promise<WorkspaceAcce
 
 export async function workspaceResources(accessToken: string, workspaceId: string, minimum: WorkspaceRole = 'viewer'): Promise<WorkspaceResources> {
   const root = await getFile(accessToken, workspaceId)
-  if (root.appProperties?.app !== APP || root.appProperties?.resourceType !== 'workspace-root' || root.mimeType !== FOLDER_MIME) {
+  if (root.appProperties?.app !== DRIVE_APP || root.appProperties?.resourceType !== 'workspace-root' || root.mimeType !== FOLDER_MIME) {
     throw new AppError(404, 'WORKSPACE_NOT_FOUND', 'Famnesia workspace not found.')
   }
   const result = await ensureResources(accessToken, root)
-  const level = { viewer: 0, editor: 1, owner: 2 }
+  const level = { viewer: 0, contributor: 1, owner: 2 }
   if (level[result.access.role] < level[minimum]) throw new AppError(403, 'INSUFFICIENT_ROLE', `This operation requires ${minimum} access.`)
   return result
 }
@@ -174,7 +181,7 @@ function sameRevision(expected: FamilyRevision | undefined, current: DriveFile):
   return true
 }
 
-async function downloadText(accessToken: string, fileId: string): Promise<string> {
+export async function downloadText(accessToken: string, fileId: string): Promise<string> {
   return (await googleResponse(accessToken, `/files/${encodeURIComponent(fileId)}?alt=media`)).text()
 }
 
@@ -188,7 +195,7 @@ export async function loadFamily(accessToken: string, workspaceId: string): Prom
 }
 
 export async function saveFamily(accessToken: string, workspaceId: string, data: FamilyData, expected: FamilyRevision | undefined, mode: 'save' | 'replace' | 'restore' | 'merge' = 'save', actor?: { email: string; name?: string }): Promise<FamilySnapshot> {
-  const minimum: WorkspaceRole = mode === 'replace' || mode === 'restore' ? 'owner' : 'editor'
+  const minimum: WorkspaceRole = mode === 'replace' || mode === 'restore' || collaborationApprovalEnabled() ? 'owner' : 'contributor'
   const resource = await workspaceResources(accessToken, workspaceId, minimum)
   const current = await getFile(accessToken, resource.familyData.id)
   if (!sameRevision(expected, current)) throw new AppError(409, 'FAMILY_DATA_CONFLICT', 'Family data changed in another session. Reload before saving.', { currentRevision: revision(current) })
@@ -265,7 +272,7 @@ async function validateCommitPhotoReferences(accessToken: string, workspaceId: s
 export async function commitFamily(accessToken: string, workspaceId: string, request: FamilyCommitRequest, actor: { email: string; name?: string }): Promise<{ snapshot: FamilySnapshot; commit: FamilyCommitMeta }> {
   const operations = compactFamilyOperations(request.operations)
   const commit: FamilyCommitMeta = { commitId: request.commitId, operationCount: operations.length, counts: commitCountLabels(operations) }
-  const resource = await workspaceResources(accessToken, workspaceId, 'editor')
+  const resource = await workspaceResources(accessToken, workspaceId, collaborationApprovalEnabled() ? 'owner' : 'contributor')
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const currentVersion = await getFileVersion(accessToken, resource.familyData.id)
@@ -337,7 +344,7 @@ async function writeTextFile(accessToken: string, fileId: string, content: strin
 }
 
 export async function appendActivity(accessToken: string, workspaceId: string, input: Pick<ActivityEvent, 'actorEmail' | 'actorName' | 'action' | 'entityType' | 'entityId' | 'summary' | 'metadata'>): Promise<void> {
-  const resource = await workspaceResources(accessToken, workspaceId, 'editor')
+  const resource = await workspaceResources(accessToken, workspaceId, collaborationApprovalEnabled() ? 'owner' : 'contributor')
   const folder = resource.activity ?? await createFolder(accessToken, 'activity', 'activity', resource.root.id)
   const month = new Date().toISOString().slice(0, 7)
   const files = await listFiles(accessToken, `${propertyQuery('activity-log')} and '${escapeQuery(folder.id)}' in parents`, 'name desc')
@@ -361,7 +368,7 @@ export async function listActivity(accessToken: string, workspaceId: string, lim
 function backupName(): string { return `famnesia_${new Date().toISOString().replace(/[-:]/g, '').replace('T', '_').replace(/\.\d{3}Z$/, '')}.json` }
 
 export async function createBackup(accessToken: string, workspaceId: string, data: FamilyData, reason = 'manual'): Promise<FamilyBackup> {
-  const resource = await workspaceResources(accessToken, workspaceId, 'editor')
+  const resource = await workspaceResources(accessToken, workspaceId, collaborationApprovalEnabled() ? 'owner' : 'contributor')
   const file = await createJsonFile(accessToken, backupName(), resource.backups.id, 'family-backup', serializeFamilyData(requireValidFamilyData(data)), { schemaVersion: String(CURRENT_SCHEMA_VERSION), reason })
   return { id: file.id, name: file.name, createdTime: file.createdTime, modifiedTime: file.modifiedTime, reason }
 }
@@ -382,7 +389,7 @@ export async function loadBackup(accessToken: string, workspaceId: string, backu
 }
 
 export async function uploadPhoto(accessToken: string, workspaceId: string, file: Blob, filename: string, profileId?: string, personId?: string, uploadedBy?: string): Promise<string> {
-  const resource = await workspaceResources(accessToken, workspaceId, 'editor')
+  const resource = await workspaceResources(accessToken, workspaceId, collaborationApprovalEnabled() ? 'owner' : 'contributor')
   if (!file.type.startsWith('image/')) throw new AppError(415, 'PHOTO_TYPE_INVALID', 'Only image files can be uploaded.')
   if (file.size > 10 * 1024 * 1024) throw new AppError(413, 'PHOTO_TOO_LARGE', 'Photo must be 10 MB or smaller.')
   let parentId = resource.photos.id
@@ -398,7 +405,7 @@ export async function uploadPhoto(accessToken: string, workspaceId: string, file
   }
   const form = new FormData()
   const createdAt = new Date().toISOString()
-  form.append('metadata', new Blob([JSON.stringify({ name: `${Date.now()}-${filename}`, parents: [parentId], appProperties: props('person-photo', { workspaceId, ...(profileId ? { profileId } : {}), ...(personId ? { personId } : {}), ...(uploadedBy ? { uploadedBy } : {}), createdAt }) })], { type: 'application/json' }))
+  form.append('metadata', new Blob([JSON.stringify({ name: `${Date.now()}-${filename}`, parents: [parentId], appProperties: driveProps('person-photo', { workspaceId, ...(profileId ? { profileId } : {}), ...(personId ? { personId } : {}), ...(uploadedBy ? { uploadedBy } : {}), createdAt }) })], { type: 'application/json' }))
   form.append('file', file, filename)
   const response = await fetch(`${UPLOAD_API}/files?uploadType=multipart&fields=id`, { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` }, body: form })
   if (!response.ok) throw new AppError(502, 'PHOTO_UPLOAD_FAILED', 'Photo could not be uploaded to Google Drive.')
@@ -408,7 +415,7 @@ export async function uploadPhoto(accessToken: string, workspaceId: string, file
 }
 
 export async function cleanupOrphanPhotos(accessToken: string, workspaceId: string, data?: FamilyData, ttlDays = Number(process.env.FAMNESIA_ORPHAN_PHOTO_TTL_DAYS ?? 7)): Promise<number> {
-  await workspaceResources(accessToken, workspaceId, 'editor')
+  await workspaceResources(accessToken, workspaceId, collaborationApprovalEnabled() ? 'owner' : 'contributor')
   const snapshot = data ?? (await loadFamily(accessToken, workspaceId)).snapshot.data
   const referenced = new Set(snapshot.media.map((item) => item.driveFileId))
   const cutoff = Date.now() - Math.max(1, ttlDays) * 24 * 60 * 60 * 1000
@@ -423,7 +430,7 @@ async function isInsidePhotoFolder(accessToken: string, file: DriveFile, photosF
   if (depth >= 3 || !file.parents?.length) return false
   for (const parentId of file.parents) {
     const parent = await getFile(accessToken, parentId)
-    if (parent.mimeType !== FOLDER_MIME || parent.appProperties?.app !== APP) continue
+    if (parent.mimeType !== FOLDER_MIME || parent.appProperties?.app !== DRIVE_APP) continue
     if (await isInsidePhotoFolder(accessToken, parent, photosFolderId, depth + 1)) return true
   }
   return false
@@ -437,14 +444,14 @@ export async function readPhoto(accessToken: string, workspaceId: string, fileId
 }
 
 export async function deletePhoto(accessToken: string, workspaceId: string, fileId: string): Promise<void> {
-  const resource = await workspaceResources(accessToken, workspaceId, 'editor')
+  const resource = await workspaceResources(accessToken, workspaceId, collaborationApprovalEnabled() ? 'owner' : 'contributor')
   const file = await getFile(accessToken, fileId)
   if (file.appProperties?.resourceType !== 'person-photo' || !await isInsidePhotoFolder(accessToken, file, resource.photos.id)) throw new AppError(404, 'PHOTO_NOT_FOUND', 'Photo not found in this workspace.')
   await googleResponse(accessToken, `/files/${encodeURIComponent(fileId)}`, { method: 'DELETE' })
 }
 
 interface DrivePermission { id: string; emailAddress?: string; displayName?: string; photoLink?: string; role: string; type: string; permissionDetails?: { inherited?: boolean }[] }
-function memberRole(permission: DrivePermission): WorkspaceRole { return permission.role === 'owner' ? 'owner' : permission.role === 'writer' ? 'editor' : 'viewer' }
+function memberRole(permission: DrivePermission): WorkspaceRole { return permission.role === 'owner' ? 'owner' : permission.role === 'writer' ? 'contributor' : 'viewer' }
 
 export async function listMembers(accessToken: string, workspaceId: string): Promise<WorkspaceMember[]> {
   await workspaceResources(accessToken, workspaceId, 'owner')
@@ -456,14 +463,14 @@ export async function listMembers(accessToken: string, workspaceId: string): Pro
 export async function addMember(accessToken: string, workspaceId: string, email: string, role: Exclude<WorkspaceRole, 'owner'>): Promise<void> {
   await workspaceResources(accessToken, workspaceId, 'owner')
   await googleJson(accessToken, `/files/${encodeURIComponent(workspaceId)}/permissions?sendNotificationEmail=true&fields=id`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'user', role: role === 'editor' ? 'writer' : 'reader', emailAddress: email }),
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'user', role: role === 'contributor' && !collaborationApprovalEnabled() ? 'writer' : 'reader', emailAddress: email }),
   })
 }
 
 export async function updateMember(accessToken: string, workspaceId: string, permissionId: string, role: Exclude<WorkspaceRole, 'owner'>): Promise<void> {
   await workspaceResources(accessToken, workspaceId, 'owner')
   await googleJson(accessToken, `/files/${encodeURIComponent(workspaceId)}/permissions/${encodeURIComponent(permissionId)}?fields=id`, {
-    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: role === 'editor' ? 'writer' : 'reader' }),
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: role === 'contributor' && !collaborationApprovalEnabled() ? 'writer' : 'reader' }),
   })
 }
 

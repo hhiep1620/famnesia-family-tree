@@ -1,5 +1,6 @@
 import type { ActivityEvent, FamilyBackup, FamilyData, WorkspaceInfo, WorkspaceMember, WorkspaceRole } from '../types/family'
 import type { FamilyCommitRequest, FamilyCommitResult } from '../types/familyOperations'
+import type { CollaborationStatus, DraftReviewRequest, DraftReviewResult, MirrorSyncResult, ReviewDraft, SubmitDraftResult } from '../types/collaboration'
 import { apiRequest, jsonBody } from './apiClient'
 
 export interface FamilyDataRevision { modifiedTime?: string; version?: string }
@@ -53,6 +54,26 @@ export class FamilyRepository {
 
   async commit(request: FamilyCommitRequest): Promise<FamilyCommitResult> {
     return apiRequest<FamilyCommitResult>(`${workspacePath(this.workspace.id)}/family/commit`, { method: 'POST', ...jsonBody(request) })
+  }
+
+  async submitDraft(request: FamilyCommitRequest): Promise<SubmitDraftResult> {
+    return apiRequest<SubmitDraftResult>(`${workspacePath(this.workspace.id)}/family?operation=draft-submit`, { method: 'POST', ...jsonBody(request) })
+  }
+
+  async listDrafts(): Promise<ReviewDraft[]> {
+    return (await apiRequest<{ drafts: ReviewDraft[] }>(`${workspacePath(this.workspace.id)}/family?resource=drafts`)).drafts
+  }
+
+  async collaborationStatus(): Promise<CollaborationStatus> {
+    return (await apiRequest<{ status: CollaborationStatus }>(`${workspacePath(this.workspace.id)}/family?resource=collaboration-status`)).status
+  }
+
+  async reviewDraft(request: DraftReviewRequest): Promise<DraftReviewResult> {
+    return apiRequest<DraftReviewResult>(`${workspacePath(this.workspace.id)}/family?operation=draft-review`, { method: 'POST', ...jsonBody(request) })
+  }
+
+  async syncMirror(): Promise<MirrorSyncResult> {
+    return apiRequest<MirrorSyncResult>(`${workspacePath(this.workspace.id)}/family?operation=mirror-sync`, { method: 'POST', ...jsonBody({}) })
   }
 
   async listActivity(): Promise<ActivityEvent[]> { return (await apiRequest<{ activity: ActivityEvent[] }>(`${workspacePath(this.workspace.id)}/family?resource=activity`)).activity }

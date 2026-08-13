@@ -64,6 +64,71 @@ function referencesProfile(operation: FamilyOperation, profileId: string): boole
   return operation.profileId === profileId || record(operation.value)?.profileId === profileId
 }
 
+function referencedEntityIds(operation: FamilyOperation): { profiles: Set<string>; persons: Set<string>; media: Set<string> } {
+  const value = record(operation.value)
+  const changes = operation.changes
+  const profiles = new Set<string>()
+  const persons = new Set<string>()
+  const media = new Set<string>()
+  const profileId = operation.profileId ?? (typeof value?.profileId === 'string' ? value.profileId : undefined)
+  if (profileId) profiles.add(profileId)
+  for (const candidate of [value?.personId, value?.person1Id, value?.person2Id, changes?.personId, changes?.subjectPersonId]) {
+    if (typeof candidate === 'string' && candidate) persons.add(candidate)
+  }
+  for (const candidate of [changes?.primaryMediaId, operation.type === 'media.attach' ? undefined : operation.entityId]) {
+    if (typeof candidate === 'string' && candidate) media.add(candidate)
+  }
+  return { profiles, persons, media }
+}
+
+function createDomain(operation: FamilyOperation): 'profile' | 'person' | 'media' | undefined {
+  if (operation.type === 'profile.create') return 'profile'
+  if (operation.type === 'person.create') return 'person'
+  if (operation.type === 'media.attach') return 'media'
+  return undefined
+}
+
+/**
+ * Expands a review selection into a valid operation set. Approval includes the
+ * operations a selection depends on; rejection includes operations that depend
+ * on the rejected selection.
+ */
+export function operationReviewClosure(operations: FamilyOperation[], selectedIds: string[], decision: 'approve' | 'reject'): string[] {
+  const compacted = compactFamilyOperations(operations)
+  const selected = new Set(selectedIds.filter((id) => compacted.some((operation) => operation.id === id)))
+  const dependencies = new Map<string, Set<string>>()
+  const creates = new Map<string, string>()
+  for (const operation of compacted) {
+    const domain = createDomain(operation)
+    if (domain && operation.entityId) creates.set(`${domain}:${operation.entityId}`, operation.id)
+  }
+  for (const operation of compacted) {
+    const refs = referencedEntityIds(operation)
+    const ids = new Set<string>()
+    for (const profileId of refs.profiles) { const dependency = creates.get(`profile:${profileId}`); if (dependency && dependency !== operation.id) ids.add(dependency) }
+    for (const personId of refs.persons) { const dependency = creates.get(`person:${personId}`); if (dependency && dependency !== operation.id) ids.add(dependency) }
+    for (const mediaId of refs.media) { const dependency = creates.get(`media:${mediaId}`); if (dependency && dependency !== operation.id) ids.add(dependency) }
+    dependencies.set(operation.id, ids)
+  }
+
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const operation of compacted) {
+      if (decision === 'approve' && selected.has(operation.id)) {
+        for (const dependency of dependencies.get(operation.id) ?? []) {
+          if (!selected.has(dependency)) { selected.add(dependency); changed = true }
+        }
+      }
+      if (decision === 'reject' && !selected.has(operation.id)) {
+        const dependsOnRejected = [...(dependencies.get(operation.id) ?? [])].some((dependency) => selected.has(dependency))
+        if (dependsOnRejected) { selected.add(operation.id); changed = true }
+      }
+    }
+  }
+  return compacted.filter((operation) => selected.has(operation.id)).map((operation) => operation.id)
+}
+
 export function compactFamilyOperations(input: FamilyOperation[]): FamilyOperation[] {
   let result: FamilyOperation[] = []
   for (const source of input) {
