@@ -8,6 +8,7 @@ export function prepareFamilyDataForExport(data: FamilyData, updatedAt = data.up
     updatedAt,
     profiles: data.profiles.map((profile) => ({
       ...profile,
+      lineageSurname: profile.lineageSurname ?? '',
       description: profile.description ?? '',
       photoFileId: profile.photoFileId ?? null,
       subjectPersonId: profile.subjectPersonId ?? null,
@@ -34,6 +35,7 @@ export function createFamilyDataTemplate(): FamilyData {
     profiles: [{
       id: 'F0001',
       name: 'Gia đình của tôi',
+      lineageSurname: 'Nguyễn',
       description: 'Dữ liệu mẫu — hãy thay bằng thông tin gia đình bạn.',
       photoFileId: null,
       subjectPersonId: 'P0001',

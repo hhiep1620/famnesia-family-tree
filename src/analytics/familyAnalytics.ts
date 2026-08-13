@@ -22,12 +22,12 @@ export function calculateFamilyAnalytics(data: FamilyData, subjectId: string | u
   }
   const people = data.persons.filter(matchesScope)
   const gender = { male: 0, female: 0, other: 0, unknown: 0 }
-  const age: Record<string, number> = { '0–18': 0, '19–30': 0, '31–45': 0, '46–60': 0, '61–75': 0, '76+': 0, 'Không rõ': 0 }
+  const age: Record<string, number> = { '0–9': 0, '10–19': 0, '20–29': 0, '30–39': 0, '40–49': 0, '50–59': 0, '60–69': 0, '70–79': 0, '80+': 0, 'Không rõ': 0 }
   const locationMap = new Map<string, number>()
   for (const person of people) {
     gender[person.gender ?? 'unknown'] += 1
     const years = calculateAge(person.birthDate ?? undefined)
-    const band = years === undefined ? 'Không rõ' : years <= 18 ? '0–18' : years <= 30 ? '19–30' : years <= 45 ? '31–45' : years <= 60 ? '46–60' : years <= 75 ? '61–75' : '76+'
+    const band = years === undefined || years < 0 ? 'Không rõ' : years >= 80 ? '80+' : `${Math.floor(years / 10) * 10}–${Math.floor(years / 10) * 10 + 9}`
     age[band] += 1
     const location = person.address?.split(',').at(-1)?.trim() || 'Không rõ'
     locationMap.set(location, (locationMap.get(location) ?? 0) + 1)

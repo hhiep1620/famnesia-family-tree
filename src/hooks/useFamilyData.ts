@@ -182,16 +182,32 @@ export function useFamilyData() {
     if (familyData.profiles.some((profile) => profile.id === profileId)) setActiveProfileIdState(profileId)
   }, [familyData.profiles])
 
-  const createProfile = useCallback(async (name: string, description = '') => {
+  const createProfile = useCallback(async (name: string, description = '', lineageSurname = '') => {
     const id = nextProfileId(familyData.profiles.map((profile) => profile.id))
     const profile: FamilyProfile = {
-      id, name: name.trim(), description: description.trim(), subjectPersonId: null,
+      id, name: name.trim(), lineageSurname: lineageSurname.trim(), description: description.trim(), subjectPersonId: null,
       photoFileId: null, requiresSecret: false, isActive: true,
     }
     if (!profile.name) throw new Error('Hãy nhập tên gia đình.')
     await persist('Đang tạo gia đình…', { ...familyData, profiles: [...familyData.profiles, profile] })
     setActiveProfileIdState(id)
     return profile
+  }, [familyData, persist])
+
+  const updateProfile = useCallback(async (profileId: string, name: string, description = '', lineageSurname = '') => {
+    const cleanName = name.trim()
+    if (!cleanName) throw new Error('Hãy nhập tên gia đình.')
+    const profile = familyData.profiles.find((item) => item.id === profileId)
+    if (!profile) throw new Error('Không tìm thấy gia đình cần chỉnh sửa.')
+    await persist('Đang lưu tên gia đình…', {
+      ...familyData,
+      profiles: familyData.profiles.map((item) => item.id === profileId ? {
+        ...item,
+        name: cleanName,
+        description: description.trim(),
+        lineageSurname: lineageSurname.trim(),
+      } : item),
+    })
   }, [familyData, persist])
 
   const setSubject = useCallback(async (personId: string) => {
@@ -561,6 +577,7 @@ export function useFamilyData() {
     refresh,
     setActiveProfileId,
     createProfile,
+    updateProfile,
     setSubject,
     addPerson,
     updatePerson,
@@ -588,7 +605,7 @@ export function useFamilyData() {
     activeProfile, activeProfileId, activeWorkspaceId, addMember, addPerson, addPersonMedia, addRelationship, backupNow, busy, createProfile,
     deletePerson, deletePersonMedia, deleteRelationship, error, familyData, listBackups, loading, media, persons,
     refresh, relationships, replaceAllData, restoreBackup, saveStatus, setActiveProfileId,
-    setPrimaryMedia, setSubject, switchWorkspace, updateMediaCaption, updateMember, removeMember, refreshMembers, updatePerson, updateRelationship, useMockData, workspace, workspaces, members,
+    setPrimaryMedia, setSubject, switchWorkspace, updateMediaCaption, updateMember, removeMember, refreshMembers, updatePerson, updateProfile, updateRelationship, useMockData, workspace, workspaces, members,
     activity, suppressDuplicate, mergeDuplicatePeople, refreshActivity,
   ])
 }

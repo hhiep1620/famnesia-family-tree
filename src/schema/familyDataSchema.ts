@@ -23,6 +23,7 @@ const OptionalTextSchema = z.union([z.string(), z.null()]).optional()
 export const ProfileSchema = z.object({
   id: z.string().trim().min(1, 'Profile ID không được để trống.'),
   name: z.string().trim().min(1, 'Tên gia đình không được để trống.'),
+  lineageSurname: z.string().default(''),
   description: z.string().default(''),
   photoFileId: OptionalTextSchema,
   subjectPersonId: OptionalTextSchema,

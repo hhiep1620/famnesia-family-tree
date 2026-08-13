@@ -42,6 +42,7 @@ describe('secure import pipeline', () => {
     const result = await validateExcelImportFile(xlsxFile(createFamilyWorkbook(original)))
     expect(result.errors).toEqual([])
     expect(result.preview).toMatchObject({ profiles: 1, people: 3, relationships: 3, media: 0 })
+    expect(result.data?.profiles[0].lineageSurname).toBe(original.profiles[0].lineageSurname)
     expect(result.data?.persons.map((person) => person.name)).toEqual(original.persons.map((person) => person.name))
   })
 

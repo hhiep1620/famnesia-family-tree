@@ -28,7 +28,7 @@ export const sampleFamilyData: FamilyData = {
   schemaVersion: CURRENT_SCHEMA_VERSION,
   updatedAt: '2026-08-11T03:10:00Z',
   profiles: [{
-    id: 'F0001', name: 'Gia đình Nguyễn', description: 'Dữ liệu mẫu dùng khi phát triển giao diện.',
+    id: 'F0001', name: 'Gia đình Nguyễn', lineageSurname: 'Nguyễn', description: 'Dữ liệu mẫu dùng khi phát triển giao diện.',
     subjectPersonId: 'P0006', requiresSecret: false, isActive: true,
   }],
   persons: samplePersons,

@@ -8,7 +8,7 @@ import { inspectXlsxContainer } from './security/excelSecurity'
 import { IMPORT_LIMITS } from './security/importLimits'
 
 const COLUMNS = {
-  profiles: ['id', 'name', 'description', 'photo_file_id', 'subject_person_id', 'requires_secret', 'is_active'],
+  profiles: ['id', 'name', 'lineage_surname', 'description', 'photo_file_id', 'subject_person_id', 'requires_secret', 'is_active'],
   persons: ['id', 'profile_id', 'name', 'nickname', 'gender', 'birth_date', 'birth_date_confidence', 'is_deceased', 'death_date', 'death_date_confidence', 'death_lunar_day', 'death_lunar_month', 'death_lunar_leap_month', 'phone_1', 'phone_2', 'address', 'note', 'ancestral_role', 'sort_order'],
   relationships: ['id', 'profile_id', 'person_1_id', 'person_2_id', 'type', 'status', 'confidence', 'start_date', 'end_date', 'sort_order'],
   media: ['id', 'profile_id', 'person_id', 'drive_file_id', 'type', 'is_primary', 'caption', 'taken_date', 'sort_order'],
@@ -63,7 +63,7 @@ function rows(workbook: XLSX.WorkBook, sheetName: keyof typeof COLUMNS): Record<
 
 function normalizeWorkbook(workbook: XLSX.WorkBook): FamilyData {
   const profiles: FamilyProfile[] = rows(workbook, 'profiles').map((row) => ({
-    id: plainText(row.id), name: plainText(row.name), description: plainText(row.description),
+    id: plainText(row.id), name: plainText(row.name), lineageSurname: plainText(row.lineage_surname), description: plainText(row.description),
     photoFileId: plainText(row.photo_file_id) || null, subjectPersonId: plainText(row.subject_person_id) || null,
     requiresSecret: bool(row.requires_secret), isActive: bool(row.is_active, true),
   }))
@@ -152,7 +152,7 @@ export function createFamilyWorkbook(data: FamilyData): Uint8Array {
     ['Import thay thế toàn bộ dữ liệu và luôn tạo backup trước khi ghi.'],
   ]
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(readme), 'README')
-  addSheet(workbook, 'profiles', COLUMNS.profiles, data.profiles.map((item) => [item.id, item.name, item.description, item.photoFileId, item.subjectPersonId, item.requiresSecret, item.isActive]))
+  addSheet(workbook, 'profiles', COLUMNS.profiles, data.profiles.map((item) => [item.id, item.name, item.lineageSurname, item.description, item.photoFileId, item.subjectPersonId, item.requiresSecret, item.isActive]))
   addSheet(workbook, 'persons', COLUMNS.persons, data.persons.map((item) => [item.id, item.profileId, item.name, item.nickname, item.gender, item.birthDate, item.confidence?.birthDate, item.isDeceased, item.deathDate, item.confidence?.deathDate, item.deathLunar?.day, item.deathLunar?.month, item.deathLunar?.leapMonth, item.phone1, item.phone2, item.address, item.note, item.ancestralRole, item.sortOrder]))
   addSheet(workbook, 'relationships', COLUMNS.relationships, data.relationships.map((item) => [item.id, item.profileId, item.person1Id, item.person2Id, item.type, item.status, item.confidence, item.startDate, item.endDate, item.sortOrder]))
   addSheet(workbook, 'media', COLUMNS.media, data.media.map((item) => [item.id, item.profileId, item.personId, item.driveFileId, item.type, item.isPrimary, item.caption, item.takenDate, item.sortOrder]))

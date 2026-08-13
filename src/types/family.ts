@@ -54,6 +54,7 @@ export interface Relationship {
 export interface FamilyProfile {
   id: string
   name: string
+  lineageSurname?: string
   description?: string
   photoFileId?: string | null
   subjectPersonId?: string | null

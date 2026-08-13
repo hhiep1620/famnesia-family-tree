@@ -144,6 +144,7 @@ Mọi response API nhạy cảm đều `Cache-Control: no-store`; thao tác thay
 ## Quy tắc family.json
 
 - `schemaVersion` hiện tại là `3`; dữ liệu v1/v2 được migrate khi đọc.
+- Mỗi profile có `name` chỉnh sửa được và `lineageSurname` tùy chọn để nhóm nhiều gia đình dưới nhãn “Gia tộc họ …”; dữ liệu cũ thiếu trường này vẫn hợp lệ.
 - ID profile, person và relationship phải duy nhất; tham chiếu phải tồn tại và cùng profile.
 - Không cho self-parent, self-spouse, quan hệ trùng hoặc vòng lặp tổ tiên.
 - Trạng thái hôn phối: `married`, `partner`, `separated`, `divorced`, `widowed`, `unknown`.

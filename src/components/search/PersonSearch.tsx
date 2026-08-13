@@ -39,7 +39,7 @@ export function PersonSearch({ persons, media, workspaceId, onSelect, kinships, 
 
   return <div className="person-search">
     <Search size={17} aria-hidden="true" />
-    <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm tên, SĐT, địa chỉ…" aria-label="Tìm thành viên" />
+    <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm người thân theo tên, SĐT, địa chỉ…" aria-label="Tìm thành viên" />
     {query && <button type="button" aria-label="Xóa tìm kiếm" onClick={() => setQuery('')}><X size={15} /></button>}
     {query.trim() && <div className="search-results" role="listbox">{results.length ? results.map((result) => <SearchResultCard key={result.person.id} result={result} workspaceId={workspaceId} photoId={primary.get(result.person.id)?.driveFileId} onSelect={() => { onSelect(result.person.id); setQuery('') }} />) : <p className="search-empty">Không tìm thấy thành viên phù hợp.</p>}</div>}
   </div>
