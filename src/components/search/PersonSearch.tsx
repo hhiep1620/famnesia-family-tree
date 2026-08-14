@@ -4,6 +4,7 @@ import { calculateAge } from '../../calendar/dateUtils'
 import { useDriveImage } from '../../hooks/useDriveImage'
 import { createPrimaryMediaMap } from '../../media/mediaSelectors'
 import { PersonSearchIndex, type PersonSearchResult } from '../../search/personSearchIndex'
+import { mediaReferenceId } from '../../services/mediaReference'
 import type { FamilyScope, KinshipResult, Person, PersonMedia } from '../../types/family'
 import { getInitials } from '../../utils/initials'
 
@@ -41,6 +42,6 @@ export function PersonSearch({ persons, media, workspaceId, onSelect, kinships, 
     <Search size={17} aria-hidden="true" />
     <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm người thân theo tên, SĐT, địa chỉ…" aria-label="Tìm thành viên" />
     {query && <button type="button" aria-label="Xóa tìm kiếm" onClick={() => setQuery('')}><X size={15} /></button>}
-    {query.trim() && <div className="search-results" role="listbox">{results.length ? results.map((result) => <SearchResultCard key={result.person.id} result={result} workspaceId={workspaceId} photoId={primary.get(result.person.id)?.driveFileId} onSelect={() => { onSelect(result.person.id); setQuery('') }} />) : <p className="search-empty">Không tìm thấy thành viên phù hợp.</p>}</div>}
+    {query.trim() && <div className="search-results" role="listbox">{results.length ? results.map((result) => <SearchResultCard key={result.person.id} result={result} workspaceId={workspaceId} photoId={mediaReferenceId(primary.get(result.person.id))} onSelect={() => { onSelect(result.person.id); setQuery('') }} />) : <p className="search-empty">Không tìm thấy thành viên phù hợp.</p>}</div>}
   </div>
 }

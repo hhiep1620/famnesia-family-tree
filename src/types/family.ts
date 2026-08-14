@@ -72,7 +72,12 @@ export interface PersonMedia {
   id: string
   profileId: string
   personId: string
-  driveFileId: string
+  /** Legacy Google Drive object key. Present only while media comes from Drive. */
+  driveFileId?: string
+  /** Opaque key consumed by the selected media repository. */
+  fileId?: string
+  /** Private Supabase Storage path; never treated as a public URL. */
+  storagePath?: string
   type: 'photo'
   isPrimary: boolean
   caption?: string
@@ -150,7 +155,7 @@ export interface PersonDraft {
   photos?: File[]
 }
 
-export type WorkspaceRole = 'owner' | 'contributor' | 'viewer'
+export type WorkspaceRole = 'owner' | 'editor' | 'contributor' | 'viewer'
 
 export interface WorkspaceInfo {
   id: string

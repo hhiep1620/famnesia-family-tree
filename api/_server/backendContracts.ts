@@ -11,6 +11,7 @@ export interface FamilySnapshot {
 
 export type FamilySaveMode = 'save' | 'replace' | 'restore' | 'merge'
 export type ActivityInput = Pick<ActivityEvent, 'actorEmail' | 'actorName' | 'action' | 'entityType' | 'entityId' | 'summary' | 'metadata'>
+export type AssignableWorkspaceRole = Extract<WorkspaceRole, 'contributor' | 'viewer'>
 
 export interface WorkspaceRepositoryContract {
   list(): Promise<WorkspaceInfo[]>
@@ -34,8 +35,8 @@ export interface MediaRepositoryContract {
 
 export interface MemberRepositoryContract {
   list(workspaceId: string): Promise<WorkspaceMember[]>
-  add(workspaceId: string, email: string, role: Exclude<WorkspaceRole, 'owner'>): Promise<void>
-  update(workspaceId: string, memberId: string, role: Exclude<WorkspaceRole, 'owner'>): Promise<void>
+  add(workspaceId: string, email: string, role: AssignableWorkspaceRole): Promise<void>
+  update(workspaceId: string, memberId: string, role: AssignableWorkspaceRole): Promise<void>
   remove(workspaceId: string, memberId: string): Promise<void>
 }
 

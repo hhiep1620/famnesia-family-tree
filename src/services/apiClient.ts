@@ -19,14 +19,18 @@ export function configureBearerAccessTokenProvider(provider?: AccessTokenProvide
   accessTokenProvider = provider
 }
 
-export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+export async function authenticatedApiFetch(path: string, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers)
-  headers.set('Accept', 'application/json')
+  if (!headers.has('Accept')) headers.set('Accept', 'application/json')
   if (!headers.has('Authorization') && accessTokenProvider) {
     const accessToken = await accessTokenProvider()
     if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
   }
-  const response = await fetch(path, { ...init, credentials: 'same-origin', headers })
+  return fetch(path, { ...init, credentials: 'same-origin', headers })
+}
+
+export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await authenticatedApiFetch(path, init)
   if (response.status === 204) return undefined as T
   const contentType = response.headers.get('content-type') ?? ''
   const payload = contentType.includes('application/json') ? await response.json() as { error?: { code?: string; message?: string; details?: unknown } } : undefined

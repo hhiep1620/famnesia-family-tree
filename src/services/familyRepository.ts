@@ -5,6 +5,7 @@ import { apiRequest, jsonBody } from './apiClient'
 
 export interface FamilyDataRevision { modifiedTime?: string; version?: string }
 export interface FamilyDataSnapshot { data: FamilyData; revision: FamilyDataRevision }
+export type AssignableWorkspaceRole = Extract<WorkspaceRole, 'contributor' | 'viewer'>
 
 export interface FamilyRepositoryContract {
   readonly workspace: WorkspaceInfo
@@ -25,8 +26,8 @@ export interface FamilyRepositoryContract {
   deletePhoto(id: string): Promise<void>
   photoUrl(id: string): string
   listMembers(): Promise<WorkspaceMember[]>
-  addMember(email: string, role: Exclude<WorkspaceRole, 'owner'>): Promise<void>
-  updateMember(id: string, role: Exclude<WorkspaceRole, 'owner'>): Promise<void>
+  addMember(email: string, role: AssignableWorkspaceRole): Promise<void>
+  updateMember(id: string, role: AssignableWorkspaceRole): Promise<void>
   removeMember(id: string): Promise<void>
 }
 
@@ -125,7 +126,7 @@ export class FamilyRepository implements FamilyRepositoryContract {
   photoUrl(id: string): string { return `${workspacePath(this.workspace.id)}/photos/${encodeURIComponent(id)}` }
 
   async listMembers(): Promise<WorkspaceMember[]> { return (await apiRequest<{ members: WorkspaceMember[] }>(`${workspacePath(this.workspace.id)}/members`)).members }
-  async addMember(email: string, role: Exclude<WorkspaceRole, 'owner'>): Promise<void> { await apiRequest(`${workspacePath(this.workspace.id)}/members`, { method: 'POST', ...jsonBody({ email, role }) }) }
-  async updateMember(id: string, role: Exclude<WorkspaceRole, 'owner'>): Promise<void> { await apiRequest(`${workspacePath(this.workspace.id)}/members`, { method: 'PATCH', ...jsonBody({ permissionId: id, role }) }) }
+  async addMember(email: string, role: AssignableWorkspaceRole): Promise<void> { await apiRequest(`${workspacePath(this.workspace.id)}/members`, { method: 'POST', ...jsonBody({ email, role }) }) }
+  async updateMember(id: string, role: AssignableWorkspaceRole): Promise<void> { await apiRequest(`${workspacePath(this.workspace.id)}/members`, { method: 'PATCH', ...jsonBody({ permissionId: id, role }) }) }
   async removeMember(id: string): Promise<void> { await apiRequest(`${workspacePath(this.workspace.id)}/members`, { method: 'DELETE', ...jsonBody({ permissionId: id }) }) }
 }

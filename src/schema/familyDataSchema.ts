@@ -62,13 +62,17 @@ export const PersonMediaSchema = z.object({
   id: z.string().trim().min(1, 'Media ID không được để trống.'),
   profileId: z.string().trim().min(1, 'profileId không được để trống.'),
   personId: z.string().trim().min(1, 'personId không được để trống.'),
-  driveFileId: z.string().trim().regex(/^[A-Za-z0-9_-]+$/, 'Drive file ID không hợp lệ.'),
+  driveFileId: z.string().trim().regex(/^[A-Za-z0-9_-]+$/, 'Drive file ID không hợp lệ.').optional(),
+  fileId: z.string().trim().min(1).optional(),
+  storagePath: z.string().trim().min(1).optional(),
   type: z.literal('photo'),
   isPrimary: z.boolean().default(false),
   caption: z.string().default(''),
   takenDate: OptionalDateSchema,
   sortOrder: z.number().finite().optional(),
   createdAt: IsoDateTimeSchema.optional(),
+}).superRefine((media, context) => {
+  if (!media.driveFileId && !media.fileId) context.addIssue({ code: 'custom', path: ['fileId'], message: 'Media phải có object key trung lập hoặc Drive file ID.' })
 })
 
 export const RelationshipSchema = z.object({

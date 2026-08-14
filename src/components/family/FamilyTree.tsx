@@ -8,6 +8,7 @@ import { calculateAllGenerations, calculateGenerationOrdinals } from '../../gene
 import { createFamilyUnits } from '../../graph/familyUnits'
 import { createBranchVisibleGraph, type CollateralVisibility } from '../../lineage/branchVisibility'
 import { createPrimaryMediaMap } from '../../media/mediaSelectors'
+import { mediaReferenceId } from '../../services/mediaReference'
 import type { FamilyEventType, FamilyGraph, KinshipResult, PersonMedia } from '../../types/family'
 import { addGenerationBands, createFlowEdges, createFlowNodes, layoutFamilyTree, PERSON_HEIGHT, PERSON_WIDTH } from '../../layout/familyLayout'
 import { FamilyBranchEdge } from './FamilyBranchEdge'
@@ -79,7 +80,10 @@ function FamilyTreeCanvas({ graph, workspaceId, selectedId, subjectId, subjectNa
   const siblingGroupMemberIds = useMemo(() => new Set(
     createFamilyUnits(graph).filter((unit) => unit.childIds.length > 1).flatMap((unit) => unit.childIds),
   ), [graph])
-  const primaryPhotoIds = useMemo(() => new Map([...createPrimaryMediaMap(media)].map(([personId, item]) => [personId, item.driveFileId])), [media])
+  const primaryPhotoIds = useMemo(() => new Map([...createPrimaryMediaMap(media)].flatMap(([personId, item]) => {
+    const reference = mediaReferenceId(item)
+    return reference ? [[personId, reference] as const] : []
+  })), [media])
   const generations = useMemo(() => subjectId ? calculateAllGenerations(subjectId, graph) : new Map<string, number>(), [graph, subjectId])
   const generationOrdinals = useMemo(() => calculateGenerationOrdinals(generations), [generations])
   const branchExpandedIds = useMemo(() => {

@@ -4,7 +4,7 @@ import { googleAccessToken } from './oauth.js'
 import { sessions } from './sessionRepository.js'
 import type { SafeUser } from './types.js'
 import { backendSelection } from './backendSelectors.js'
-import { createSupabaseUserClient } from './supabase/serverClient.js'
+import { createSupabaseAuthClient, createSupabaseUserClient } from './supabase/serverClient.js'
 
 export interface AuthContext {
   backend: 'google-drive-oauth' | 'supabase'
@@ -51,7 +51,10 @@ function metadataText(metadata: Record<string, unknown>, ...keys: string[]): str
 
 const defaultSupabaseVerifier: SupabaseAuthVerifier = {
   async verify(accessToken) {
-    const client = createSupabaseUserClient(accessToken)
+    // Supabase auth methods cannot run on a client configured with the custom
+    // accessToken option. Verify the bearer token with an anonymous client,
+    // then use a separate user-context client for RLS-protected queries.
+    const client = createSupabaseAuthClient()
     const { data, error } = await client.auth.getUser(accessToken)
     const user = data.user
     if (error || !user?.id || !user.email) throw new AppError(401, 'SUPABASE_TOKEN_INVALID', 'The Supabase session is invalid or expired.')

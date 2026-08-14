@@ -10,6 +10,7 @@ import { mergePeople } from '../integrity/mergePerson'
 import { CURRENT_SCHEMA_VERSION, requireValidFamilyData } from '../schema/familyDataSchema'
 import { ApiError } from '../services/apiClient'
 import { FamilyRepository, type FamilyDataRevision } from '../services/familyRepository'
+import { mediaReferenceId } from '../services/mediaReference'
 import { sharedWorkspaceForEmptyOwner } from '../services/workspaceSelection'
 import type { ActivityEvent, FamilyBackup, FamilyData, FamilyProfile, FriendlyRelationship, Person, PersonDraft, PersonMedia, Relationship, SaveStatus, SpouseStatus, WorkspaceInfo, WorkspaceMember } from '../types/family'
 import type { FamilyCommitConflictDetails, FamilyOperation, FamilyOperationConflict, StoredFamilyDraft } from '../types/familyOperations'
@@ -382,7 +383,8 @@ export function useFamilyData(userId = 'mock-user') {
     const target = familyData.media.find((item) => item.id === mediaId); if (!target) return
     const newlyUploaded = pendingRef.current.find((item) => item.type === 'media.attach' && item.entityId === mediaId)
     stageOperations([createOperation({ type: 'media.delete', entityId: mediaId, profileId: target.profileId, baseValues: { $entity: savedData.media.find((item) => item.id === mediaId) ?? target } })])
-    if (newlyUploaded && !useMockData) await repository.current?.deletePhoto(target.driveFileId).catch(() => setNotice('Ảnh không còn trong Draft và sẽ được dọn tự động sau.'))
+    const objectKey = mediaReferenceId(target)
+    if (newlyUploaded && objectKey && !useMockData) await repository.current?.deletePhoto(objectKey).catch(() => setNotice('Ảnh không còn trong Draft và sẽ được dọn tự động sau.'))
   }, [familyData.media, savedData.media, stageOperations, useMockData])
 
   const addRelationship = useCallback(async (input: Omit<Relationship, 'id' | 'createdAt' | 'updatedAt'>) => {

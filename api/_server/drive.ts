@@ -302,8 +302,8 @@ export async function commitFamily(accessToken: string, workspaceId: string, req
     try {
       const written = await writeCommittedFamily(accessToken, currentVersion.file, currentVersion.etag, validation.data, request.commitId)
       await appendCommitActivity(accessToken, workspaceId, actor, commit).catch((error) => console.error('Commit activity append failed', error instanceof Error ? error.message : String(error)))
-      const referenced = new Set(validation.data.media.map((item) => item.driveFileId))
-      const removedPhotoIds = latest.media.filter((item) => !referenced.has(item.driveFileId)).map((item) => item.driveFileId)
+      const referenced = new Set(validation.data.media.flatMap((item) => item.driveFileId ? [item.driveFileId] : []))
+      const removedPhotoIds = latest.media.flatMap((item) => item.driveFileId && !referenced.has(item.driveFileId) ? [item.driveFileId] : [])
       await Promise.allSettled(removedPhotoIds.map((fileId) => deletePhoto(accessToken, workspaceId, fileId)))
       await cleanupOrphanPhotos(accessToken, workspaceId, validation.data).catch((error) => { console.error('Photo cleanup failed', error instanceof Error ? error.message : String(error)); return 0 })
       return { snapshot: { data: validation.data, revision: revision(written) }, commit }
@@ -417,7 +417,7 @@ export async function uploadPhoto(accessToken: string, workspaceId: string, file
 export async function cleanupOrphanPhotos(accessToken: string, workspaceId: string, data?: FamilyData, ttlDays = Number(process.env.FAMNESIA_ORPHAN_PHOTO_TTL_DAYS ?? 7)): Promise<number> {
   await workspaceResources(accessToken, workspaceId, collaborationApprovalEnabled() ? 'owner' : 'contributor')
   const snapshot = data ?? (await loadFamily(accessToken, workspaceId)).snapshot.data
-  const referenced = new Set(snapshot.media.map((item) => item.driveFileId))
+  const referenced = new Set(snapshot.media.flatMap((item) => item.driveFileId ? [item.driveFileId] : []))
   const cutoff = Date.now() - Math.max(1, ttlDays) * 24 * 60 * 60 * 1000
   const candidates = await listFiles(accessToken, `${propertyQuery('person-photo')} and appProperties has { key='workspaceId' and value='${escapeQuery(workspaceId)}' }`, 'createdTime')
   const orphanIds = candidates.filter((file) => !referenced.has(file.id) && Date.parse(file.createdTime ?? file.appProperties?.createdAt ?? '') < cutoff).map((file) => file.id)

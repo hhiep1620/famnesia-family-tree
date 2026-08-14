@@ -8,6 +8,7 @@ import { useDriveImage } from '../../hooks/useDriveImage'
 import { explainKinshipPath } from '../../kinship/kinshipEngine'
 import { SPOUSE_STATUS_LABELS } from '../../kinship/kinshipRules'
 import { getPrimaryMedia, getPersonMedia } from '../../media/mediaSelectors'
+import { mediaReferenceId } from '../../services/mediaReference'
 import type { FactConfidence, KinshipResult, Person, PersonMedia, Relationship } from '../../types/family'
 import { getInitials } from '../../utils/initials'
 import { ManageRelationships } from './ManageRelationships'
@@ -58,7 +59,7 @@ export function PersonDetails(props: Props) {
   const age = person.isDeceased ? undefined : calculateAge(person.birthDate ?? undefined, today)
   const personMedia = getPersonMedia(props.media, person.id)
   const primaryMedia = getPrimaryMedia(props.media, person.id)
-  const { url } = useDriveImage(workspaceId, primaryMedia?.driveFileId)
+  const { url } = useDriveImage(workspaceId, mediaReferenceId(primaryMedia))
 
   const relationshipSuffix = (member: Person) => {
     const relationship = relationships.find((item) => item.type === 'spouse' && ((item.person1Id === person.id && item.person2Id === member.id) || (item.person2Id === person.id && item.person1Id === member.id)))

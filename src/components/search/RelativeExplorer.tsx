@@ -6,6 +6,7 @@ import { createPrimaryMediaMap } from '../../media/mediaSelectors'
 import { getNearestRelatives, type NearestRelative } from '../../relatives/nearestRelatives'
 import { getAllKinships } from '../../kinship/kinshipEngine'
 import { classifyRelativeScope } from '../../lineage/lineageClassifier'
+import { mediaReferenceId } from '../../services/mediaReference'
 import type { FamilyGraph, Person, PersonMedia } from '../../types/family'
 import { getInitials } from '../../utils/initials'
 
@@ -82,7 +83,10 @@ export function RelativeExplorer({ targetId, graph, media, workspaceId, onClose,
     for (const members of Object.values(result)) members.sort((left, right) => right.generationDelta - left.generationDelta || left.distance - right.distance || left.person.name.localeCompare(right.person.name, 'vi'))
     return result
   }, [graph, maxDistance, targetId])
-  const photos = useMemo(() => new Map([...createPrimaryMediaMap(media)].map(([personId, item]) => [personId, item.driveFileId])), [media])
+  const photos = useMemo(() => new Map([...createPrimaryMediaMap(media)].flatMap(([personId, item]) => {
+    const reference = mediaReferenceId(item)
+    return reference ? [[personId, reference] as const] : []
+  })), [media])
   if (!target) return null
 
   return <div className="relative-explorer">
