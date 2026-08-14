@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createDriveRequestBackend } from '../api/_server/driveBackend.js'
 import { parseBackendSelection, requireDrivePersistenceBackends, requireGoogleDriveAuthBackend } from '../api/_server/backendSelectors.js'
+import { requestBackend } from '../api/_server/requestBackend.js'
 import type { AuthContext } from '../api/_server/auth.js'
 
 const driveSelection = { data: 'drive', auth: 'google-drive-oauth', media: 'drive' } as const
@@ -28,6 +29,23 @@ describe('backend selection and repository boundary', () => {
   it('rejects mixed provider stacks that would lose required credentials', () => {
     expect(() => parseBackendSelection({ AUTH_BACKEND: 'supabase' })).toThrow(/complete Drive stack or the complete Supabase stack/)
     expect(() => parseBackendSelection({ DATA_BACKEND: 'supabase', AUTH_BACKEND: 'google-drive-oauth', MEDIA_BACKEND: 'supabase' })).toThrow(/Mixed auth\/data\/media/)
+  })
+
+  it('requires an explicit CR10 approval marker for the Production Supabase stack', () => {
+    const production = { DATA_BACKEND: 'supabase', AUTH_BACKEND: 'supabase', MEDIA_BACKEND: 'supabase', VERCEL_ENV: 'production' }
+    expect(() => parseBackendSelection(production)).toThrow(/explicit CR10 approval ID/)
+    expect(parseBackendSelection({ ...production, SUPABASE_CUTOVER_APPROVAL_ID: 'CR10-approved-20260814' })).toEqual({ data: 'supabase', auth: 'supabase', media: 'supabase' })
+  })
+
+  it('blocks writes before authentication while the controlled read-only window is active', async () => {
+    const previous = process.env.FAMNESIA_MAINTENANCE_MODE
+    process.env.FAMNESIA_MAINTENANCE_MODE = 'read-only'
+    try {
+      await expect(requestBackend(new Request('http://localhost/api/workspaces', { method: 'POST' }))).rejects.toMatchObject({ code: 'FAMNESIA_READ_ONLY', status: 503 })
+    } finally {
+      if (previous === undefined) delete process.env.FAMNESIA_MAINTENANCE_MODE
+      else process.env.FAMNESIA_MAINTENANCE_MODE = previous
+    }
   })
 
   it('exposes all neutral repository capabilities through the Drive adapter', () => {

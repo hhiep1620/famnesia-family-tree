@@ -63,7 +63,7 @@ For a hosted Preview project, the command additionally requires both:
 --allow-remote-preview --confirm-host <exact-supabase-host>
 ```
 
-CR09 rejects `VERCEL_ENV=production` or `MIGRATION_ENVIRONMENT=production`. Production migration belongs to CR10 after explicit authorization and preflight.
+CR09's normal path rejects `VERCEL_ENV=production` or `MIGRATION_ENVIRONMENT=production`. The same importer can be used by CR10 only with the additional production approval, exact-host confirmation and matching final-backup report described in the cutover runbook.
 
 ## Resume and idempotency
 

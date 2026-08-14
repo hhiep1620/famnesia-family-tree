@@ -10,7 +10,7 @@ export interface BackendSelection {
   media: MediaBackendName
 }
 
-type BackendEnvironment = Partial<Record<'DATA_BACKEND' | 'AUTH_BACKEND' | 'MEDIA_BACKEND', string | undefined>>
+type BackendEnvironment = Partial<Record<'DATA_BACKEND' | 'AUTH_BACKEND' | 'MEDIA_BACKEND' | 'VERCEL_ENV' | 'SUPABASE_CUTOVER_APPROVAL_ID', string | undefined>>
 
 function selected<T extends string>(name: keyof BackendEnvironment, raw: string | undefined, fallback: T, allowed: readonly T[]): T {
   const value = raw?.trim() || fallback
@@ -34,6 +34,16 @@ export function parseBackendSelection(environment: BackendEnvironment): BackendS
       'BACKEND_COMBINATION_UNSUPPORTED',
       'Backend selectors must use the complete Drive stack or the complete Supabase stack. Mixed auth/data/media modes cannot preserve required provider credentials.',
     )
+  }
+  if (allSupabase && environment.VERCEL_ENV?.trim() === 'production') {
+    const approvalId = environment.SUPABASE_CUTOVER_APPROVAL_ID?.trim() ?? ''
+    if (!/^CR10-[A-Za-z0-9._-]{8,80}$/.test(approvalId)) {
+      throw new AppError(
+        500,
+        'SUPABASE_PRODUCTION_CUTOVER_NOT_APPROVED',
+        'Production Supabase selectors require an explicit CR10 approval ID. Roll back all three selectors to Drive or complete the cutover runbook.',
+      )
+    }
   }
   return selection
 }

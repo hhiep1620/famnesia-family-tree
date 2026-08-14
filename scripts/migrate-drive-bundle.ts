@@ -27,7 +27,14 @@ function assertEnvironment(url: string, args: Args) {
   const host = new URL(url).host
   const local = /^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host)
   if (local) return
-  if (process.env.VERCEL_ENV === 'production' || process.env.MIGRATION_ENVIRONMENT === 'production') throw new Error('CR09 cấm migration Production; dùng CR10 cutover runbook.')
+  const production = process.env.VERCEL_ENV === 'production' || process.env.MIGRATION_ENVIRONMENT === 'production'
+  if (production) {
+    const expectedApproval = process.env.SUPABASE_CUTOVER_APPROVAL_ID?.trim()
+    if (args['allow-production'] !== true || args['confirm-host'] !== host || typeof args['approval-id'] !== 'string' || args['approval-id'] !== expectedApproval || !/^CR10-[A-Za-z0-9._-]{8,80}$/.test(expectedApproval ?? '')) {
+      throw new Error(`Production migration requires --allow-production --confirm-host ${host} --approval-id matching SUPABASE_CUTOVER_APPROVAL_ID.`)
+    }
+    return
+  }
   if (args['allow-remote-preview'] !== true || args['confirm-host'] !== host) throw new Error(`Remote Preview yêu cầu --allow-remote-preview --confirm-host ${host}`)
 }
 async function writeReports(reportPath: string, report: Record<string, unknown>) {
@@ -68,6 +75,13 @@ const url = process.env.SUPABASE_URL?.trim()
 const secretKey = process.env.SUPABASE_SECRET_KEY?.trim()
 if (!url || !secretKey) throw new Error('SUPABASE_URL và SUPABASE_SECRET_KEY là bắt buộc.')
 assertEnvironment(url, args)
+if (process.env.VERCEL_ENV === 'production' || process.env.MIGRATION_ENVIRONMENT === 'production') {
+  const backupPath = required(args, 'final-backup-report')
+  const backup = JSON.parse(await readFile(path.resolve(backupPath), 'utf8')) as { status?: unknown; sourceChecksum?: unknown; warnings?: unknown }
+  if (!['dry-run', 'completed'].includes(String(backup.status ?? '')) || backup.sourceChecksum !== inspection.sourceChecksum || (Array.isArray(backup.warnings) && backup.warnings.length)) {
+    throw new Error('Final backup report is missing, has warnings, or does not match this source checksum.')
+  }
+}
 const admin = createClient(url, secretKey, { auth: { persistSession: false, autoRefreshToken: false } })
 const owner = await admin.from('user_profiles').select('id').eq('email', ownerEmail).maybeSingle()
 if (owner.error) throw owner.error

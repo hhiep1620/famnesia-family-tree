@@ -24,7 +24,10 @@
     "supabase:collaboration:smoke": "node scripts/supabase-collaboration-smoke.mjs",
     "supabase:migrate:drive": "tsx scripts/migrate-drive-bundle.ts",
     "supabase:migration:smoke": "tsx scripts/supabase-migration-smoke.ts",
+    "supabase:rls:remote-smoke": "tsx scripts/supabase-remote-rls-smoke.ts",
+    "supabase:cutover:preflight": "tsx scripts/supabase-cutover-preflight.ts",
     "typecheck:migration": "tsc --ignoreConfig --noEmit --strict --target ES2023 --module NodeNext --moduleResolution NodeNext --types node --skipLibCheck scripts/migrate-drive-bundle.ts scripts/lib/driveMigration.ts",
+    "typecheck:cutover": "tsc --ignoreConfig --noEmit --strict --target ES2023 --module NodeNext --moduleResolution NodeNext --types node --skipLibCheck scripts/supabase-cutover-preflight.ts scripts/supabase-remote-rls-smoke.ts scripts/lib/cutoverSafety.ts",
     "test": "vitest run",
     "typecheck:api": "tsc -p tsconfig.api.json"
   },
