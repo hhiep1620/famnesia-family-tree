@@ -12,8 +12,8 @@
 ## To-do
 
 - [x] Phase 01 — Baseline và repository boundary. Commit `c74a34a`; 84 tests, lint, build pass.
-- [x] Phase 02 — Supabase foundation/local environment. Local CLI `2.114.0`, stack start/status/reset, 88 tests, lint và build pass; commit pending.
-- [ ] Phase 03 — Database schema, constraints và RLS.
+- [x] Phase 02 — Supabase foundation/local environment. Commit `caa7e9b`; local CLI `2.114.0`, stack start/status/reset, 88 tests, lint và build pass.
+- [x] Phase 03 — Database schema, constraints và RLS. Schema reset/db lint, 43 pgTAP policy/constraint tests, generated types; commit pending.
 - [ ] Phase 04 — Supabase Auth migration.
 - [ ] Phase 05 — Supabase read repository.
 - [ ] Phase 06 — Transactional batch write.
@@ -24,7 +24,7 @@
 
 ## Current blocker / next action
 
-- Tiếp theo: `CR-03-DATABASE-SCHEMA-AND-RLS.md` trên stack local đã chạy được.
+- Tiếp theo: `CR-04-AUTH-MIGRATION.md` trên stack local đã chạy được.
 - Remote verification vẫn chờ Supabase project, Project URL, publishable key và secret key; production selectors tiếp tục giữ Drive.
 
 ## Update rule
