@@ -1,6 +1,6 @@
 import type { ActivityEvent, FamilyBackup, FamilyData, WorkspaceInfo, WorkspaceMember, WorkspaceRole } from '../../src/types/family.js'
 import type { CollaborationStatus, DraftReviewRequest, DraftReviewResult, MirrorSyncResult, ReviewDraft, SubmitDraftResult } from '../../src/types/collaboration.js'
-import type { FamilyCommitMeta, FamilyCommitRequest, FamilyRevision } from '../../src/types/familyOperations.js'
+import type { FamilyCommitMeta, FamilyCommitRequest, FamilyCommitStatusResult, FamilyRevision } from '../../src/types/familyOperations.js'
 import type { BackendSelection } from './backendSelectors.js'
 import type { SafeUser } from './types.js'
 
@@ -23,6 +23,7 @@ export interface FamilyRepositoryContract {
   load(workspaceId: string): Promise<{ snapshot: FamilySnapshot; workspace: WorkspaceInfo }>
   save(workspaceId: string, data: FamilyData, expected: FamilyRevision | undefined, mode?: FamilySaveMode): Promise<FamilySnapshot>
   commit(workspaceId: string, request: FamilyCommitRequest): Promise<{ snapshot: FamilySnapshot; commit: FamilyCommitMeta }>
+  commitStatus(workspaceId: string, commitId: string): Promise<FamilyCommitStatusResult>
   listActivity(workspaceId: string): Promise<ActivityEvent[]>
   recordActivity(workspaceId: string, input: ActivityInput): Promise<void>
 }

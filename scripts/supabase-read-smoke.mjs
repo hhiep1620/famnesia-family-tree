@@ -13,6 +13,8 @@ const seedUsers = [
   '10000000-0000-4000-8000-000000000001',
   '10000000-0000-4000-8000-000000000002',
   '10000000-0000-4000-8000-000000000003',
+  '10000000-0000-4000-8000-000000000004',
+  '10000000-0000-4000-8000-000000000005',
 ]
 for (const userId of seedUsers) {
   const result = await admin.auth.admin.updateUserById(userId, { password })
@@ -59,7 +61,8 @@ try {
   assert(family.body.snapshot?.data?.relationships?.length === 3, 'Family fixture should contain three relationships.')
   assert(family.body.snapshot?.data?.media?.[0]?.fileId === 'M01', 'Supabase media must use neutral fileId.')
   assert(!family.body.snapshot?.data?.media?.[0]?.driveFileId, 'Storage object must not be disguised as a Drive file ID.')
-  assert(family.body.workspace?.canEdit === false, 'CR05 must expose the Supabase backend as read-only.')
+  assert(family.body.workspace?.canEdit === true && family.body.workspace?.canCommitDirectly === true, 'CR06 must expose owner metadata commit capability.')
+  assert(family.body.workspace?.canUpload === false, 'CR06 must keep Supabase media upload disabled.')
 
   const activity = await request(owner.token, `/api/workspaces/${familyId}/family?resource=activity`)
   assert(activity.response.ok && activity.body.activity?.length === 2, 'Activity parity fixture should load.')
@@ -74,7 +77,7 @@ try {
     method: 'PUT',
     body: JSON.stringify({ data: family.body.snapshot.data, expectedRevision: family.body.snapshot.revision }),
   })
-  assert(blockedWrite.response.status === 501 && blockedWrite.body.error?.code === 'SUPABASE_WRITE_NOT_ENABLED', 'Supabase family write must be explicitly blocked in CR05.')
+  assert(blockedWrite.response.status === 501 && blockedWrite.body.error?.code === 'SUPABASE_WRITE_NOT_ENABLED', 'Supabase full dataset replacement must remain explicitly blocked in CR06.')
 
   const viewerWorkspaces = await request(viewer.token, '/api/workspaces')
   assert(viewerWorkspaces.response.ok && viewerWorkspaces.body.workspaces?.length === 1, 'Viewer should list only their shared workspace.')
@@ -87,7 +90,7 @@ try {
   const outsiderFamily = await request(outsider.token, `/api/workspaces/${familyId}/family`)
   assert(outsiderFamily.response.status === 404, 'Non-member should not load another family workspace.')
 
-  console.log('Supabase read API smoke passed: owner/viewer/outsider, parity data, empty workspace, placeholder and blocked writes.')
+  console.log('Supabase read API smoke passed: owner/viewer/outsider, parity data, empty workspace, placeholder and metadata-only capabilities.')
 } finally {
   await Promise.all([owner.client.auth.signOut(), viewer.client.auth.signOut(), outsider.client.auth.signOut()])
 }

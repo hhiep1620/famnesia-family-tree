@@ -5,7 +5,8 @@ import type { WorkspaceAccess } from '../api/_server/types'
 function base(overrides: Partial<WorkspaceAccess> = {}): WorkspaceAccess {
   return {
     id: 'workspace-1', name: 'Famnesia', role: 'viewer', canRead: true, canEdit: false, canUpload: false,
-    canManageMembers: false, canCommitDirectly: false, canSubmitDraft: false, canReviewDrafts: false, ownedByMe: false,
+    canManageMembers: false, canCommitDirectly: false, canSubmitDraft: false, canReviewDrafts: false,
+    canReplaceData: false, canCreateBackups: false, ownedByMe: false,
     ...overrides,
   }
 }

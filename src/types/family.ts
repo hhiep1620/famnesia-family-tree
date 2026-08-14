@@ -168,6 +168,8 @@ export interface WorkspaceInfo {
   canCommitDirectly: boolean
   canSubmitDraft: boolean
   canReviewDrafts: boolean
+  canReplaceData?: boolean
+  canCreateBackups?: boolean
   migrationRequired?: boolean
   ownedByMe: boolean
   webViewLink?: string

@@ -20,18 +20,21 @@ function unsupported(operation: string): never {
   throw new AppError(501, 'SUPABASE_WRITE_NOT_ENABLED', `${operation} is read-only until the Supabase transactional write phase is enabled.`)
 }
 
-export function readOnlyWorkspaceInfo(row: WorkspaceRow, role: WorkspaceRole): WorkspaceInfo {
+export function workspaceInfo(row: WorkspaceRow, role: WorkspaceRole): WorkspaceInfo {
+  const canCommitDirectly = role === 'owner' || role === 'editor'
   return {
     id: row.id,
     name: row.name,
     role,
     canRead: true,
-    canEdit: false,
+    canEdit: canCommitDirectly,
     canUpload: false,
     canManageMembers: false,
-    canCommitDirectly: false,
+    canCommitDirectly,
     canSubmitDraft: false,
     canReviewDrafts: false,
+    canReplaceData: false,
+    canCreateBackups: false,
     ownedByMe: role === 'owner',
   }
 }
@@ -42,8 +45,8 @@ function activityMetadata(value: Json): Record<string, unknown> | undefined {
 
 export class SupabaseReadRepository {
   constructor(
-    private readonly client: SupabaseClient<Database>,
-    private readonly userId: string,
+    protected readonly client: SupabaseClient<Database>,
+    protected readonly userId: string,
   ) {}
 
   async listWorkspaces(): Promise<WorkspaceInfo[]> {
@@ -55,11 +58,11 @@ export class SupabaseReadRepository {
     if (membershipResult.error) repositoryError('Workspace memberships', membershipResult.error)
     const roles = new Map(membershipResult.data.map((membership) => [membership.workspace_id, membership.role as WorkspaceRole]))
     return workspaceResult.data
-      .flatMap((workspace) => roles.has(workspace.id) ? [readOnlyWorkspaceInfo(workspace, roles.get(workspace.id)!)] : [])
+      .flatMap((workspace) => roles.has(workspace.id) ? [workspaceInfo(workspace, roles.get(workspace.id)!)] : [])
       .sort((left, right) => Number(right.ownedByMe) - Number(left.ownedByMe) || left.name.localeCompare(right.name) || left.id.localeCompare(right.id))
   }
 
-  private async workspaceRow(workspaceId: string): Promise<{ row: WorkspaceRow; role: WorkspaceRole }> {
+  async getWorkspaceRow(workspaceId: string): Promise<{ row: WorkspaceRow; role: WorkspaceRole }> {
     const [workspaceResult, membershipResult] = await Promise.all([
       this.client.from('workspaces').select('*').eq('id', workspaceId).maybeSingle(),
       this.client.from('workspace_members').select('role').eq('workspace_id', workspaceId).eq('user_id', this.userId).maybeSingle(),
@@ -71,12 +74,12 @@ export class SupabaseReadRepository {
   }
 
   async getWorkspace(workspaceId: string): Promise<WorkspaceInfo> {
-    const { row, role } = await this.workspaceRow(workspaceId)
-    return readOnlyWorkspaceInfo(row, role)
+    const { row, role } = await this.getWorkspaceRow(workspaceId)
+    return workspaceInfo(row, role)
   }
 
   async loadFamily(workspaceId: string) {
-    const { row, role } = await this.workspaceRow(workspaceId)
+    const { row, role } = await this.getWorkspaceRow(workspaceId)
     const [profiles, persons, relationships, media] = await Promise.all([
       this.client.from('family_profiles').select('*').eq('workspace_id', workspaceId),
       this.client.from('persons').select('*').eq('workspace_id', workspaceId),
@@ -90,12 +93,12 @@ export class SupabaseReadRepository {
     const data = mapSupabaseRowsToFamilyData({ workspace: row, profiles: profiles.data, persons: persons.data, relationships: relationships.data, media: media.data })
     return {
       snapshot: { data, revision: { version: String(row.data_version), modifiedTime: row.updated_at } },
-      workspace: readOnlyWorkspaceInfo(row, role),
+      workspace: workspaceInfo(row, role),
     }
   }
 
   async listActivity(workspaceId: string): Promise<ActivityEvent[]> {
-    await this.workspaceRow(workspaceId)
+    await this.getWorkspaceRow(workspaceId)
     const result = await this.client.from('activity_events').select('*').eq('workspace_id', workspaceId).order('occurred_at', { ascending: false }).limit(20)
     if (result.error) repositoryError('Activity', result.error)
     return result.data.map((item) => ({
@@ -113,21 +116,21 @@ export class SupabaseReadRepository {
   }
 
   async listMembers(workspaceId: string): Promise<WorkspaceMember[]> {
-    await this.workspaceRow(workspaceId)
+    await this.getWorkspaceRow(workspaceId)
     const result = await this.client.from('workspace_members').select('id, user_id, role').eq('workspace_id', workspaceId).order('created_at')
     if (result.error) repositoryError('Workspace members', result.error)
     return result.data.map((member) => ({ id: member.user_id, role: member.role as WorkspaceRole, inherited: false }))
   }
 
   async listBackups(workspaceId: string): Promise<FamilyBackup[]> {
-    await this.workspaceRow(workspaceId)
+    await this.getWorkspaceRow(workspaceId)
     const result = await this.client.from('workspace_snapshots').select('id, reason, created_at').eq('workspace_id', workspaceId).order('created_at', { ascending: false }).limit(20)
     if (result.error) repositoryError('Workspace snapshots', result.error)
     return result.data.map((snapshot) => ({ id: snapshot.id, name: snapshot.reason, reason: snapshot.reason, createdTime: snapshot.created_at, modifiedTime: snapshot.created_at }))
   }
 
   async loadBackup(workspaceId: string, backupId: string) {
-    await this.workspaceRow(workspaceId)
+    await this.getWorkspaceRow(workspaceId)
     const result = await this.client.from('workspace_snapshots').select('family_data').eq('workspace_id', workspaceId).eq('id', backupId).maybeSingle()
     if (result.error) repositoryError('Workspace snapshot', result.error)
     if (!result.data) throw new AppError(404, 'BACKUP_NOT_FOUND', 'Family backup was not found.')
@@ -135,7 +138,7 @@ export class SupabaseReadRepository {
   }
 
   async mediaPlaceholder(workspaceId: string, mediaId: string): Promise<Response> {
-    await this.workspaceRow(workspaceId)
+    await this.getWorkspaceRow(workspaceId)
     const result = await this.client.from('media').select('id').eq('workspace_id', workspaceId).eq('legacy_id', mediaId).maybeSingle()
     if (result.error) repositoryError('Media', result.error)
     if (!result.data) throw new AppError(404, 'PHOTO_NOT_FOUND', 'Photo was not found.')
@@ -159,6 +162,7 @@ export function createSupabaseReadRequestBackend(auth: AuthContext, selection: B
       load: (workspaceId) => repository.loadFamily(workspaceId),
       save: async () => unsupported('Family save'),
       commit: async () => unsupported('Family commit'),
+      commitStatus: async () => unsupported('Family commit status'),
       listActivity: (workspaceId) => repository.listActivity(workspaceId),
       recordActivity: async () => unsupported('Activity write'),
     },

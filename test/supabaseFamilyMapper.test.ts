@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mapFamilyDataToSupabaseRows, mapSupabaseRowsToFamilyData, type SupabaseFamilyRows } from '../api/_server/supabase/familyMapper.js'
-import { readOnlyWorkspaceInfo } from '../api/_server/supabase/readBackend.js'
+import { workspaceInfo } from '../api/_server/supabase/readBackend.js'
 import { requireValidFamilyData } from '../src/schema/familyDataSchema.js'
 import type { FamilyData } from '../src/types/family.js'
 
@@ -112,12 +112,16 @@ describe('Supabase FamilyData mapper', () => {
   })
 })
 
-describe('Supabase read-only workspace capabilities', () => {
-  it.each(['owner', 'editor', 'contributor', 'viewer'] as const)('preserves %s role while disabling every write capability in CR05', (role) => {
-    const info = readOnlyWorkspaceInfo(rows.workspace, role)
+describe('Supabase CR06 workspace capabilities', () => {
+  it.each(['owner', 'editor', 'contributor', 'viewer'] as const)('maps transactional commit capabilities for %s', (role) => {
+    const info = workspaceInfo(rows.workspace, role)
+    const canCommit = role === 'owner' || role === 'editor'
     expect(info.role).toBe(role)
     expect(info.canRead).toBe(true)
-    expect([info.canEdit, info.canUpload, info.canManageMembers, info.canCommitDirectly, info.canSubmitDraft, info.canReviewDrafts]).toEqual([false, false, false, false, false, false])
+    expect([
+      info.canEdit, info.canUpload, info.canManageMembers, info.canCommitDirectly,
+      info.canSubmitDraft, info.canReviewDrafts, info.canReplaceData, info.canCreateBackups,
+    ]).toEqual([canCommit, false, false, canCommit, false, false, false, false])
     expect(info.ownedByMe).toBe(role === 'owner')
   })
 })

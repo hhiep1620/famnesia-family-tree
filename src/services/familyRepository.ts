@@ -1,7 +1,7 @@
 import type { ActivityEvent, FamilyBackup, FamilyData, WorkspaceInfo, WorkspaceMember, WorkspaceRole } from '../types/family'
-import type { FamilyCommitRequest, FamilyCommitResult } from '../types/familyOperations'
+import type { FamilyCommitRequest, FamilyCommitResult, FamilyCommitStatusResult } from '../types/familyOperations'
 import type { CollaborationStatus, DraftReviewRequest, DraftReviewResult, MirrorSyncResult, ReviewDraft, SubmitDraftResult } from '../types/collaboration'
-import { apiRequest, jsonBody } from './apiClient'
+import { ApiError, apiRequest, jsonBody } from './apiClient'
 
 export interface FamilyDataRevision { modifiedTime?: string; version?: string }
 export interface FamilyDataSnapshot { data: FamilyData; revision: FamilyDataRevision }
@@ -13,6 +13,7 @@ export interface FamilyRepositoryContract {
   load(): Promise<FamilyDataSnapshot>
   save(data: FamilyData, expectedRevision?: FamilyDataRevision, mode?: 'save' | 'replace' | 'restore' | 'merge'): Promise<FamilyDataSnapshot>
   commit(request: FamilyCommitRequest): Promise<FamilyCommitResult>
+  commitStatus(commitId: string): Promise<FamilyCommitStatusResult>
   submitDraft(request: FamilyCommitRequest): Promise<SubmitDraftResult>
   listDrafts(): Promise<ReviewDraft[]>
   collaborationStatus(): Promise<CollaborationStatus>
@@ -33,6 +34,13 @@ export interface FamilyRepositoryContract {
 
 export class FamilyDataConflictError extends Error {
   constructor() { super('Dữ liệu gia đình đã được thay đổi ở phiên khác. Hãy tải lại bản mới nhất trước khi tiếp tục.'); this.name = 'FamilyDataConflictError' }
+}
+
+export class CommitOutcomeUnknownError extends Error {
+  constructor() {
+    super('Chưa xác định được lần lưu trước đã hoàn tất hay chưa. Hãy thử Lưu tất cả lại trước khi chỉnh sửa thêm.')
+    this.name = 'CommitOutcomeUnknownError'
+  }
 }
 
 const workspacePath = (workspaceId: string) => `/api/workspaces/${encodeURIComponent(workspaceId)}`
@@ -78,7 +86,23 @@ export class FamilyRepository implements FamilyRepositoryContract {
   }
 
   async commit(request: FamilyCommitRequest): Promise<FamilyCommitResult> {
-    return apiRequest<FamilyCommitResult>(`${workspacePath(this.workspace.id)}/family/commit`, { method: 'POST', ...jsonBody(request) })
+    try {
+      return await apiRequest<FamilyCommitResult>(`${workspacePath(this.workspace.id)}/family?operation=commit`, { method: 'POST', ...jsonBody(request) })
+    } catch (caught) {
+      if (caught instanceof ApiError) throw caught
+      let status: FamilyCommitStatusResult
+      try {
+        status = await this.commitStatus(request.commitId)
+      } catch {
+        throw new CommitOutcomeUnknownError()
+      }
+      if (status.status === 'applied' && status.result) return status.result
+      throw caught
+    }
+  }
+
+  async commitStatus(commitId: string): Promise<FamilyCommitStatusResult> {
+    return apiRequest<FamilyCommitStatusResult>(`${workspacePath(this.workspace.id)}/family?resource=commit-status&commitId=${encodeURIComponent(commitId)}`)
   }
 
   async submitDraft(request: FamilyCommitRequest): Promise<SubmitDraftResult> {

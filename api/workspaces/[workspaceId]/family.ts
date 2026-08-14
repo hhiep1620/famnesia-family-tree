@@ -54,6 +54,11 @@ export default { fetch(request: Request) { return withErrors(async () => {
   if (request.method === 'GET') {
     const resource = new URL(request.url).searchParams.get('resource')
     if (resource === 'activity') return json({ activity: await backend.family.listActivity(workspaceId) })
+    if (resource === 'commit-status') {
+      const commitId = new URL(request.url).searchParams.get('commitId')
+      if (!validCommitId(commitId)) throw new AppError(400, 'FAMILY_COMMIT_ID_INVALID', 'A valid commitId is required.')
+      return json(await backend.family.commitStatus(workspaceId, commitId))
+    }
     if (resource === 'drafts') return json({ drafts: await backend.drafts.list(workspaceId) })
     if (resource === 'collaboration-status') return json({ status: await backend.drafts.status(workspaceId) })
     return json(await backend.family.load(workspaceId))

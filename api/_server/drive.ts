@@ -149,6 +149,7 @@ function accessOf(root: DriveFile): WorkspaceAccess {
     canEdit: role !== 'viewer', canUpload: role !== 'viewer', canManageMembers: role === 'owner',
     canCommitDirectly: role === 'owner' || (!approval && role === 'contributor'),
     canSubmitDraft: approval && role === 'contributor', canReviewDrafts: approval && role === 'owner',
+    canReplaceData: role === 'owner', canCreateBackups: role === 'owner',
     ownedByMe: Boolean(root.ownedByMe), webViewLink: root.webViewLink,
   }
 }

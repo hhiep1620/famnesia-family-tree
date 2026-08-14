@@ -1,0 +1,167 @@
+import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
+import { compactFamilyOperations } from '../../../src/draft/familyOperations.js'
+import { requireValidFamilyData } from '../../../src/schema/familyDataSchema.js'
+import type { Database, Json } from '../../../src/types/database.generated.js'
+import type { FamilyCommitMeta, FamilyCommitRequest, FamilyCommitStatusResult, FamilyOperationConflict } from '../../../src/types/familyOperations.js'
+import type { AuthContext } from '../auth.js'
+import type { RequestBackend } from '../backendContracts.js'
+import type { BackendSelection } from '../backendSelectors.js'
+import { AppError } from '../http.js'
+import { createSupabaseUserClient } from './serverClient.js'
+import { SupabaseReadRepository } from './readBackend.js'
+
+interface RpcCommitPayload {
+  status: 'applied' | 'conflict' | 'missing'
+  idempotent?: boolean
+  autoMerged?: boolean
+  dataVersion?: number
+  resultDataVersion?: number
+  appliedCount?: number
+  counts?: Record<string, number>
+  snapshot?: unknown
+  conflicts?: FamilyOperationConflict[]
+}
+
+const COMMIT_COUNT_LABELS: Record<string, string> = {
+  'profile.create': 'profileCreated', 'profile.update': 'profileUpdated', 'subject.set': 'subjectSet',
+  'person.create': 'personCreated', 'person.update': 'personUpdated', 'person.delete': 'personDeleted',
+  'relationship.create': 'relationshipCreated', 'relationship.update': 'relationshipUpdated', 'relationship.delete': 'relationshipDeleted',
+  'media.attach': 'mediaAttached', 'media.primary.set': 'mediaPrimarySet', 'media.caption.update': 'mediaCaptionUpdated', 'media.delete': 'mediaDeleted',
+  'settings.duplicate_suppression.add': 'duplicateSuppressionAdded',
+}
+
+function payloadRecord(value: Json | null): RpcCommitPayload {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new AppError(502, 'SUPABASE_COMMIT_RESPONSE_INVALID', 'Supabase returned an invalid family commit response.')
+  return value as unknown as RpcCommitPayload
+}
+
+function commitError(error: PostgrestError): never {
+  const message = error.message || 'Supabase family commit failed.'
+  if (error.code === '22023' && message.includes('FAMILY_COMMIT_ID_REUSED')) {
+    throw new AppError(409, 'FAMILY_COMMIT_ID_REUSED', 'This commit ID was already used for a different operation batch.')
+  }
+  if (error.code === '42501') {
+    if (message.includes('FAMILY_COMMIT_FORBIDDEN')) throw new AppError(403, 'FAMILY_COMMIT_FORBIDDEN', 'Only workspace owners and editors may commit canonical family data.')
+    throw new AppError(404, 'WORKSPACE_NOT_FOUND', 'Famnesia workspace was not found or is not shared with this user.')
+  }
+  if (['22023', '23503', '23505', '23514'].includes(error.code)) {
+    throw new AppError(422, 'FAMILY_COMMIT_INVALID', 'The combined changes failed family validation.', { databaseCode: error.code, reason: message })
+  }
+  console.error({ name: 'SupabaseCommitError', code: error.code, message })
+  throw new AppError(502, 'SUPABASE_COMMIT_FAILED', 'Family changes could not be committed to Supabase.')
+}
+
+function normalizedCounts(counts: Record<string, number> | undefined): Record<string, number> {
+  return Object.fromEntries(Object.entries(counts ?? {}).map(([key, count]) => [COMMIT_COUNT_LABELS[key] ?? key, count]))
+}
+
+function commitMeta(commitId: string, payload: RpcCommitPayload): FamilyCommitMeta {
+  return {
+    commitId,
+    operationCount: payload.appliedCount ?? 0,
+    counts: normalizedCounts(payload.counts),
+    idempotent: payload.idempotent,
+    autoMerged: payload.autoMerged,
+    resultVersion: payload.resultDataVersion ?? payload.dataVersion,
+  }
+}
+
+function requiredBaseVersion(request: FamilyCommitRequest): number {
+  const raw = request.baseRevision?.version
+  if (!raw || !/^\d+$/.test(raw)) throw new AppError(422, 'FAMILY_BASE_VERSION_REQUIRED', 'Supabase commits require a numeric base data version.')
+  const version = Number(raw)
+  if (!Number.isSafeInteger(version) || version < 0) throw new AppError(422, 'FAMILY_BASE_VERSION_REQUIRED', 'Supabase commits require a valid base data version.')
+  return version
+}
+
+export class SupabaseWriteRepository extends SupabaseReadRepository {
+  constructor(client: SupabaseClient<Database>, userId: string) { super(client, userId) }
+
+  async commitFamily(workspaceId: string, request: FamilyCommitRequest) {
+    const operations = compactFamilyOperations(request.operations)
+    if (!operations.length) throw new AppError(422, 'FAMILY_COMMIT_INVALID', 'A family commit must contain at least one effective operation.')
+    const result = await this.client.rpc('commit_family_operations', {
+      p_workspace_id: workspaceId,
+      p_commit_id: request.commitId,
+      p_base_data_version: requiredBaseVersion(request),
+      p_operations: operations as unknown as Json,
+      p_client_created_at: request.clientCreatedAt,
+    })
+    if (result.error) commitError(result.error)
+    const payload = payloadRecord(result.data)
+    const snapshotData = requireValidFamilyData(payload.snapshot)
+    const revision = { version: String(payload.dataVersion), modifiedTime: snapshotData.updatedAt }
+    if (payload.status === 'conflict') {
+      throw new AppError(409, 'FAMILY_COMMIT_CONFLICT', 'Some changes conflict with the latest Supabase version.', {
+        conflicts: payload.conflicts ?? [],
+        latestSnapshot: { data: snapshotData, revision },
+      })
+    }
+    if (payload.status !== 'applied') throw new AppError(502, 'SUPABASE_COMMIT_RESPONSE_INVALID', 'Supabase did not return an applied family commit.')
+    return { snapshot: { data: snapshotData, revision }, commit: commitMeta(request.commitId, payload) }
+  }
+
+  async commitStatus(workspaceId: string, commitId: string): Promise<FamilyCommitStatusResult> {
+    const result = await this.client.rpc('get_family_commit_status', { p_workspace_id: workspaceId, p_commit_id: commitId })
+    if (result.error) commitError(result.error)
+    const payload = payloadRecord(result.data)
+    if (payload.status === 'missing') return { status: 'missing' }
+    if (payload.status !== 'applied' || !payload.snapshot || payload.dataVersion === undefined) return { status: payload.status }
+    const data = requireValidFamilyData(payload.snapshot)
+    return {
+      status: 'applied',
+      result: {
+        snapshot: { data, revision: { version: String(payload.dataVersion), modifiedTime: data.updatedAt } },
+        commit: commitMeta(commitId, payload),
+      },
+    }
+  }
+}
+
+export function createSupabaseWriteRequestBackend(auth: AuthContext, selection: BackendSelection): RequestBackend {
+  const repository = new SupabaseWriteRepository(createSupabaseUserClient(auth.accessToken), auth.user.id)
+  const workspace = (workspaceId: string) => repository.getWorkspace(workspaceId)
+  const unsupported = (operation: string): never => { throw new AppError(501, 'SUPABASE_WRITE_NOT_ENABLED', `${operation} is not enabled in the Supabase metadata-write phase.`) }
+  return {
+    selection,
+    user: auth.user,
+    workspaces: {
+      list: () => repository.listWorkspaces(),
+      connect: workspace,
+      get: workspace,
+    },
+    family: {
+      load: (workspaceId) => repository.loadFamily(workspaceId),
+      save: async () => unsupported('Full dataset replacement'),
+      commit: (workspaceId, request) => repository.commitFamily(workspaceId, request),
+      commitStatus: (workspaceId, commitId) => repository.commitStatus(workspaceId, commitId),
+      listActivity: (workspaceId) => repository.listActivity(workspaceId),
+      recordActivity: async () => unsupported('Standalone activity write'),
+    },
+    media: {
+      upload: async () => unsupported('Media upload'),
+      read: (workspaceId, mediaId) => repository.mediaPlaceholder(workspaceId, mediaId),
+      delete: async () => unsupported('Media delete'),
+    },
+    members: {
+      list: (workspaceId) => repository.listMembers(workspaceId),
+      add: async () => unsupported('Member invitation'),
+      update: async () => unsupported('Member role update'),
+      remove: async () => unsupported('Member removal'),
+    },
+    drafts: {
+      submit: async () => unsupported('Draft submission'),
+      list: async (workspaceId) => { await workspace(workspaceId); return [] },
+      status: async (workspaceId) => ({ enabled: false, workspaceRole: (await workspace(workspaceId)).role, pendingDraftCount: 0, mirrorGeneration: 0 }),
+      review: async () => unsupported('Draft review'),
+      syncMirror: async () => unsupported('Drive mirror sync'),
+      workspaceInfo: workspace,
+      markCanonicalChanged: async (workspaceId) => Number((await repository.getWorkspaceRow(workspaceId)).row.data_version),
+    },
+    backups: {
+      create: async () => unsupported('Backup creation'),
+      list: (workspaceId) => repository.listBackups(workspaceId),
+      load: (workspaceId, backupId) => repository.loadBackup(workspaceId, backupId),
+    },
+  }
+}

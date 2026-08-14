@@ -9,7 +9,7 @@ import { duplicatePairId } from '../integrity/duplicateDetection'
 import { mergePeople } from '../integrity/mergePerson'
 import { CURRENT_SCHEMA_VERSION, requireValidFamilyData } from '../schema/familyDataSchema'
 import { ApiError } from '../services/apiClient'
-import { FamilyRepository, type FamilyDataRevision } from '../services/familyRepository'
+import { CommitOutcomeUnknownError, FamilyRepository, type FamilyDataRevision } from '../services/familyRepository'
 import { mediaReferenceId } from '../services/mediaReference'
 import { sharedWorkspaceForEmptyOwner } from '../services/workspaceSelection'
 import type { ActivityEvent, FamilyBackup, FamilyData, FamilyProfile, FriendlyRelationship, Person, PersonDraft, PersonMedia, Relationship, SaveStatus, SpouseStatus, WorkspaceInfo, WorkspaceMember } from '../types/family'
@@ -58,6 +58,7 @@ export function useFamilyData(userId = 'mock-user') {
   const pendingRef = useRef<FamilyOperation[]>([])
   const draftReady = useRef(false)
   const commitId = useRef<string | undefined>(undefined)
+  const commitOutcomeUnknown = useRef(false)
   const submittedDraftRevision = useRef<number | undefined>(undefined)
   const submittedOperationIds = useRef<Set<string>>(new Set())
   const collaborationRefreshing = useRef(false)
@@ -95,7 +96,7 @@ export function useFamilyData(userId = 'mock-user') {
 
   const applyCommittedSnapshot = useCallback((next: FamilyData, nextRevision?: FamilyDataRevision) => {
     setSavedData(next); setFamilyData(next); revision.current = nextRevision; setOperations([]); selectAvailableProfile(next)
-    setSaveStatus('saved'); setConflictDetails(undefined); commitId.current = undefined
+    setSaveStatus('saved'); setConflictDetails(undefined); commitId.current = undefined; commitOutcomeUnknown.current = false
   }, [selectAvailableProfile, setOperations])
 
   const restoreDraft = useCallback(async (next: FamilyData, nextRevision: FamilyDataRevision | undefined, workspaceId: string) => {
@@ -144,7 +145,7 @@ export function useFamilyData(userId = 'mock-user') {
           } else {
             setSavedData(snapshot.data); revision.current = snapshot.revision
             setFamilyData(requireValidFamilyData(replayFamilyOperations(snapshot.data, pendingRef.current)))
-            setSaveStatus('unsaved'); setNotice('Đã cập nhật Draft trên dữ liệu Drive mới nhất.')
+            setSaveStatus('unsaved'); setNotice('Đã cập nhật Draft trên dữ liệu mới nhất.')
           }
         } else await restoreDraft(snapshot.data, snapshot.revision, connected.workspace.id)
         setActivity(await connected.listActivity().catch(() => []))
@@ -277,6 +278,7 @@ export function useFamilyData(userId = 'mock-user') {
 
   const stageOperations = useCallback((incoming: FamilyOperation[]) => {
     if (!useMockData && !workspace?.canEdit) throw new Error('Bạn chỉ có quyền xem workspace này.')
+    if (commitOutcomeUnknown.current) throw new Error('Hãy thử Lưu tất cả lại để xác minh lần lưu trước trước khi chỉnh sửa thêm.')
     const operations = compactFamilyOperations([...pendingRef.current, ...incoming])
     const next = requireValidFamilyData(replayFamilyOperations(savedData, operations))
     setFamilyData(next); setOperations(operations); setSaveStatus(operations.length ? (navigator.onLine ? 'unsaved' : 'offline') : 'saved')
@@ -294,7 +296,7 @@ export function useFamilyData(userId = 'mock-user') {
     if (!files.length) return []
     if (!useMockData && typeof navigator !== 'undefined' && !navigator.onLine) throw new Error('Không thể tải ảnh khi đang ngoại tuyến. Các chỉnh sửa khác vẫn có thể lưu vào Draft.')
     if (useMockData) return files.map((_, index) => `mock-${Date.now()}-${index}`)
-    if (!repository.current) throw new Error('Workspace Google Drive chưa sẵn sàng.')
+    if (!repository.current) throw new Error('Workspace chưa sẵn sàng.')
     const optimized = await Promise.all(files.map(optimizePhoto))
     const uploaded: string[] = []
     try { for (const photo of optimized) uploaded.push(await repository.current.uploadPhoto(photo, profileId, personId)); return uploaded }
@@ -421,7 +423,7 @@ export function useFamilyData(userId = 'mock-user') {
       if (useMockData) {
         const saved = requireValidFamilyData({ ...replayFamilyOperations(mockData.current, operations), updatedAt: new Date().toISOString() }); mockData.current = cloneData(saved); applyCommittedSnapshot(saved)
       } else {
-        if (!repository.current) throw new Error('Workspace Google Drive chưa sẵn sàng.')
+        if (!repository.current) throw new Error('Workspace chưa sẵn sàng.')
         commitId.current ??= `commit_${crypto.randomUUID()}`
         const request = { commitId: commitId.current, baseRevision: revision.current, operations, clientCreatedAt: new Date().toISOString() }
         if (submitting) {
@@ -439,12 +441,14 @@ export function useFamilyData(userId = 'mock-user') {
       setNotice(`Đã lưu ${operations.length} thay đổi.`); return true
     } catch (caught) {
       console.error(caught)
-      if (caught instanceof ApiError && caught.code === 'FAMILY_COMMIT_CONFLICT') { setConflictDetails(caught.details as FamilyCommitConflictDetails); setSaveStatus('conflict'); setError('Có thay đổi trùng nhau cần bạn chọn phiên bản.'); return false }
+      if (caught instanceof ApiError && caught.code === 'FAMILY_COMMIT_CONFLICT') { commitOutcomeUnknown.current = false; setConflictDetails(caught.details as FamilyCommitConflictDetails); setSaveStatus('conflict'); setError('Có thay đổi trùng nhau cần bạn chọn phiên bản.'); return false }
+      commitOutcomeUnknown.current = caught instanceof CommitOutcomeUnknownError
       setSaveStatus('failed'); setError(caught instanceof Error ? `${caught.message} Draft vẫn an toàn.` : 'Lưu thất bại — Draft vẫn an toàn.'); return false
     } finally { setBusy(undefined) }
   }, [activity, applyCommittedSnapshot, useMockData, userId, workspace?.canSubmitDraft, workspace?.id])
 
   const discardDraft = useCallback(async () => {
+    if (commitOutcomeUnknown.current) { setError('Chưa thể hủy Draft khi kết quả lần lưu trước chưa được xác minh. Hãy thử Lưu tất cả lại.'); return }
     const photoIds = pendingRef.current.map(operationReferencesNewPhoto).filter((value): value is string => Boolean(value))
     setFamilyData(savedData); setOperations([]); selectAvailableProfile(savedData); setConflictDetails(undefined); setSaveStatus('saved'); commitId.current = undefined
     if (!useMockData) await Promise.allSettled(photoIds.map((photoId) => repository.current?.deletePhoto(photoId)))
@@ -487,7 +491,7 @@ export function useFamilyData(userId = 'mock-user') {
   const requireNoDraft = useCallback(() => { if (pendingRef.current.length) throw new Error('Hãy Lưu tất cả hoặc Hủy Draft trước khi Import, Restore hoặc Gộp trùng lặp.') }, [])
   const saveFullData = useCallback(async (next: FamilyData, mode: 'replace' | 'restore' | 'merge') => {
     if (useMockData) { const saved = requireValidFamilyData({ ...next, updatedAt: new Date().toISOString() }); mockData.current = cloneData(saved); applyCommittedSnapshot(saved); return }
-    if (!repository.current) throw new Error('Workspace Google Drive chưa sẵn sàng.'); const snapshot = await repository.current.save(next, revision.current, mode); applyCommittedSnapshot(snapshot.data, snapshot.revision); setActivity(await repository.current.listActivity().catch(() => []))
+    if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); const snapshot = await repository.current.save(next, revision.current, mode); applyCommittedSnapshot(snapshot.data, snapshot.revision); setActivity(await repository.current.listActivity().catch(() => []))
   }, [applyCommittedSnapshot, useMockData])
 
   const backupNow = useCallback(async (reason = 'manual'): Promise<FamilyBackup> => {

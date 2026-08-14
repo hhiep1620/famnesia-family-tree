@@ -38,7 +38,7 @@ describe('backend selection and repository boundary', () => {
     } satisfies AuthContext
     const backend = createDriveRequestBackend(auth, driveSelection)
     expect(Object.keys(backend.workspaces).sort()).toEqual(['connect', 'get', 'list'])
-    expect(Object.keys(backend.family).sort()).toEqual(['commit', 'listActivity', 'load', 'recordActivity', 'save'])
+    expect(Object.keys(backend.family).sort()).toEqual(['commit', 'commitStatus', 'listActivity', 'load', 'recordActivity', 'save'])
     expect(Object.keys(backend.media).sort()).toEqual(['delete', 'read', 'upload'])
     expect(Object.keys(backend.members).sort()).toEqual(['add', 'list', 'remove', 'update'])
     expect(Object.keys(backend.drafts).sort()).toEqual(['list', 'markCanonicalChanged', 'review', 'status', 'submit', 'syncMirror', 'workspaceInfo'])

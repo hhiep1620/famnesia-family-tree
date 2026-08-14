@@ -8,7 +8,9 @@ insert into auth.users (
 values
   ('00000000-0000-0000-0000-000000000000', '10000000-0000-4000-8000-000000000001', 'authenticated', 'authenticated', 'local-owner@example.test', extensions.crypt('FamnesiaLocal123!', extensions.gen_salt('bf')), now(), '', '', '', '', '{"provider":"email","providers":["email"]}', '{"name":"Local Owner"}', now(), now()),
   ('00000000-0000-0000-0000-000000000000', '10000000-0000-4000-8000-000000000002', 'authenticated', 'authenticated', 'local-viewer@example.test', extensions.crypt('FamnesiaLocal123!', extensions.gen_salt('bf')), now(), '', '', '', '', '{"provider":"email","providers":["email"]}', '{"name":"Local Viewer"}', now(), now()),
-  ('00000000-0000-0000-0000-000000000000', '10000000-0000-4000-8000-000000000003', 'authenticated', 'authenticated', 'local-outsider@example.test', extensions.crypt('FamnesiaLocal123!', extensions.gen_salt('bf')), now(), '', '', '', '', '{"provider":"email","providers":["email"]}', '{"name":"Local Outsider"}', now(), now());
+  ('00000000-0000-0000-0000-000000000000', '10000000-0000-4000-8000-000000000003', 'authenticated', 'authenticated', 'local-outsider@example.test', extensions.crypt('FamnesiaLocal123!', extensions.gen_salt('bf')), now(), '', '', '', '', '{"provider":"email","providers":["email"]}', '{"name":"Local Outsider"}', now(), now()),
+  ('00000000-0000-0000-0000-000000000000', '10000000-0000-4000-8000-000000000004', 'authenticated', 'authenticated', 'local-editor@example.test', extensions.crypt('FamnesiaLocal123!', extensions.gen_salt('bf')), now(), '', '', '', '', '{"provider":"email","providers":["email"]}', '{"name":"Local Editor"}', now(), now()),
+  ('00000000-0000-0000-0000-000000000000', '10000000-0000-4000-8000-000000000005', 'authenticated', 'authenticated', 'local-contributor@example.test', extensions.crypt('FamnesiaLocal123!', extensions.gen_salt('bf')), now(), '', '', '', '', '{"provider":"email","providers":["email"]}', '{"name":"Local Contributor"}', now(), now());
 
 insert into auth.identities (provider_id, user_id, identity_data, provider, created_at, updated_at)
 select id::text, id, jsonb_build_object('sub', id::text, 'email', email, 'email_verified', true), 'email', now(), now()
@@ -16,7 +18,9 @@ from auth.users
 where id in (
   '10000000-0000-4000-8000-000000000001',
   '10000000-0000-4000-8000-000000000002',
-  '10000000-0000-4000-8000-000000000003'
+  '10000000-0000-4000-8000-000000000003',
+  '10000000-0000-4000-8000-000000000004',
+  '10000000-0000-4000-8000-000000000005'
 );
 
 insert into public.workspaces (
@@ -28,7 +32,9 @@ values
 
 insert into public.workspace_members (workspace_id, user_id, role, invited_by_user_id)
 values
-  ('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000002', 'viewer', '10000000-0000-4000-8000-000000000001');
+  ('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000002', 'viewer', '10000000-0000-4000-8000-000000000001'),
+  ('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000004', 'editor', '10000000-0000-4000-8000-000000000001'),
+  ('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000005', 'contributor', '10000000-0000-4000-8000-000000000001');
 
 insert into public.family_profiles (
   id, workspace_id, legacy_id, name, lineage_surname, description, requires_secret, is_active

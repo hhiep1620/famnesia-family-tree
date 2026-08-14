@@ -52,6 +52,7 @@ export function createDriveRequestBackend(auth: AuthContext, selection: BackendS
       },
       save: (workspaceId, data, expected, mode) => saveFamily(token, workspaceId, data, expected, mode, { email: user.email, name: user.name }),
       commit: (workspaceId, request) => commitFamily(token, workspaceId, request, { email: user.email, name: user.name }),
+      commitStatus: async () => ({ status: 'missing' }),
       listActivity: (workspaceId) => listActivity(token, workspaceId),
       recordActivity: (workspaceId, input) => appendActivity(token, workspaceId, input),
     },

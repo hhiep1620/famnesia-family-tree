@@ -94,6 +94,7 @@ export type Database = {
         Row: {
           actor_user_id: string
           applied_at: string | null
+          auto_merged: boolean
           base_data_version: number | null
           client_created_at: string | null
           commit_id: string
@@ -102,6 +103,7 @@ export type Database = {
           id: string
           operation_count: number
           operation_counts: Json
+          request_checksum: string
           result_data_version: number | null
           status: Database["public"]["Enums"]["commit_status"]
           workspace_id: string
@@ -109,6 +111,7 @@ export type Database = {
         Insert: {
           actor_user_id: string
           applied_at?: string | null
+          auto_merged?: boolean
           base_data_version?: number | null
           client_created_at?: string | null
           commit_id: string
@@ -117,6 +120,7 @@ export type Database = {
           id?: string
           operation_count?: number
           operation_counts?: Json
+          request_checksum?: string
           result_data_version?: number | null
           status?: Database["public"]["Enums"]["commit_status"]
           workspace_id: string
@@ -124,6 +128,7 @@ export type Database = {
         Update: {
           actor_user_id?: string
           applied_at?: string | null
+          auto_merged?: boolean
           base_data_version?: number | null
           client_created_at?: string | null
           commit_id?: string
@@ -132,6 +137,7 @@ export type Database = {
           id?: string
           operation_count?: number
           operation_counts?: Json
+          request_checksum?: string
           result_data_version?: number | null
           status?: Database["public"]["Enums"]["commit_status"]
           workspace_id?: string
@@ -843,6 +849,30 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _family_apply_operations: {
+        Args: { data: Json; operations: Json }
+        Returns: Json
+      }
+      _family_filter_person_references: {
+        Args: { data: Json; person_legacy_id: string }
+        Returns: Json
+      }
+      _family_find_entity: {
+        Args: { array_name: string; data: Json; legacy_id: string }
+        Returns: Json
+      }
+      _family_remove_entity: {
+        Args: { array_name: string; data: Json; legacy_id: string }
+        Returns: Json
+      }
+      _family_snapshot_json: {
+        Args: { target_workspace_id: string }
+        Returns: Json
+      }
+      _replace_family_data: {
+        Args: { family_data: Json; target_workspace_id: string }
+        Returns: undefined
+      }
       can_commit_workspace: {
         Args: { target_workspace_id: string }
         Returns: boolean
@@ -863,6 +893,20 @@ export type Database = {
       can_review_workspace: {
         Args: { target_workspace_id: string }
         Returns: boolean
+      }
+      commit_family_operations: {
+        Args: {
+          p_base_data_version: number
+          p_client_created_at: string
+          p_commit_id: string
+          p_operations: Json
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      get_family_commit_status: {
+        Args: { p_commit_id: string; p_workspace_id: string }
+        Returns: Json
       }
       is_workspace_member: {
         Args: { target_workspace_id: string }
