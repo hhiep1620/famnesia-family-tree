@@ -621,7 +621,10 @@ export type Database = {
           created_at: string
           dry_run: boolean
           id: string
+          manifest_checksum: string | null
           report: Json
+          resume_cursor: number
+          source_checksum: string | null
           source_revision: string | null
           source_type: string
           started_at: string | null
@@ -635,7 +638,10 @@ export type Database = {
           created_at?: string
           dry_run?: boolean
           id?: string
+          manifest_checksum?: string | null
           report?: Json
+          resume_cursor?: number
+          source_checksum?: string | null
           source_revision?: string | null
           source_type?: string
           started_at?: string | null
@@ -649,7 +655,10 @@ export type Database = {
           created_at?: string
           dry_run?: boolean
           id?: string
+          manifest_checksum?: string | null
           report?: Json
+          resume_cursor?: number
+          source_checksum?: string | null
           source_revision?: string | null
           source_type?: string
           started_at?: string | null
@@ -1003,6 +1012,7 @@ export type Database = {
       }
       workspaces: {
         Row: {
+          canonical_ready: boolean
           created_at: string
           data_version: number
           duplicate_suppressions: Json
@@ -1016,6 +1026,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          canonical_ready?: boolean
           created_at?: string
           data_version?: number
           duplicate_suppressions?: Json
@@ -1029,6 +1040,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          canonical_ready?: boolean
           created_at?: string
           data_version?: number
           duplicate_suppressions?: Json
@@ -1144,6 +1156,11 @@ export type Database = {
         Args: { p_upload_id: string; p_workspace_id: string }
         Returns: Json
       }
+      drive_migration_snapshot: { Args: { p_run_id: string }; Returns: Json }
+      fail_drive_bundle_migration: {
+        Args: { p_report: Json; p_resume_cursor: number; p_run_id: string }
+        Returns: undefined
+      }
       finalize_family_draft_review: {
         Args: {
           p_decision: string
@@ -1168,6 +1185,15 @@ export type Database = {
         Args: { target_workspace_id: string }
         Returns: boolean
       }
+      load_drive_bundle_migration: {
+        Args: {
+          p_family_data: Json
+          p_media_metadata: Json
+          p_report: Json
+          p_run_id: string
+        }
+        Returns: Json
+      }
       mark_family_draft_needs_changes: {
         Args: {
           p_draft_id: string
@@ -1190,6 +1216,10 @@ export type Database = {
         }
         Returns: Json
       }
+      publish_drive_bundle_migration: {
+        Args: { p_report: Json; p_run_id: string }
+        Returns: Json
+      }
       replace_family_dataset: {
         Args: {
           p_expected_data_version: number
@@ -1202,6 +1232,23 @@ export type Database = {
       revoke_workspace_invitation: {
         Args: { p_invitation_id: string; p_workspace_id: string }
         Returns: undefined
+      }
+      rollback_incomplete_drive_migration: {
+        Args: { p_run_id: string }
+        Returns: Json
+      }
+      start_drive_bundle_migration: {
+        Args: {
+          p_legacy_drive_folder_id: string
+          p_manifest_checksum: string
+          p_name: string
+          p_owner_user_id: string
+          p_run_id: string
+          p_source_checksum: string
+          p_source_revision: string
+          p_workspace_id: string
+        }
+        Returns: Json
       }
       submit_family_draft: {
         Args: {

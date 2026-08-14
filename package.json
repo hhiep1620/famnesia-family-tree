@@ -22,6 +22,9 @@
     "supabase:write:smoke": "node scripts/supabase-write-smoke.mjs",
     "supabase:media:smoke": "node scripts/supabase-media-smoke.mjs",
     "supabase:collaboration:smoke": "node scripts/supabase-collaboration-smoke.mjs",
+    "supabase:migrate:drive": "tsx scripts/migrate-drive-bundle.ts",
+    "supabase:migration:smoke": "tsx scripts/supabase-migration-smoke.ts",
+    "typecheck:migration": "tsc --ignoreConfig --noEmit --strict --target ES2023 --module NodeNext --moduleResolution NodeNext --types node --skipLibCheck scripts/migrate-drive-bundle.ts scripts/lib/driveMigration.ts",
     "test": "vitest run",
     "typecheck:api": "tsc -p tsconfig.api.json"
   },
@@ -47,6 +50,7 @@
     "oxlint": "^1.75.0",
     "supabase": "2.114.0",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.12",
     "typescript": "~6.0.2",
     "vite": "^8.2.0",
     "vitest": "^4.1.10"
