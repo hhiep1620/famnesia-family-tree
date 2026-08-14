@@ -15,7 +15,7 @@
 - [x] Phase 02 — Supabase foundation/local environment. Commit `caa7e9b`; local CLI `2.114.0`, stack start/status/reset, 88 tests, lint và build pass.
 - [x] Phase 03 — Database schema, constraints và RLS. Commit `2ce26e7`; schema reset/db lint, 43 pgTAP policy/constraint tests và generated types pass.
 - [x] Phase 04 — Supabase Auth migration. Commit `c82ada6`; 96 tests, local email auth smoke, schema reset/db lint và build pass.
-- [x] Phase 05 — Supabase read repository. 103 tests, owner/viewer/outsider API smoke, browser smoke, schema reset/db lint và build pass; commit đang được chốt trong phase này.
+- [x] Phase 05 — Supabase read repository. Commit `6014246`; 103 tests, owner/viewer/outsider API smoke, browser smoke, schema reset/db lint và build pass.
 - [ ] Phase 06 — Transactional batch write.
 - [ ] Phase 07 — Private Storage/media lifecycle.
 - [ ] Phase 08 — Shared workspace và approval workflow.
@@ -24,7 +24,7 @@
 
 ## Current blocker / next action
 
-- Tiếp theo: `CR-06-BATCH-WRITE.md` trên stack local đã chạy được.
+- Điểm dừng theo yêu cầu: Phase 05 đã hoàn tất; chưa bắt đầu Phase 06.
 - Google provider/redirect trên remote Supabase Preview vẫn chờ Project URL/key và cấu hình Dashboard thực tế.
 - Remote verification vẫn chờ Supabase project, Project URL, publishable key và secret key; production selectors tiếp tục giữ Drive.
 
