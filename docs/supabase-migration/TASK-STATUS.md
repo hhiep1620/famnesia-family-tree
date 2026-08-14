@@ -20,11 +20,11 @@
 - [x] Phase 07 — Private Storage/media lifecycle. Commit `ecdddf6`; 111 app tests, 108 pgTAP tests, DB reset/lint, read/write/media API smoke, browser thumbnail/original smoke, lint và build pass.
 - [x] Phase 08 — Shared workspace và approval workflow. Commit `7f5cabb`; 111 app tests, 138 pgTAP tests, DB reset/lint, read/write/media/collaboration API smoke, owner browser approval/invitation smoke, lint và build pass.
 - [x] Phase 09 — Drive-to-Supabase migration tool và reconciliation. Commit `9f588b6`; 117 app tests, 159 pgTAP tests, DB reset/lint, dry/live/image/RLS/idempotent migration smoke, typecheck, lint và build pass.
-- [ ] Phase 10 — Preview, production cutover, rollback và cleanup.
+- [ ] Phase 10 — Preview, production cutover, rollback và cleanup. Safety/preflight tooling commit `168b095`; local RLS/preflight rehearsal, 122 app tests, 159 pgTAP tests, typecheck, DB lint, lint và build pass. Production cutover/observation/cleanup chưa chạy.
 
 ## Current blocker / next action
 
-- Phase 09 đã hoàn tất; Phase 10 dừng tại production stop condition cho đến khi có explicit authorization, backup/final reconciliation và remote RLS smoke.
+- Phase 09 đã hoàn tất; Phase 10 đã sẵn sàng về tooling/runbook nhưng dừng đúng production stop condition: chưa có explicit authorization, final Production backup/reconciliation, remote RLS evidence và rollback/observation owner.
 - Google provider/redirect trên remote Supabase Preview vẫn chờ Project URL/key và cấu hình Dashboard thực tế.
 - Remote verification vẫn chờ Supabase project, Project URL, publishable key và secret key; production selectors tiếp tục giữ Drive.
 
