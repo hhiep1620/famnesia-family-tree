@@ -91,6 +91,8 @@ npm run supabase:reset
 
 Hướng dẫn Project URL, publishable/secret key và cách cấu hình Local/Preview/Production nằm tại [docs/supabase-migration/SUPABASE-SETUP.md](docs/supabase-migration/SUPABASE-SETUP.md).
 
+Supabase Google Auth, callback/origin và compatibility giữa hai stack được mô tả tại [docs/supabase-migration/SUPABASE-AUTH.md](docs/supabase-migration/SUPABASE-AUTH.md). Production hiện vẫn dùng Google Drive OAuth; mixed auth/data/media backend bị chặn để không làm mất provider credential.
+
 Chỉ phát triển UI bằng dữ liệu mẫu, không cần OAuth:
 
 ```bash

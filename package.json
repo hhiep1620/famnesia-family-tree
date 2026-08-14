@@ -17,6 +17,7 @@
     "supabase:test": "supabase test db",
     "supabase:lint": "supabase db lint --local",
     "supabase:types": "supabase gen types typescript --local > src/types/database.generated.ts",
+    "supabase:auth:smoke": "node scripts/supabase-auth-smoke.mjs",
     "test": "vitest run",
     "typecheck:api": "tsc -p tsconfig.api.json"
   },

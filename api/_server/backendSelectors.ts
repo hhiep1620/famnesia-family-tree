@@ -21,11 +21,21 @@ function selected<T extends string>(name: keyof BackendEnvironment, raw: string 
 }
 
 export function parseBackendSelection(environment: BackendEnvironment): BackendSelection {
-  return {
+  const selection: BackendSelection = {
     data: selected('DATA_BACKEND', environment.DATA_BACKEND, 'drive', ['drive', 'supabase']),
     auth: selected('AUTH_BACKEND', environment.AUTH_BACKEND, 'google-drive-oauth', ['google-drive-oauth', 'supabase']),
     media: selected('MEDIA_BACKEND', environment.MEDIA_BACKEND, 'drive', ['drive', 'supabase']),
   }
+  const allDrive = selection.data === 'drive' && selection.auth === 'google-drive-oauth' && selection.media === 'drive'
+  const allSupabase = selection.data === 'supabase' && selection.auth === 'supabase' && selection.media === 'supabase'
+  if (!allDrive && !allSupabase) {
+    throw new AppError(
+      500,
+      'BACKEND_COMBINATION_UNSUPPORTED',
+      'Backend selectors must use the complete Drive stack or the complete Supabase stack. Mixed auth/data/media modes cannot preserve required provider credentials.',
+    )
+  }
+  return selection
 }
 
 export function backendSelection(): BackendSelection {
@@ -34,7 +44,7 @@ export function backendSelection(): BackendSelection {
 
 export function requireGoogleDriveAuthBackend(selection = backendSelection()): void {
   if (selection.auth !== 'google-drive-oauth') {
-    throw new AppError(503, 'AUTH_BACKEND_NOT_IMPLEMENTED', 'AUTH_BACKEND=supabase is not available until the Supabase Auth migration phase is complete.')
+    throw new AppError(409, 'GOOGLE_DRIVE_AUTH_REQUIRED', 'This endpoint belongs to the rollback Google Drive OAuth flow.')
   }
 }
 

@@ -18,18 +18,23 @@ describe('backend selection and repository boundary', () => {
     expect(() => parseBackendSelection(environment)).toThrow(/Invalid .*_BACKEND/)
   })
 
-  it('accepts Supabase selectors but blocks them until their implementation phase', () => {
+  it('accepts the complete Supabase stack but keeps Drive-only adapters isolated', () => {
     const selected = parseBackendSelection({ DATA_BACKEND: 'supabase', AUTH_BACKEND: 'supabase', MEDIA_BACKEND: 'supabase' })
     expect(selected).toEqual({ data: 'supabase', auth: 'supabase', media: 'supabase' })
-    expect(() => requireGoogleDriveAuthBackend(selected)).toThrow(/Supabase Auth migration phase/)
+    expect(() => requireGoogleDriveAuthBackend(selected)).toThrow(/rollback Google Drive OAuth flow/)
     expect(() => requireDrivePersistenceBackends(selected)).toThrow(/Supabase data repository phase/)
+  })
+
+  it('rejects mixed provider stacks that would lose required credentials', () => {
+    expect(() => parseBackendSelection({ AUTH_BACKEND: 'supabase' })).toThrow(/complete Drive stack or the complete Supabase stack/)
+    expect(() => parseBackendSelection({ DATA_BACKEND: 'supabase', AUTH_BACKEND: 'google-drive-oauth', MEDIA_BACKEND: 'supabase' })).toThrow(/Mixed auth\/data\/media/)
   })
 
   it('exposes all neutral repository capabilities through the Drive adapter', () => {
     const auth = {
-      session: { id: 'session', googleSub: 'google-user', email: 'owner@example.com', encryptedRefreshToken: 'encrypted', createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString() },
-      repository: {} as AuthContext['repository'], accessToken: 'drive-token',
+      backend: 'google-drive-oauth', accessToken: 'drive-token',
       user: { id: 'google-user', email: 'owner@example.com', name: 'Owner' },
+      expiresAt: new Date(Date.now() + 60_000).toISOString(), providerSubject: 'google-user',
     } satisfies AuthContext
     const backend = createDriveRequestBackend(auth, driveSelection)
     expect(Object.keys(backend.workspaces).sort()).toEqual(['connect', 'get', 'list'])

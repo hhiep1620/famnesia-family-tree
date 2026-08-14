@@ -60,7 +60,7 @@ export function createDriveRequestBackend(auth: AuthContext, selection: BackendS
         const access = collaborationApprovalEnabled() ? await drafts.workspaceInfo(workspaceId) : undefined
         return access?.role === 'contributor'
           ? uploadDraftPhoto(token, workspaceId, user, file, filename, profileId, personId)
-          : uploadPhoto(token, workspaceId, file, filename, profileId, personId, auth.session.googleSub)
+          : uploadPhoto(token, workspaceId, file, filename, profileId, personId, auth.providerSubject)
       },
       async read(workspaceId, mediaId) {
         const access = collaborationApprovalEnabled() ? await drafts.workspaceInfo(workspaceId) : undefined
