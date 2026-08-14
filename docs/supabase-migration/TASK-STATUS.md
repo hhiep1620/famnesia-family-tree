@@ -11,8 +11,8 @@
 
 ## To-do
 
-- [x] Phase 01 — Baseline và repository boundary. Validation: 78 tests, lint, build pass; commit pending.
-- [ ] Phase 02 — Supabase foundation/local environment.
+- [x] Phase 01 — Baseline và repository boundary. Commit `c74a34a`; 84 tests, lint, build pass.
+- [x] Phase 02 — Supabase foundation/local environment. Local CLI `2.114.0`, stack start/status/reset, 88 tests, lint và build pass; commit pending.
 - [ ] Phase 03 — Database schema, constraints và RLS.
 - [ ] Phase 04 — Supabase Auth migration.
 - [ ] Phase 05 — Supabase read repository.
@@ -24,8 +24,8 @@
 
 ## Current blocker / next action
 
-- Cần tạo Supabase project và chuẩn bị Project URL + publishable key trước Phase 02 remote verification.
-- Tiếp theo: `CR-02-SUPABASE-FOUNDATION.md`; có thể hoàn thành local-only và phải ghi rõ nếu Docker/remote project còn thiếu.
+- Tiếp theo: `CR-03-DATABASE-SCHEMA-AND-RLS.md` trên stack local đã chạy được.
+- Remote verification vẫn chờ Supabase project, Project URL, publishable key và secret key; production selectors tiếp tục giữ Drive.
 
 ## Update rule
 

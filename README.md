@@ -81,6 +81,16 @@ openssl rand -base64 48
 
 `npm run dev:vercel` dùng `vercel dev` tại `http://localhost:3000` để frontend và `/api` chạy cùng origin. Local có thể dùng `SESSION_STORE_DRIVER=memory`; session local sẽ mất nếu tiến trình dev bị dừng. `npm run dev` chỉ chạy Vite và không phục vụ các endpoint `/api`.
 
+Nền tảng Supabase local cho quá trình migration (chưa thay backend Drive):
+
+```bash
+npm run supabase:start
+npm run supabase:status
+npm run supabase:reset
+```
+
+Hướng dẫn Project URL, publishable/secret key và cách cấu hình Local/Preview/Production nằm tại [docs/supabase-migration/SUPABASE-SETUP.md](docs/supabase-migration/SUPABASE-SETUP.md).
+
 Chỉ phát triển UI bằng dữ liệu mẫu, không cần OAuth:
 
 ```bash
@@ -115,6 +125,8 @@ Cài Upstash Redis từ Vercel Marketplace và kết nối vào project `family-
 Không đưa `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `TOKEN_ENCRYPTION_KEY` hoặc Redis token vào biến `VITE_*`.
 
 Ba backend selector mặc định giữ nguyên stack Drive hiện tại. Giá trị hợp lệ là `DATA_BACKEND=drive|supabase`, `AUTH_BACKEND=google-drive-oauth|supabase` và `MEDIA_BACKEND=drive|supabase`; backend Supabase chỉ được bật sau khi phase migration tương ứng hoàn tất.
+
+Các biến Supabase dùng tên `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` và `SUPABASE_SECRET_KEY`. Secret key là server-only và tuyệt đối không được đặt trong biến `VITE_*`.
 
 ### Kết nối workspace được chia sẻ bằng Google Picker
 

@@ -1,0 +1,2 @@
+-- CR-02 foundation intentionally has no business tables or production data.
+-- Deterministic development fixtures are added with the schema in CR-03.
