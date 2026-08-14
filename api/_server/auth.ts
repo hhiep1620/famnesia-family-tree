@@ -3,6 +3,7 @@ import { AppError } from './http.js'
 import { googleAccessToken } from './oauth.js'
 import { sessions, type SessionRepository } from './sessionRepository.js'
 import type { AuthSession, SafeUser } from './types.js'
+import { requireGoogleDriveAuthBackend } from './backendSelectors.js'
 
 export interface AuthContext {
   session: AuthSession
@@ -12,6 +13,7 @@ export interface AuthContext {
 }
 
 export async function requireAuth(request: Request): Promise<AuthContext> {
+  requireGoogleDriveAuthBackend()
   const sessionId = readCookie(request, SESSION_COOKIE)
   if (!sessionId) throw new AppError(401, 'AUTH_REQUIRED', 'Please sign in with Google.')
   const repository = sessions()

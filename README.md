@@ -2,6 +2,8 @@
 
 *Too many relatives. Not enough memory.*
 
+> Kế hoạch thay Google Drive bằng Supabase được tách thành các change request nhỏ cho AI Agent tại [docs/supabase-migration/00-INDEX.md](docs/supabase-migration/00-INDEX.md). Tài liệu này mô tả hệ thống production hiện tại; bộ migration mô tả kiến trúc đích và thứ tự chuyển đổi an toàn.
+
 Ứng dụng gia phả responsive bằng React, Vite, Vercel Functions và Google Drive. Frontend không nhận Google access/refresh token; toàn bộ OAuth, session, kiểm tra quyền và Drive API chạy ở server.
 
 ## Kiến trúc
@@ -100,6 +102,9 @@ SESSION_SECRET=...
 TOKEN_ENCRYPTION_KEY=...
 SESSION_MAX_AGE_SECONDS=604800
 COLLAB_APPROVAL_V2_ENABLED=false
+DATA_BACKEND=drive
+AUTH_BACKEND=google-drive-oauth
+MEDIA_BACKEND=drive
 UPSTASH_REDIS_REST_URL=...
 UPSTASH_REDIS_REST_TOKEN=...
 VITE_USE_MOCK_DATA=false
@@ -108,6 +113,8 @@ VITE_USE_MOCK_DATA=false
 Cài Upstash Redis từ Vercel Marketplace và kết nối vào project `family-tree`; integration sẽ inject URL/token. Production cố ý từ chối chạy auth nếu không có persistent store, tránh session bị mất khi serverless instance restart.
 
 Không đưa `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `TOKEN_ENCRYPTION_KEY` hoặc Redis token vào biến `VITE_*`.
+
+Ba backend selector mặc định giữ nguyên stack Drive hiện tại. Giá trị hợp lệ là `DATA_BACKEND=drive|supabase`, `AUTH_BACKEND=google-drive-oauth|supabase` và `MEDIA_BACKEND=drive|supabase`; backend Supabase chỉ được bật sau khi phase migration tương ứng hoàn tất.
 
 ### Kết nối workspace được chia sẻ bằng Google Picker
 

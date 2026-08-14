@@ -6,13 +6,37 @@ import { apiRequest, jsonBody } from './apiClient'
 export interface FamilyDataRevision { modifiedTime?: string; version?: string }
 export interface FamilyDataSnapshot { data: FamilyData; revision: FamilyDataRevision }
 
+export interface FamilyRepositoryContract {
+  readonly workspace: WorkspaceInfo
+  readonly workspaces: WorkspaceInfo[]
+  load(): Promise<FamilyDataSnapshot>
+  save(data: FamilyData, expectedRevision?: FamilyDataRevision, mode?: 'save' | 'replace' | 'restore' | 'merge'): Promise<FamilyDataSnapshot>
+  commit(request: FamilyCommitRequest): Promise<FamilyCommitResult>
+  submitDraft(request: FamilyCommitRequest): Promise<SubmitDraftResult>
+  listDrafts(): Promise<ReviewDraft[]>
+  collaborationStatus(): Promise<CollaborationStatus>
+  reviewDraft(request: DraftReviewRequest): Promise<DraftReviewResult>
+  syncMirror(): Promise<MirrorSyncResult>
+  listActivity(): Promise<ActivityEvent[]>
+  backup(data: FamilyData, reason?: string): Promise<FamilyBackup>
+  listBackups(): Promise<FamilyBackup[]>
+  loadBackup(id: string): Promise<FamilyData>
+  uploadPhoto(file: File, profileId?: string, personId?: string): Promise<string>
+  deletePhoto(id: string): Promise<void>
+  photoUrl(id: string): string
+  listMembers(): Promise<WorkspaceMember[]>
+  addMember(email: string, role: Exclude<WorkspaceRole, 'owner'>): Promise<void>
+  updateMember(id: string, role: Exclude<WorkspaceRole, 'owner'>): Promise<void>
+  removeMember(id: string): Promise<void>
+}
+
 export class FamilyDataConflictError extends Error {
   constructor() { super('Dữ liệu gia đình đã được thay đổi ở phiên khác. Hãy tải lại bản mới nhất trước khi tiếp tục.'); this.name = 'FamilyDataConflictError' }
 }
 
 const workspacePath = (workspaceId: string) => `/api/workspaces/${encodeURIComponent(workspaceId)}`
 
-export class FamilyRepository {
+export class FamilyRepository implements FamilyRepositoryContract {
   readonly workspace: WorkspaceInfo
   readonly workspaces: WorkspaceInfo[]
 
