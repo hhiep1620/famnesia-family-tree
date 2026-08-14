@@ -21,7 +21,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'reac
 import { downloadFamilyData, downloadFamilyDataExcel, downloadFamilyDataExcelTemplate, downloadFamilyDataTemplate } from '../../import/exportFamilyData'
 import { validateImportFile, type ImportValidationResult } from '../../import/validateImport'
 import { validateFamilyData } from '../../schema/familyDataSchema'
-import type { ActivityEvent, FamilyBackup, FamilyData, SaveStatus, WorkspaceInfo, WorkspaceMember } from '../../types/family'
+import type { ActivityEvent, FamilyBackup, FamilyData, SaveStatus, WorkspaceInfo, WorkspaceInvitationResult, WorkspaceMember } from '../../types/family'
 import type { DraftReviewRequest, MirrorSyncResult, ReviewDraft } from '../../types/collaboration'
 import { ActivityTimeline } from './ActivityTimeline'
 import { DataQualityCenter } from './DataQualityCenter'
@@ -43,8 +43,8 @@ interface Props {
   onRestore: (backupId: string) => Promise<void>
   members?: WorkspaceMember[]
   onRefreshMembers?: () => Promise<WorkspaceMember[]>
-  onAddMember?: (email: string, role: 'contributor' | 'viewer') => Promise<void>
-  onUpdateMember?: (id: string, role: 'contributor' | 'viewer') => Promise<void>
+  onAddMember?: (email: string, role: 'editor' | 'contributor' | 'viewer') => Promise<WorkspaceInvitationResult | void>
+  onUpdateMember?: (id: string, role: 'editor' | 'contributor' | 'viewer') => Promise<void>
   onRemoveMember?: (id: string) => Promise<void>
   activity?: ActivityEvent[]
   onOpenPerson?: (id: string) => void
@@ -111,8 +111,9 @@ export function DataManagement(props: Props) {
   const [backups, setBackups] = useState<FamilyBackup[]>([])
   const [backupError, setBackupError] = useState<string>()
   const [memberEmail, setMemberEmail] = useState('')
-  const [memberRole, setMemberRole] = useState<'contributor' | 'viewer'>('viewer')
+  const [memberRole, setMemberRole] = useState<'editor' | 'contributor' | 'viewer'>('viewer')
   const [memberError, setMemberError] = useState<string>()
+  const [inviteLink, setInviteLink] = useState<string>()
   const validation = validateFamilyData(props.data)
 
   const refreshBackups = useCallback(async () => {
@@ -162,8 +163,15 @@ export function DataManagement(props: Props) {
 
   async function inviteMember() {
     if (!memberEmail.trim() || !props.onAddMember) return
-    if (props.collaborationEnabled && memberRole === 'contributor' && !window.confirm('Mời với quyền Editor cần duyệt? Famnesia sẽ tạo một mirror trong Drive của người này. Nếu sau này gỡ quyền, owner chỉ dừng được đồng bộ và không thể xóa bản mirror họ đã sở hữu.')) return
-    try { await props.onAddMember(memberEmail.trim(), memberRole); setMemberEmail(''); setMemberError(undefined) }
+    try {
+      const invitation = await props.onAddMember(memberEmail.trim(), memberRole)
+      setMemberEmail(''); setMemberError(undefined)
+      if (invitation) {
+        const absolute = new URL(invitation.inviteUrl, window.location.origin).toString()
+        setInviteLink(absolute)
+        await navigator.clipboard?.writeText(absolute).catch(() => undefined)
+      }
+    }
     catch (caught) { setMemberError(caught instanceof Error ? caught.message : 'Không thể mời thành viên.') }
   }
 
@@ -197,10 +205,11 @@ export function DataManagement(props: Props) {
     {props.workspace?.canReviewDrafts && props.onReviewDraft ? <DraftInbox drafts={props.drafts ?? []} data={props.data} workspaceId={props.workspace.id} onReview={props.onReviewDraft} /> : null}
     {props.workspace?.role === 'contributor' && props.onRetryMirror ? <MirrorStatusCard status={props.mirrorStatus} mirror={props.mirrorSync} onRetry={props.onRetryMirror} /> : null}
 
-    {props.workspace?.canManageMembers && <section className="backup-section collaboration-section"><div className="backup-heading"><div><span className="section-label">Cộng tác</span><h3><Users size={18} /> Thành viên workspace</h3><p>{props.collaborationEnabled ? 'Editor cần duyệt chỉ gửi đề xuất; viewer chỉ được xem. Bản mirror trong Drive thành viên không thể bị owner thu hồi.' : 'Editor được sửa dữ liệu trực tiếp; viewer chỉ được xem. Bật Approval V2 sau khi hoàn tất smoke test Production.'}</p></div></div>
-      <div className="member-invite"><input type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="email@gmail.com" aria-label="Email thành viên" /><select value={memberRole} onChange={(event) => setMemberRole(event.target.value as 'contributor' | 'viewer')}><option value="viewer">Viewer</option><option value="contributor">{props.collaborationEnabled ? 'Editor cần duyệt' : 'Editor'}</option></select><button className="primary-button" onClick={() => void inviteMember()}><UserPlus size={16} /> Mời</button></div>
+    {props.workspace?.canManageMembers && <section className="backup-section collaboration-section"><div className="backup-heading"><div><span className="section-label">Cộng tác</span><h3><Users size={18} /> Thành viên workspace</h3><p>{props.collaborationEnabled ? 'Editor sửa trực tiếp; Editor cần duyệt gửi Draft; Viewer chỉ xem. Link mời hết hạn sau 7 ngày.' : 'Editor được sửa dữ liệu trực tiếp; viewer chỉ được xem.'}</p></div></div>
+      <div className="member-invite"><input type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="email@gmail.com" aria-label="Email thành viên" /><select value={memberRole} onChange={(event) => setMemberRole(event.target.value as 'editor' | 'contributor' | 'viewer')}><option value="viewer">Viewer</option>{props.collaborationEnabled && <option value="editor">Editor</option>}<option value="contributor">{props.collaborationEnabled ? 'Editor cần duyệt' : 'Editor'}</option></select><button className="primary-button" onClick={() => void inviteMember()}><UserPlus size={16} /> Tạo link mời</button></div>
       {memberError && <p className="form-error">{memberError}</p>}
-      <div className="backup-list">{props.members?.map((member) => <div className="backup-row member-row" key={member.id}><Users size={16} /><div><strong>{member.name ?? member.email ?? 'Tài khoản Google'}</strong><span>{member.email}{member.inherited ? ' · quyền kế thừa' : ''}{member.migrationRequired ? ' · cần migration lại' : ''}</span></div>{member.role === 'owner' ? <span className="session-badge">owner</span> : <><select value={member.role} disabled={member.inherited} onChange={(event) => void props.onUpdateMember?.(member.id, event.target.value as 'contributor' | 'viewer')}><option value="viewer">viewer</option><option value="contributor">{props.collaborationEnabled ? 'editor cần duyệt' : 'editor'}</option></select><button className="icon-button" disabled={member.inherited} onClick={() => { const warning = props.collaborationEnabled ? ' Mirror đã nằm trong Drive của họ sẽ không bị xóa.' : ''; if (window.confirm(`Gỡ quyền của ${member.email ?? member.name}?${warning}`)) void props.onRemoveMember?.(member.id) }} aria-label="Gỡ thành viên"><Trash2 size={16} /></button></>}</div>)}</div>
+      {inviteLink && <div className="invite-link-result"><strong>Link đã được copy</strong><input readOnly value={inviteLink} aria-label="Link mời Famnesia" /><button className="secondary-button" onClick={() => void navigator.clipboard?.writeText(inviteLink)}>Copy lại</button></div>}
+      <div className="backup-list">{props.members?.map((member) => <div className="backup-row member-row" key={member.id}><Users size={16} /><div><strong>{member.name ?? member.email ?? 'Tài khoản'}</strong><span>{member.email}{member.pendingInvitation ? ` · chờ nhận lời${member.invitationExpiresAt ? ` · hết hạn ${formatBackupTime(member.invitationExpiresAt)}` : ''}` : ''}</span></div>{member.role === 'owner' ? <span className="session-badge">owner</span> : <><select value={member.role} disabled={member.inherited} onChange={(event) => void props.onUpdateMember?.(member.id, event.target.value as 'editor' | 'contributor' | 'viewer')}><option value="viewer">viewer</option>{props.collaborationEnabled && <option value="editor">editor</option>}<option value="contributor">{props.collaborationEnabled ? 'editor cần duyệt' : 'editor'}</option></select><button className="icon-button" disabled={member.inherited} onClick={() => { if (window.confirm(`${member.pendingInvitation ? 'Thu hồi lời mời' : 'Gỡ quyền của'} ${member.email ?? member.name}?`)) void props.onRemoveMember?.(member.id) }} aria-label={member.pendingInvitation ? 'Thu hồi lời mời' : 'Gỡ thành viên'}><Trash2 size={16} /></button></>}</div>)}</div>
     </section>}
     </> : null}
 

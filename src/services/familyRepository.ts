@@ -1,11 +1,11 @@
-import type { ActivityEvent, FamilyBackup, FamilyData, WorkspaceInfo, WorkspaceMember, WorkspaceRole } from '../types/family'
+import type { ActivityEvent, FamilyBackup, FamilyData, WorkspaceInfo, WorkspaceInvitationResult, WorkspaceMember, WorkspaceRole } from '../types/family'
 import type { FamilyCommitRequest, FamilyCommitResult, FamilyCommitStatusResult } from '../types/familyOperations'
 import type { CollaborationStatus, DraftReviewRequest, DraftReviewResult, MirrorSyncResult, ReviewDraft, SubmitDraftResult } from '../types/collaboration'
 import { ApiError, apiRequest, jsonBody } from './apiClient'
 
 export interface FamilyDataRevision { modifiedTime?: string; version?: string }
 export interface FamilyDataSnapshot { data: FamilyData; revision: FamilyDataRevision }
-export type AssignableWorkspaceRole = Extract<WorkspaceRole, 'contributor' | 'viewer'>
+export type AssignableWorkspaceRole = Extract<WorkspaceRole, 'editor' | 'contributor' | 'viewer'>
 
 export interface FamilyRepositoryContract {
   readonly workspace: WorkspaceInfo
@@ -27,13 +27,17 @@ export interface FamilyRepositoryContract {
   deletePhoto(id: string): Promise<void>
   photoUrl(id: string): string
   listMembers(): Promise<WorkspaceMember[]>
-  addMember(email: string, role: AssignableWorkspaceRole): Promise<void>
+  addMember(email: string, role: AssignableWorkspaceRole): Promise<WorkspaceInvitationResult | void>
   updateMember(id: string, role: AssignableWorkspaceRole): Promise<void>
   removeMember(id: string): Promise<void>
 }
 
 export class FamilyDataConflictError extends Error {
   constructor() { super('Dữ liệu gia đình đã được thay đổi ở phiên khác. Hãy tải lại bản mới nhất trước khi tiếp tục.'); this.name = 'FamilyDataConflictError' }
+}
+
+export class NoWorkspaceError extends Error {
+  constructor() { super('Bạn chưa có workspace Famnesia. Hãy tạo gia đình mới hoặc mở link mời của owner.'); this.name = 'NoWorkspaceError' }
 }
 
 export class CommitOutcomeUnknownError extends Error {
@@ -56,12 +60,29 @@ export class FamilyRepository implements FamilyRepositoryContract {
   }
 
   static async connect(preferredId?: string): Promise<FamilyRepository> {
+    const invitationToken = new URLSearchParams(window.location.search).get('invite')
+    if (invitationToken) {
+      const accepted = await apiRequest<{ workspace: WorkspaceInfo }>('/api/workspaces', {
+        method: 'POST', ...jsonBody({ invitationToken }),
+      })
+      const url = new URL(window.location.href); url.searchParams.delete('invite'); window.history.replaceState({}, '', url)
+      preferredId = accepted.workspace.id
+    }
     const workspaces = await this.listWorkspaces()
     const remembered = localStorage.getItem('family-tree-workspace') ?? undefined
     const workspace = workspaces.find((item) => item.id === preferredId) ?? workspaces.find((item) => item.id === remembered) ?? workspaces[0]
-    if (!workspace) throw new Error('Không tìm thấy workspace Famnesia.')
+    if (!workspace) throw new NoWorkspaceError()
     localStorage.setItem('family-tree-workspace', workspace.id)
     return new FamilyRepository(workspace, workspaces)
+  }
+
+  static async create(name: string): Promise<FamilyRepository> {
+    const result = await apiRequest<{ workspace: WorkspaceInfo }>('/api/workspaces', {
+      method: 'POST', ...jsonBody({ name }),
+    })
+    const workspaces = await this.listWorkspaces()
+    localStorage.setItem('family-tree-workspace', result.workspace.id)
+    return new FamilyRepository(result.workspace, workspaces)
   }
 
   static async connectShared(workspaceId: string): Promise<FamilyRepository> {
@@ -151,7 +172,10 @@ export class FamilyRepository implements FamilyRepositoryContract {
   photoUrl(id: string): string { return `${workspacePath(this.workspace.id)}/photos/${encodeURIComponent(id)}` }
 
   async listMembers(): Promise<WorkspaceMember[]> { return (await apiRequest<{ members: WorkspaceMember[] }>(`${workspacePath(this.workspace.id)}/members`)).members }
-  async addMember(email: string, role: AssignableWorkspaceRole): Promise<void> { await apiRequest(`${workspacePath(this.workspace.id)}/members`, { method: 'POST', ...jsonBody({ email, role }) }) }
+  async addMember(email: string, role: AssignableWorkspaceRole): Promise<WorkspaceInvitationResult | void> {
+    const result = await apiRequest<{ invitation?: WorkspaceInvitationResult }>(`${workspacePath(this.workspace.id)}/members`, { method: 'POST', ...jsonBody({ email, role }) })
+    return result.invitation
+  }
   async updateMember(id: string, role: AssignableWorkspaceRole): Promise<void> { await apiRequest(`${workspacePath(this.workspace.id)}/members`, { method: 'PATCH', ...jsonBody({ permissionId: id, role }) }) }
   async removeMember(id: string): Promise<void> { await apiRequest(`${workspacePath(this.workspace.id)}/members`, { method: 'DELETE', ...jsonBody({ permissionId: id }) }) }
 }

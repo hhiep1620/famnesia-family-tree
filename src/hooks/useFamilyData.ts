@@ -9,10 +9,10 @@ import { duplicatePairId } from '../integrity/duplicateDetection'
 import { mergePeople } from '../integrity/mergePerson'
 import { CURRENT_SCHEMA_VERSION, requireValidFamilyData } from '../schema/familyDataSchema'
 import { ApiError } from '../services/apiClient'
-import { CommitOutcomeUnknownError, FamilyRepository, type FamilyDataRevision } from '../services/familyRepository'
+import { CommitOutcomeUnknownError, FamilyRepository, NoWorkspaceError, type FamilyDataRevision } from '../services/familyRepository'
 import { mediaReferenceId } from '../services/mediaReference'
 import { sharedWorkspaceForEmptyOwner } from '../services/workspaceSelection'
-import type { ActivityEvent, FamilyBackup, FamilyData, FamilyProfile, FriendlyRelationship, Person, PersonDraft, PersonMedia, Relationship, SaveStatus, SpouseStatus, WorkspaceInfo, WorkspaceMember } from '../types/family'
+import type { ActivityEvent, FamilyBackup, FamilyData, FamilyProfile, FriendlyRelationship, Person, PersonDraft, PersonMedia, Relationship, SaveStatus, SpouseStatus, WorkspaceInfo, WorkspaceInvitationResult, WorkspaceMember } from '../types/family'
 import type { FamilyCommitConflictDetails, FamilyOperation, FamilyOperationConflict, StoredFamilyDraft } from '../types/familyOperations'
 import type { CollaborationStatus, DraftReviewRequest, DraftReviewResult, MirrorSyncResult, ReviewDraft } from '../types/collaboration'
 import { generateNextPersonId } from '../utils/personId'
@@ -83,6 +83,7 @@ export function useFamilyData(userId = 'mock-user') {
   const [collaborationState, setCollaborationState] = useState<CollaborationStatus>()
   const [reviewDrafts, setReviewDrafts] = useState<ReviewDraft[]>([])
   const [mirrorSync, setMirrorSync] = useState<MirrorSyncResult>()
+  const [needsWorkspace, setNeedsWorkspace] = useState(false)
 
   const setOperations = useCallback((operations: FamilyOperation[]) => {
     pendingRef.current = operations
@@ -149,10 +150,15 @@ export function useFamilyData(userId = 'mock-user') {
           }
         } else await restoreDraft(snapshot.data, snapshot.revision, connected.workspace.id)
         setActivity(await connected.listActivity().catch(() => []))
+        setNeedsWorkspace(false)
       }
       draftReady.current = true
     } catch (caught) {
-      console.error(caught); setError(caught instanceof Error ? caught.message : 'Không thể tải dữ liệu gia đình.')
+      if (caught instanceof NoWorkspaceError) {
+        setNeedsWorkspace(true); setWorkspace(undefined); setWorkspaces([]); setError(undefined)
+      } else {
+        console.error(caught); setError(caught instanceof Error ? caught.message : 'Không thể tải dữ liệu gia đình.')
+      }
     } finally { setLoading(false) }
   }, [activeWorkspaceId, restoreDraft, selectAvailableProfile, useMockData, userId])
 
@@ -198,7 +204,7 @@ export function useFamilyData(userId = 'mock-user') {
   }, [rebaseFromRemote, useMockData, userId, workspace?.id])
 
   const continueMirrorSync = useCallback(async (status: CollaborationStatus) => {
-    if (!repository.current || status.workspaceRole !== 'contributor' || !navigator.onLine) return
+    if (!repository.current || status.workspaceRole !== 'contributor' || !status.mirror || !navigator.onLine) return
     const synced = status.mirror?.syncedGeneration ?? -1
     if (synced >= status.mirrorGeneration && status.mirror?.status !== 'failed') return
     try {
@@ -512,6 +518,15 @@ export function useFamilyData(userId = 'mock-user') {
   const mergeDuplicatePeople = useCallback(async (canonicalId: string, duplicateId: string) => { requireNoDraft(); setBusy('Đang gộp thành viên…'); try { await saveFullData(mergePeople(familyData, canonicalId, duplicateId), 'merge') } finally { setBusy(undefined) } }, [familyData, requireNoDraft, saveFullData])
 
   const switchWorkspace = useCallback((id: string) => { if (!workspaces.some((item) => item.id === id) || id === activeWorkspaceId) return; localStorage.setItem('family-tree-workspace', id); repository.current = undefined; revision.current = undefined; setActiveWorkspaceId(id) }, [activeWorkspaceId, workspaces])
+  const createWorkspace = useCallback(async (name: string) => {
+    if (pendingRef.current.length) throw new Error('Hãy xử lý Draft cục bộ trước khi tạo workspace khác.')
+    setBusy('Đang tạo workspace…'); setError(undefined)
+    try {
+      const connected = await FamilyRepository.create(name)
+      repository.current = connected; setNeedsWorkspace(false); setWorkspaces(connected.workspaces); setWorkspace(connected.workspace); setActiveWorkspaceId(connected.workspace.id)
+      setNotice('Đã tạo workspace Famnesia mới. Bạn là owner.')
+    } finally { setBusy(undefined) }
+  }, [])
   const connectSharedWorkspace = useCallback(async (id: string) => {
     if (pendingRef.current.length) throw new Error('Hãy Lưu tất cả hoặc Hủy Draft trước khi kết nối gia đình khác.')
     setBusy('Đang kết nối gia đình được chia sẻ…'); setError(undefined)
@@ -523,8 +538,8 @@ export function useFamilyData(userId = 'mock-user') {
     } finally { setBusy(undefined) }
   }, [])
   const refreshMembers = useCallback(async () => { if (useMockData || !repository.current?.workspace.canManageMembers) { setMembers([]); return [] } const next = await repository.current.listMembers(); setMembers(next); return next }, [useMockData])
-  const addMember = useCallback(async (email: string, role: 'contributor' | 'viewer') => { if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); await repository.current.addMember(email, role); await refreshMembers() }, [refreshMembers])
-  const updateMember = useCallback(async (id: string, role: 'contributor' | 'viewer') => { if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); await repository.current.updateMember(id, role); await refreshMembers() }, [refreshMembers])
+  const addMember = useCallback(async (email: string, role: 'editor' | 'contributor' | 'viewer'): Promise<WorkspaceInvitationResult | void> => { if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); const invitation = await repository.current.addMember(email, role); await refreshMembers(); return invitation }, [refreshMembers])
+  const updateMember = useCallback(async (id: string, role: 'editor' | 'contributor' | 'viewer') => { if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); await repository.current.updateMember(id, role); await refreshMembers() }, [refreshMembers])
   const removeMember = useCallback(async (id: string) => { if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); await repository.current.removeMember(id); await refreshMembers() }, [refreshMembers])
   const refreshActivity = useCallback(async () => { if (useMockData || !repository.current) return activity; const events = await repository.current.listActivity(); setActivity(events); return events }, [activity, useMockData])
   const reviewDraft = useCallback(async (request: DraftReviewRequest): Promise<DraftReviewResult> => {
@@ -547,10 +562,10 @@ export function useFamilyData(userId = 'mock-user') {
     finally { setBusy(undefined) }
   }, [refreshCollaboration])
 
-  return useMemo(() => ({ familyData, savedData, profiles: familyData.profiles, activeProfile, activeProfileId, persons, relationships, media, workspace, workspaces, activeWorkspaceId, members, activity, loading, busy, error, notice, saveStatus, useMockData,
+  return useMemo(() => ({ familyData, savedData, profiles: familyData.profiles, activeProfile, activeProfileId, persons, relationships, media, workspace, workspaces, activeWorkspaceId, members, activity, loading, busy, error, notice, saveStatus, useMockData, needsWorkspace,
     pendingOperations, conflictDetails, draftRecovery, refresh, setActiveProfileId, createProfile, updateProfile, setSubject, addPerson, updatePerson, addPersonMedia, setPrimaryMedia, updateMediaCaption, deletePersonMedia, addRelationship, updateRelationship, deleteRelationship, deletePerson,
     saveAll, discardDraft, undoOperation, resolveConflictsAndSave, downloadRecoveryDraft, deleteRecoveryDraft,
-    backupNow, listBackups, restoreBackup, replaceAllData, switchWorkspace, connectSharedWorkspace, refreshMembers, addMember, updateMember, removeMember, suppressDuplicate, mergeDuplicatePeople, refreshActivity,
+    backupNow, listBackups, restoreBackup, replaceAllData, switchWorkspace, createWorkspace, connectSharedWorkspace, refreshMembers, addMember, updateMember, removeMember, suppressDuplicate, mergeDuplicatePeople, refreshActivity,
     collaborationState, reviewDrafts, mirrorSync, refreshCollaboration, reviewDraft, retryMirrorSync,
-  }), [familyData, savedData, activeProfile, activeProfileId, persons, relationships, media, workspace, workspaces, activeWorkspaceId, members, activity, loading, busy, error, notice, saveStatus, useMockData, pendingOperations, conflictDetails, draftRecovery, refresh, setActiveProfileId, createProfile, updateProfile, setSubject, addPerson, updatePerson, addPersonMedia, setPrimaryMedia, updateMediaCaption, deletePersonMedia, addRelationship, updateRelationship, deleteRelationship, deletePerson, saveAll, discardDraft, undoOperation, resolveConflictsAndSave, downloadRecoveryDraft, deleteRecoveryDraft, backupNow, listBackups, restoreBackup, replaceAllData, switchWorkspace, connectSharedWorkspace, refreshMembers, addMember, updateMember, removeMember, suppressDuplicate, mergeDuplicatePeople, refreshActivity, collaborationState, reviewDrafts, mirrorSync, refreshCollaboration, reviewDraft, retryMirrorSync])
+  }), [familyData, savedData, activeProfile, activeProfileId, persons, relationships, media, workspace, workspaces, activeWorkspaceId, members, activity, loading, busy, error, notice, saveStatus, useMockData, needsWorkspace, pendingOperations, conflictDetails, draftRecovery, refresh, setActiveProfileId, createProfile, updateProfile, setSubject, addPerson, updatePerson, addPersonMedia, setPrimaryMedia, updateMediaCaption, deletePersonMedia, addRelationship, updateRelationship, deleteRelationship, deletePerson, saveAll, discardDraft, undoOperation, resolveConflictsAndSave, downloadRecoveryDraft, deleteRecoveryDraft, backupNow, listBackups, restoreBackup, replaceAllData, switchWorkspace, createWorkspace, connectSharedWorkspace, refreshMembers, addMember, updateMember, removeMember, suppressDuplicate, mergeDuplicatePeople, refreshActivity, collaborationState, reviewDrafts, mirrorSync, refreshCollaboration, reviewDraft, retryMirrorSync])
 }

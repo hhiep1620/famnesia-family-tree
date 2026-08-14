@@ -21,6 +21,7 @@
     "supabase:read:smoke": "node scripts/supabase-read-smoke.mjs",
     "supabase:write:smoke": "node scripts/supabase-write-smoke.mjs",
     "supabase:media:smoke": "node scripts/supabase-media-smoke.mjs",
+    "supabase:collaboration:smoke": "node scripts/supabase-collaboration-smoke.mjs",
     "test": "vitest run",
     "typecheck:api": "tsc -p tsconfig.api.json"
   },

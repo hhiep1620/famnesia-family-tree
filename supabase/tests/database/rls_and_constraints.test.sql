@@ -181,13 +181,13 @@ select results_eq(
   array[2::bigint],
   'editor can review all contributor drafts'
 );
-select throws_ok(
-  $$update public.draft_submissions set status = 'rejected' where id = '12345678-0000-0000-0000-000000000001'$$,
-  'reject requires a review note'
+select is_empty(
+  $$update public.draft_submissions set status = 'rejected' where id = '12345678-0000-0000-0000-000000000001' returning id$$,
+  'reviewers cannot bypass the revision-checked review RPC'
 );
-select lives_ok(
-  $$update public.draft_submissions set status = 'rejected', review_note = 'Needs correction', reviewed_by_user_id = '22222222-2222-2222-2222-222222222222' where id = '12345678-0000-0000-0000-000000000002'$$,
-  'editor can reject a contributor draft with reason'
+select is_empty(
+  $$update public.draft_submissions set status = 'rejected', review_note = 'Needs correction', reviewed_by_user_id = '22222222-2222-2222-2222-222222222222' where id = '12345678-0000-0000-0000-000000000002' returning id$$,
+  'review decisions cannot be written directly even with a note'
 );
 reset role;
 

@@ -184,6 +184,16 @@ export interface WorkspaceMember {
   role: WorkspaceRole
   inherited: boolean
   migrationRequired?: boolean
+  pendingInvitation?: boolean
+  invitationExpiresAt?: string
+}
+
+export interface WorkspaceInvitationResult {
+  id: string
+  email: string
+  role: Extract<WorkspaceRole, 'editor' | 'contributor' | 'viewer'>
+  expiresAt: string
+  inviteUrl: string
 }
 
 export interface FamilyBackup {

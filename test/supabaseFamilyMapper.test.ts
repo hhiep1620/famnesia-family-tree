@@ -112,8 +112,8 @@ describe('Supabase FamilyData mapper', () => {
   })
 })
 
-describe('Supabase CR07 workspace capabilities', () => {
-  it.each(['owner', 'editor', 'contributor', 'viewer'] as const)('maps transactional commit and private media capabilities for %s', (role) => {
+describe('Supabase CR08 workspace capabilities', () => {
+  it.each(['owner', 'editor', 'contributor', 'viewer'] as const)('maps collaboration and canonical write capabilities for %s', (role) => {
     const info = workspaceInfo(rows.workspace, role)
     const canCommit = role === 'owner' || role === 'editor'
     expect(info.role).toBe(role)
@@ -121,7 +121,16 @@ describe('Supabase CR07 workspace capabilities', () => {
     expect([
       info.canEdit, info.canUpload, info.canManageMembers, info.canCommitDirectly,
       info.canSubmitDraft, info.canReviewDrafts, info.canReplaceData, info.canCreateBackups,
-    ]).toEqual([canCommit, role !== 'viewer', false, canCommit, false, false, false, false])
+    ]).toEqual([
+      canCommit || role === 'contributor',
+      role !== 'viewer',
+      role === 'owner',
+      canCommit,
+      role === 'contributor',
+      canCommit,
+      role === 'owner',
+      role === 'owner',
+    ])
     expect(info.ownedByMe).toBe(role === 'owner')
   })
 })

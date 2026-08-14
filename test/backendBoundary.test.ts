@@ -37,7 +37,7 @@ describe('backend selection and repository boundary', () => {
       expiresAt: new Date(Date.now() + 60_000).toISOString(), providerSubject: 'google-user',
     } satisfies AuthContext
     const backend = createDriveRequestBackend(auth, driveSelection)
-    expect(Object.keys(backend.workspaces).sort()).toEqual(['connect', 'get', 'list'])
+    expect(Object.keys(backend.workspaces).sort()).toEqual(['acceptInvitation', 'connect', 'create', 'get', 'list'])
     expect(Object.keys(backend.family).sort()).toEqual(['commit', 'commitStatus', 'listActivity', 'load', 'recordActivity', 'save'])
     expect(Object.keys(backend.media).sort()).toEqual(['delete', 'read', 'upload'])
     expect(Object.keys(backend.members).sort()).toEqual(['add', 'list', 'remove', 'update'])

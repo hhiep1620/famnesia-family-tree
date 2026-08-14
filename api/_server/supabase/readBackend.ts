@@ -27,14 +27,14 @@ export function workspaceInfo(row: WorkspaceRow, role: WorkspaceRole): Workspace
     name: row.name,
     role,
     canRead: true,
-    canEdit: canCommitDirectly,
+    canEdit: canCommitDirectly || role === 'contributor',
     canUpload: role !== 'viewer',
-    canManageMembers: false,
+    canManageMembers: role === 'owner',
     canCommitDirectly,
-    canSubmitDraft: false,
-    canReviewDrafts: false,
-    canReplaceData: false,
-    canCreateBackups: false,
+    canSubmitDraft: role === 'contributor',
+    canReviewDrafts: role === 'owner' || role === 'editor',
+    canReplaceData: role === 'owner',
+    canCreateBackups: role === 'owner',
     ownedByMe: role === 'owner',
   }
 }
@@ -119,7 +119,13 @@ export class SupabaseReadRepository {
     await this.getWorkspaceRow(workspaceId)
     const result = await this.client.from('workspace_members').select('id, user_id, role').eq('workspace_id', workspaceId).order('created_at')
     if (result.error) repositoryError('Workspace members', result.error)
-    return result.data.map((member) => ({ id: member.user_id, role: member.role as WorkspaceRole, inherited: false }))
+    const profileResult = await this.client.from('user_profiles').select('id, email, display_name, avatar_url').in('id', result.data.map((member) => member.user_id))
+    if (profileResult.error) repositoryError('Member profiles', profileResult.error)
+    const profiles = new Map(profileResult.data.map((profile) => [profile.id, profile]))
+    return result.data.map((member) => {
+      const profile = profiles.get(member.user_id)
+      return { id: member.user_id, email: profile?.email, name: profile?.display_name || profile?.email, photoUrl: profile?.avatar_url ?? undefined, role: member.role as WorkspaceRole, inherited: false }
+    })
   }
 
   async listBackups(workspaceId: string): Promise<FamilyBackup[]> {
@@ -157,6 +163,8 @@ export function createSupabaseReadRequestBackend(auth: AuthContext, selection: B
       list: () => repository.listWorkspaces(),
       connect: workspace,
       get: workspace,
+      create: async () => unsupported('Workspace creation'),
+      acceptInvitation: async () => unsupported('Workspace invitation acceptance'),
     },
     family: {
       load: (workspaceId) => repository.loadFamily(workspaceId),

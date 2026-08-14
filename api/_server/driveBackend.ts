@@ -12,6 +12,7 @@ import {
   removeCollaborationMember, reviewFamilyDraft, submitFamilyDraft, updateCollaborationMember, uploadDraftPhoto,
 } from './collaboration.js'
 import { syncDriveMirror } from './mirror.js'
+import { AppError } from './http.js'
 
 export function createDriveRequestBackend(auth: AuthContext, selection: BackendSelection): RequestBackend {
   const token = auth.accessToken
@@ -44,6 +45,8 @@ export function createDriveRequestBackend(auth: AuthContext, selection: BackendS
         const access = await collaborationWorkspaceAccess(token, workspace.access, user)
         return { ...access, rootFolderUrl: workspace.root.webViewLink ?? `https://drive.google.com/drive/folders/${workspace.root.id}` }
       },
+      async create() { throw new AppError(409, 'DRIVE_WORKSPACE_CREATE_UNSUPPORTED', 'Create the Famnesia folder through the existing Google Drive setup flow.') },
+      async acceptInvitation() { throw new AppError(409, 'DRIVE_INVITATION_LINK_UNSUPPORTED', 'Google Drive workspaces use the shared-folder connector.') },
     },
     family: {
       async load(workspaceId) {
@@ -80,14 +83,16 @@ export function createDriveRequestBackend(auth: AuthContext, selection: BackendS
     members: {
       list: (workspaceId) => collaborationApprovalEnabled() ? listCollaborationMembers(token, workspaceId) : listMembers(token, workspaceId),
       async add(workspaceId, email, role) {
-        if (collaborationApprovalEnabled()) await addCollaborationMember(token, workspaceId, email, role)
-        else await addMember(token, workspaceId, email, role)
+        const driveRole = role === 'editor' ? 'contributor' : role
+        if (collaborationApprovalEnabled() && role !== 'editor') await addCollaborationMember(token, workspaceId, email, driveRole)
+        else await addMember(token, workspaceId, email, driveRole)
         await appendActivity(token, workspaceId, { actorEmail: user.email, actorName: user.name, action: 'member.invited', entityType: 'member', summary: `Invited ${email} as ${role}` })
         await markMirrorChanged(workspaceId)
       },
       async update(workspaceId, memberId, role) {
-        if (collaborationApprovalEnabled()) await updateCollaborationMember(token, workspaceId, memberId, role)
-        else await updateMember(token, workspaceId, memberId, role)
+        const driveRole = role === 'editor' ? 'contributor' : role
+        if (collaborationApprovalEnabled() && role !== 'editor') await updateCollaborationMember(token, workspaceId, memberId, driveRole)
+        else await updateMember(token, workspaceId, memberId, driveRole)
         await appendActivity(token, workspaceId, { actorEmail: user.email, actorName: user.name, action: 'member.role_changed', entityType: 'member', entityId: memberId, summary: `Changed a member role to ${role}` })
         await markMirrorChanged(workspaceId)
       },

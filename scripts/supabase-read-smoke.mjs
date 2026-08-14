@@ -63,6 +63,7 @@ try {
   assert(!family.body.snapshot?.data?.media?.[0]?.driveFileId, 'Storage object must not be disguised as a Drive file ID.')
   assert(family.body.workspace?.canEdit === true && family.body.workspace?.canCommitDirectly === true, 'CR06 must expose owner metadata commit capability.')
   assert(family.body.workspace?.canUpload === true, 'CR07 must expose private media staging to the owner.')
+  assert(family.body.workspace?.canManageMembers === true && family.body.workspace?.canReviewDrafts === true, 'CR08 must expose owner collaboration capabilities.')
 
   const activity = await request(owner.token, `/api/workspaces/${familyId}/family?resource=activity`)
   assert(activity.response.ok && activity.body.activity?.length === 2, 'Activity parity fixture should load.')
@@ -73,11 +74,11 @@ try {
   const photo = await request(owner.token, `/api/workspaces/${familyId}/photos/M01`)
   assert(photo.response.ok && photo.response.headers.get('content-type')?.includes('image/svg+xml'), 'Read phase should render a safe media placeholder.')
 
-  const blockedWrite = await request(owner.token, `/api/workspaces/${familyId}/family`, {
+  const replacement = await request(owner.token, `/api/workspaces/${familyId}/family`, {
     method: 'PUT',
-    body: JSON.stringify({ data: family.body.snapshot.data, expectedRevision: family.body.snapshot.revision }),
+    body: JSON.stringify({ data: family.body.snapshot.data, expectedRevision: family.body.snapshot.revision, mode: 'replace' }),
   })
-  assert(blockedWrite.response.status === 501 && blockedWrite.body.error?.code === 'SUPABASE_WRITE_NOT_ENABLED', 'Supabase full dataset replacement must remain explicitly blocked in CR06.')
+  assert(replacement.response.ok && replacement.body.snapshot?.revision?.version === '8', 'CR08 owner replacement should create a backup and increment the canonical version.')
 
   const viewerWorkspaces = await request(viewer.token, '/api/workspaces')
   assert(viewerWorkspaces.response.ok && viewerWorkspaces.body.workspaces?.length === 1, 'Viewer should list only their shared workspace.')

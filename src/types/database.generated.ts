@@ -228,6 +228,64 @@ export type Database = {
           },
         ]
       }
+      draft_review_events: {
+        Row: {
+          created_at: string
+          decision: string
+          draft_revision: number
+          draft_submission_id: string
+          id: string
+          note: string | null
+          operation_ids: string[]
+          reviewer_user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          decision: string
+          draft_revision: number
+          draft_submission_id: string
+          id?: string
+          note?: string | null
+          operation_ids: string[]
+          reviewer_user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          decision?: string
+          draft_revision?: number
+          draft_submission_id?: string
+          id?: string
+          note?: string | null
+          operation_ids?: string[]
+          reviewer_user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "draft_review_events_draft_submission_id_fkey"
+            columns: ["draft_submission_id"]
+            isOneToOne: false
+            referencedRelation: "draft_submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draft_review_events_submission_workspace_fk"
+            columns: ["workspace_id", "draft_submission_id"]
+            isOneToOne: false
+            referencedRelation: "draft_submissions"
+            referencedColumns: ["workspace_id", "id"]
+          },
+          {
+            foreignKeyName: "draft_review_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       draft_submissions: {
         Row: {
           base_data_version: number
@@ -241,6 +299,7 @@ export type Database = {
           revision: number
           status: Database["public"]["Enums"]["draft_status"]
           submitted_at: string | null
+          terminal_at: string | null
           updated_at: string
           workspace_id: string
         }
@@ -256,6 +315,7 @@ export type Database = {
           revision?: number
           status?: Database["public"]["Enums"]["draft_status"]
           submitted_at?: string | null
+          terminal_at?: string | null
           updated_at?: string
           workspace_id: string
         }
@@ -271,6 +331,7 @@ export type Database = {
           revision?: number
           status?: Database["public"]["Enums"]["draft_status"]
           submitted_at?: string | null
+          terminal_at?: string | null
           updated_at?: string
           workspace_id?: string
         }
@@ -807,12 +868,14 @@ export type Database = {
       }
       workspace_invitations: {
         Row: {
+          accepted_at: string | null
           accepted_by_user_id: string | null
           created_at: string
           email: string
           expires_at: string | null
           id: string
           invited_by_user_id: string
+          revoked_at: string | null
           role: Database["public"]["Enums"]["workspace_role"]
           status: Database["public"]["Enums"]["invitation_status"]
           token_hash: string | null
@@ -820,12 +883,14 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          accepted_at?: string | null
           accepted_by_user_id?: string | null
           created_at?: string
           email: string
           expires_at?: string | null
           id?: string
           invited_by_user_id: string
+          revoked_at?: string | null
           role: Database["public"]["Enums"]["workspace_role"]
           status?: Database["public"]["Enums"]["invitation_status"]
           token_hash?: string | null
@@ -833,12 +898,14 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          accepted_at?: string | null
           accepted_by_user_id?: string | null
           created_at?: string
           email?: string
           expires_at?: string | null
           id?: string
           invited_by_user_id?: string
+          revoked_at?: string | null
           role?: Database["public"]["Enums"]["workspace_role"]
           status?: Database["public"]["Enums"]["invitation_status"]
           token_hash?: string | null
@@ -1009,6 +1076,10 @@ export type Database = {
         Args: { family_data: Json; target_workspace_id: string }
         Returns: Json
       }
+      accept_workspace_invitation: {
+        Args: { p_token_hash: string }
+        Returns: string
+      }
       can_commit_workspace: {
         Args: { target_workspace_id: string }
         Returns: boolean
@@ -1027,6 +1098,10 @@ export type Database = {
         Args: { target_workspace_id: string }
         Returns: boolean
       }
+      can_read_workspace_profile: {
+        Args: { target_user_id: string }
+        Returns: boolean
+      }
       can_review_workspace: {
         Args: { target_workspace_id: string }
         Returns: boolean
@@ -1034,6 +1109,10 @@ export type Database = {
       can_write_media_object: {
         Args: { object_name: string }
         Returns: boolean
+      }
+      cleanup_terminal_family_drafts: {
+        Args: { p_workspace_id: string }
+        Returns: number
       }
       commit_family_operations: {
         Args: {
@@ -1045,7 +1124,38 @@ export type Database = {
         }
         Returns: Json
       }
+      create_family_snapshot: {
+        Args: { p_reason: string; p_workspace_id: string }
+        Returns: Json
+      }
+      create_family_workspace: { Args: { p_name: string }; Returns: string }
+      create_workspace_invitation: {
+        Args: {
+          p_email: string
+          p_expires_at: string
+          p_role: Database["public"]["Enums"]["workspace_role"]
+          p_token_hash: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       discard_media_upload: { Args: { p_upload_id: string }; Returns: Json }
+      discard_reviewed_media_upload: {
+        Args: { p_upload_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      finalize_family_draft_review: {
+        Args: {
+          p_decision: string
+          p_draft_id: string
+          p_expected_revision: number
+          p_note: string
+          p_operation_ids: string[]
+          p_result_data_version: number
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       get_family_commit_status: {
         Args: { p_commit_id: string; p_workspace_id: string }
         Returns: Json
@@ -1058,6 +1168,15 @@ export type Database = {
         Args: { target_workspace_id: string }
         Returns: boolean
       }
+      mark_family_draft_needs_changes: {
+        Args: {
+          p_draft_id: string
+          p_expected_revision: number
+          p_note: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
       media_object_upload_id: { Args: { object_name: string }; Returns: string }
       media_object_workspace_id: {
         Args: { object_name: string }
@@ -1067,6 +1186,29 @@ export type Database = {
         Args: {
           p_person_legacy_id: string
           p_profile_legacy_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      replace_family_dataset: {
+        Args: {
+          p_expected_data_version: number
+          p_family_data: Json
+          p_mode: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      revoke_workspace_invitation: {
+        Args: { p_invitation_id: string; p_workspace_id: string }
+        Returns: undefined
+      }
+      submit_family_draft: {
+        Args: {
+          p_base_data_version: number
+          p_checksum: string
+          p_client_created_at: string
+          p_operations: Json
           p_workspace_id: string
         }
         Returns: Json

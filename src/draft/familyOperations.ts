@@ -313,9 +313,11 @@ export function operationCounts(operations: FamilyOperation[]): Record<string, n
 }
 
 export function operationReferencesNewPhoto(operation: FamilyOperation): string | undefined {
-  return operation.type === 'media.attach' ? String(record(operation.value)?.driveFileId ?? '') || undefined : undefined
+  const value = record(operation.value)
+  return operation.type === 'media.attach' ? String(value?.fileId ?? value?.driveFileId ?? '') || undefined : undefined
 }
 
 export function operationReferencesDeletedPhoto(operation: FamilyOperation): string | undefined {
-  return operation.type === 'media.delete' ? String(record(operation.baseValues?.$entity)?.driveFileId ?? '') || undefined : undefined
+  const value = record(operation.baseValues?.$entity)
+  return operation.type === 'media.delete' ? String(value?.fileId ?? value?.driveFileId ?? '') || undefined : undefined
 }

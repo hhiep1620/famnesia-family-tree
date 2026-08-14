@@ -1,4 +1,4 @@
-import type { ActivityEvent, FamilyBackup, FamilyData, WorkspaceInfo, WorkspaceMember, WorkspaceRole } from '../../src/types/family.js'
+import type { ActivityEvent, FamilyBackup, FamilyData, WorkspaceInfo, WorkspaceInvitationResult, WorkspaceMember, WorkspaceRole } from '../../src/types/family.js'
 import type { CollaborationStatus, DraftReviewRequest, DraftReviewResult, MirrorSyncResult, ReviewDraft, SubmitDraftResult } from '../../src/types/collaboration.js'
 import type { FamilyCommitMeta, FamilyCommitRequest, FamilyCommitStatusResult, FamilyRevision } from '../../src/types/familyOperations.js'
 import type { BackendSelection } from './backendSelectors.js'
@@ -11,12 +11,14 @@ export interface FamilySnapshot {
 
 export type FamilySaveMode = 'save' | 'replace' | 'restore' | 'merge'
 export type ActivityInput = Pick<ActivityEvent, 'actorEmail' | 'actorName' | 'action' | 'entityType' | 'entityId' | 'summary' | 'metadata'>
-export type AssignableWorkspaceRole = Extract<WorkspaceRole, 'contributor' | 'viewer'>
+export type AssignableWorkspaceRole = Extract<WorkspaceRole, 'editor' | 'contributor' | 'viewer'>
 
 export interface WorkspaceRepositoryContract {
   list(): Promise<WorkspaceInfo[]>
   connect(workspaceId: string): Promise<WorkspaceInfo>
   get(workspaceId: string): Promise<WorkspaceInfo>
+  create(name: string): Promise<WorkspaceInfo>
+  acceptInvitation(token: string): Promise<WorkspaceInfo>
 }
 
 export interface FamilyRepositoryContract {
@@ -36,7 +38,7 @@ export interface MediaRepositoryContract {
 
 export interface MemberRepositoryContract {
   list(workspaceId: string): Promise<WorkspaceMember[]>
-  add(workspaceId: string, email: string, role: AssignableWorkspaceRole): Promise<void>
+  add(workspaceId: string, email: string, role: AssignableWorkspaceRole): Promise<WorkspaceInvitationResult | void>
   update(workspaceId: string, memberId: string, role: AssignableWorkspaceRole): Promise<void>
   remove(workspaceId: string, memberId: string): Promise<void>
 }
