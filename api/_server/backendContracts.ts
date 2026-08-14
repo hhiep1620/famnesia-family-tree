@@ -29,8 +29,8 @@ export interface FamilyRepositoryContract {
 }
 
 export interface MediaRepositoryContract {
-  upload(workspaceId: string, file: Blob, filename: string, profileId?: string, personId?: string): Promise<string>
-  read(workspaceId: string, mediaId: string): Promise<Response>
+  upload(workspaceId: string, file: Blob, filename: string, profileId?: string, personId?: string, thumbnail?: Blob): Promise<string>
+  read(workspaceId: string, mediaId: string, variant?: 'original' | 'thumb'): Promise<Response>
   delete(workspaceId: string, mediaId: string): Promise<void>
 }
 

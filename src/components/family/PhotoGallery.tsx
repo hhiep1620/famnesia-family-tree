@@ -1,6 +1,6 @@
 import { Check, ExternalLink, ImagePlus, RotateCw, Star, Trash2 } from 'lucide-react'
 import { useRef, useState } from 'react'
-import { useDriveImage } from '../../hooks/useDriveImage'
+import { useMediaImage } from '../../hooks/useMediaImage'
 import { mediaReferenceId } from '../../services/mediaReference'
 import type { PersonMedia } from '../../types/family'
 
@@ -15,7 +15,7 @@ interface GalleryItemProps {
 }
 
 function GalleryItem({ item, workspaceId, readOnly, busy, onSetPrimary, onUpdateCaption, onDelete }: GalleryItemProps) {
-  const { url, loading } = useDriveImage(workspaceId, mediaReferenceId(item))
+  const { url, loading } = useMediaImage(workspaceId, mediaReferenceId(item), 'original')
   const [caption, setCaption] = useState(item.caption ?? '')
 
   return <article className={`gallery-item ${item.isPrimary ? 'is-primary' : ''}`}>

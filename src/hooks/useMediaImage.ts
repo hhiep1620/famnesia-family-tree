@@ -1,19 +1,17 @@
 import { useEffect, useState } from 'react'
 import { authenticatedApiFetch } from '../services/apiClient'
 
-/**
- * Resolve private media through the active authentication adapter. Blob URLs
- * let Supabase Bearer sessions and legacy Drive cookie sessions share the same
- * image components without exposing access tokens in image URLs.
- */
-export function useDriveImage(workspaceId?: string, fileId?: string) {
+export type MediaImageVariant = 'original' | 'thumb'
+
+/** Resolve private media through the selected authenticated backend. */
+export function useMediaImage(workspaceId?: string, mediaId?: string, variant: MediaImageVariant = 'original') {
   const [url, setUrl] = useState<string>()
-  const [loading, setLoading] = useState(Boolean(workspaceId && fileId))
+  const [loading, setLoading] = useState(Boolean(workspaceId && mediaId))
 
   useEffect(() => {
     let active = true
     let objectUrl: string | undefined
-    if (!workspaceId || !fileId) {
+    if (!workspaceId || !mediaId) {
       setUrl(undefined)
       setLoading(false)
       return () => { active = false }
@@ -21,7 +19,8 @@ export function useDriveImage(workspaceId?: string, fileId?: string) {
 
     setUrl(undefined)
     setLoading(true)
-    void authenticatedApiFetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/photos/${encodeURIComponent(fileId)}`, { headers: { Accept: 'image/*' } })
+    const path = `/api/workspaces/${encodeURIComponent(workspaceId)}/photos/${encodeURIComponent(mediaId)}?variant=${variant}`
+    void authenticatedApiFetch(path, { headers: { Accept: 'image/*' } })
       .then(async (response) => {
         if (!response.ok) throw new Error(`Media request failed with ${response.status}.`)
         objectUrl = URL.createObjectURL(await response.blob())
@@ -34,7 +33,7 @@ export function useDriveImage(workspaceId?: string, fileId?: string) {
       active = false
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [workspaceId, fileId])
+  }, [mediaId, variant, workspaceId])
 
   return { url, loading }
 }

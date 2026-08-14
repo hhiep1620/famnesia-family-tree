@@ -1,11 +1,11 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useDriveImage } from '../../hooks/useDriveImage'
+import { useMediaImage } from '../../hooks/useMediaImage'
 import type { PersonFlowNode } from '../../layout/familyLayout'
 import { getInitials } from '../../utils/initials'
 
 export function PersonNode({ data, selected }: NodeProps<PersonFlowNode>) {
-  const { url, loading } = useDriveImage(data.workspaceId, data.photoFileId)
+  const { url, loading } = useMediaImage(data.workspaceId, data.photoFileId, 'thumb')
   return (
     <article className={`person-node ${selected ? 'is-selected' : ''} ${data.isDeceased ? 'is-deceased' : ''} ${data.isDimmed ? 'is-dimmed' : ''}`} aria-label={data.name}>
       <Handle id="family-top" type="target" position={Position.Top} className="family-handle" />

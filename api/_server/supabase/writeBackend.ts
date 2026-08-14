@@ -8,6 +8,7 @@ import type { RequestBackend } from '../backendContracts.js'
 import type { BackendSelection } from '../backendSelectors.js'
 import { AppError } from '../http.js'
 import { createSupabaseUserClient } from './serverClient.js'
+import { SupabaseMediaRepository } from './mediaBackend.js'
 import { SupabaseReadRepository } from './readBackend.js'
 
 interface RpcCommitPayload {
@@ -119,7 +120,9 @@ export class SupabaseWriteRepository extends SupabaseReadRepository {
 }
 
 export function createSupabaseWriteRequestBackend(auth: AuthContext, selection: BackendSelection): RequestBackend {
-  const repository = new SupabaseWriteRepository(createSupabaseUserClient(auth.accessToken), auth.user.id)
+  const client = createSupabaseUserClient(auth.accessToken)
+  const repository = new SupabaseWriteRepository(client, auth.user.id)
+  const media = new SupabaseMediaRepository(client)
   const workspace = (workspaceId: string) => repository.getWorkspace(workspaceId)
   const unsupported = (operation: string): never => { throw new AppError(501, 'SUPABASE_WRITE_NOT_ENABLED', `${operation} is not enabled in the Supabase metadata-write phase.`) }
   return {
@@ -133,15 +136,19 @@ export function createSupabaseWriteRequestBackend(auth: AuthContext, selection: 
     family: {
       load: (workspaceId) => repository.loadFamily(workspaceId),
       save: async () => unsupported('Full dataset replacement'),
-      commit: (workspaceId, request) => repository.commitFamily(workspaceId, request),
+      async commit(workspaceId, request) {
+        const result = await repository.commitFamily(workspaceId, request)
+        await media.cleanupQueued(workspaceId).catch((error) => console.error({ name: 'SupabaseMediaCleanupDeferred', workspaceId, error: error instanceof Error ? error.message : String(error) }))
+        return result
+      },
       commitStatus: (workspaceId, commitId) => repository.commitStatus(workspaceId, commitId),
       listActivity: (workspaceId) => repository.listActivity(workspaceId),
       recordActivity: async () => unsupported('Standalone activity write'),
     },
     media: {
-      upload: async () => unsupported('Media upload'),
-      read: (workspaceId, mediaId) => repository.mediaPlaceholder(workspaceId, mediaId),
-      delete: async () => unsupported('Media delete'),
+      upload: (workspaceId, file, _filename, profileId, personId, thumbnail) => media.upload(workspaceId, file, profileId, personId, thumbnail),
+      read: (workspaceId, mediaId, variant) => media.read(workspaceId, mediaId, variant),
+      delete: (workspaceId, mediaId) => media.delete(workspaceId, mediaId),
     },
     members: {
       list: (workspaceId) => repository.listMembers(workspaceId),

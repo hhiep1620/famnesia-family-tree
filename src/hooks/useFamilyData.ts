@@ -3,7 +3,7 @@ import { sampleFamilyData } from '../data/sampleFamily'
 import { FAMILY_DRAFT_SCHEMA_VERSION, deleteFamilyDraft, isExpiredFamilyDraft, loadFamilyDraft, saveFamilyDraft } from '../draft/draftStorage'
 import { compactFamilyOperations, createOperation, isFamilyOperation, mergeFamilyOperations, operationReferencesNewPhoto, removeOperationWithDependencies, replayFamilyOperations } from '../draft/familyOperations'
 import { validateRelationship } from '../graph/familyValidation'
-import { optimizePhoto } from '../media/imageOptimization'
+import { createPhotoThumbnail, optimizePhoto } from '../media/imageOptimization'
 import { generateNextMediaId } from '../media/mediaSelectors'
 import { duplicatePairId } from '../integrity/duplicateDetection'
 import { mergePeople } from '../integrity/mergePerson'
@@ -297,9 +297,12 @@ export function useFamilyData(userId = 'mock-user') {
     if (!useMockData && typeof navigator !== 'undefined' && !navigator.onLine) throw new Error('Không thể tải ảnh khi đang ngoại tuyến. Các chỉnh sửa khác vẫn có thể lưu vào Draft.')
     if (useMockData) return files.map((_, index) => `mock-${Date.now()}-${index}`)
     if (!repository.current) throw new Error('Workspace chưa sẵn sàng.')
-    const optimized = await Promise.all(files.map(optimizePhoto))
+    const optimized = await Promise.all(files.map(async (file) => {
+      const original = await optimizePhoto(file)
+      return { original, thumbnail: await createPhotoThumbnail(original) }
+    }))
     const uploaded: string[] = []
-    try { for (const photo of optimized) uploaded.push(await repository.current.uploadPhoto(photo, profileId, personId)); return uploaded }
+    try { for (const photo of optimized) uploaded.push(await repository.current.uploadPhoto(photo.original, profileId, personId, photo.thumbnail)); return uploaded }
     catch (caught) { await Promise.allSettled(uploaded.map((id) => repository.current?.deletePhoto(id))); throw caught }
   }, [useMockData])
 
@@ -338,7 +341,7 @@ export function useFamilyData(userId = 'mock-user') {
 
   const mediaAttachOperations = useCallback((photoIds: string[], profileId: string, personId: string, existingCount: number): FamilyOperation[] => {
     const ids = familyData.media.map((item) => item.id); const now = new Date().toISOString()
-    return photoIds.map((driveFileId, index) => { const id = generateNextMediaId(ids); ids.push(id); const value: PersonMedia = { id, profileId, personId, driveFileId, type: 'photo', isPrimary: existingCount === 0 && index === 0, caption: '', takenDate: null, sortOrder: existingCount + index + 1, createdAt: now }; return createOperation({ type: 'media.attach', entityId: id, profileId, value }) })
+    return photoIds.map((fileId, index) => { const id = generateNextMediaId(ids); ids.push(id); const value: PersonMedia = { id, profileId, personId, fileId, type: 'photo', isPrimary: existingCount === 0 && index === 0, caption: '', takenDate: null, sortOrder: existingCount + index + 1, createdAt: now }; return createOperation({ type: 'media.attach', entityId: id, profileId, value }) })
   }, [familyData.media])
 
   const addPerson = useCallback(async (draft: PersonDraft, connection?: NewPersonConnection) => runUpload('Đang tải ảnh và thêm vào Draft…', async () => {
@@ -364,7 +367,7 @@ export function useFamilyData(userId = 'mock-user') {
     operations.push(...mediaAttachOperations(photoIds, current.profileId ?? '', id, familyData.media.filter((item) => item.personId === id).length)); if (operations.length) stageOperations(operations)
   }), [familyData.media, familyData.persons, mediaAttachOperations, personFromDraft, runUpload, stageOperations, uploadPhotos])
 
-  const addPersonMedia = useCallback(async (personId: string, files: File[]) => runUpload('Đang tải ảnh lên Google Drive…', async () => {
+  const addPersonMedia = useCallback(async (personId: string, files: File[]) => runUpload('Đang tải ảnh vào kho media riêng tư…', async () => {
     const person = familyData.persons.find((item) => item.id === personId); if (!person || !files.length) return
     const photoIds = await uploadPhotos(files, person.profileId ?? '', personId)
     stageOperations(mediaAttachOperations(photoIds, person.profileId ?? '', personId, familyData.media.filter((item) => item.personId === personId).length))

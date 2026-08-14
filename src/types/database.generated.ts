@@ -367,7 +367,9 @@ export type Database = {
           sort_order: number | null
           storage_bucket: string | null
           storage_path: string | null
+          storage_status: string
           taken_date: string | null
+          thumbnail_storage_path: string | null
           type: string
           updated_at: string
           workspace_id: string
@@ -387,7 +389,9 @@ export type Database = {
           sort_order?: number | null
           storage_bucket?: string | null
           storage_path?: string | null
+          storage_status?: string
           taken_date?: string | null
+          thumbnail_storage_path?: string | null
           type?: string
           updated_at?: string
           workspace_id: string
@@ -407,7 +411,9 @@ export type Database = {
           sort_order?: number | null
           storage_bucket?: string | null
           storage_path?: string | null
+          storage_status?: string
           taken_date?: string | null
+          thumbnail_storage_path?: string | null
           type?: string
           updated_at?: string
           workspace_id?: string
@@ -419,6 +425,132 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "persons"
             referencedColumns: ["workspace_id", "family_profile_id", "id"]
+          },
+        ]
+      }
+      media_cleanup_queue: {
+        Row: {
+          attempt_count: number
+          completed_at: string | null
+          created_at: string
+          id: string
+          last_error: string | null
+          original_path: string
+          status: Database["public"]["Enums"]["media_cleanup_status"]
+          thumbnail_path: string | null
+          workspace_id: string
+        }
+        Insert: {
+          attempt_count?: number
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          original_path: string
+          status?: Database["public"]["Enums"]["media_cleanup_status"]
+          thumbnail_path?: string | null
+          workspace_id: string
+        }
+        Update: {
+          attempt_count?: number
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          original_path?: string
+          status?: Database["public"]["Enums"]["media_cleanup_status"]
+          thumbnail_path?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_cleanup_queue_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_uploads: {
+        Row: {
+          byte_size: number | null
+          checksum: string | null
+          claimed_legacy_id: string | null
+          created_at: string
+          created_by_user_id: string
+          expires_at: string
+          family_profile_id: string
+          id: string
+          mime_type: string | null
+          object_prefix: string
+          original_path: string | null
+          person_id: string
+          status: Database["public"]["Enums"]["media_upload_status"]
+          thumbnail_byte_size: number | null
+          thumbnail_path: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          byte_size?: number | null
+          checksum?: string | null
+          claimed_legacy_id?: string | null
+          created_at?: string
+          created_by_user_id: string
+          expires_at?: string
+          family_profile_id: string
+          id?: string
+          mime_type?: string | null
+          object_prefix: string
+          original_path?: string | null
+          person_id: string
+          status?: Database["public"]["Enums"]["media_upload_status"]
+          thumbnail_byte_size?: number | null
+          thumbnail_path?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          byte_size?: number | null
+          checksum?: string | null
+          claimed_legacy_id?: string | null
+          created_at?: string
+          created_by_user_id?: string
+          expires_at?: string
+          family_profile_id?: string
+          id?: string
+          mime_type?: string | null
+          object_prefix?: string
+          original_path?: string | null
+          person_id?: string
+          status?: Database["public"]["Enums"]["media_upload_status"]
+          thumbnail_byte_size?: number | null
+          thumbnail_path?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_uploads_person_fk"
+            columns: ["workspace_id", "family_profile_id", "person_id"]
+            isOneToOne: false
+            referencedRelation: "persons"
+            referencedColumns: ["workspace_id", "family_profile_id", "id"]
+          },
+          {
+            foreignKeyName: "media_uploads_profile_fk"
+            columns: ["workspace_id", "family_profile_id"]
+            isOneToOne: false
+            referencedRelation: "family_profiles"
+            referencedColumns: ["workspace_id", "id"]
+          },
+          {
+            foreignKeyName: "media_uploads_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -873,6 +1005,10 @@ export type Database = {
         Args: { family_data: Json; target_workspace_id: string }
         Returns: undefined
       }
+      _resolve_family_media_uploads: {
+        Args: { family_data: Json; target_workspace_id: string }
+        Returns: Json
+      }
       can_commit_workspace: {
         Args: { target_workspace_id: string }
         Returns: boolean
@@ -886,12 +1022,17 @@ export type Database = {
         Returns: boolean
       }
       can_read_draft: { Args: { target_draft_id: string }; Returns: boolean }
+      can_read_media_object: { Args: { object_name: string }; Returns: boolean }
       can_read_workspace: {
         Args: { target_workspace_id: string }
         Returns: boolean
       }
       can_review_workspace: {
         Args: { target_workspace_id: string }
+        Returns: boolean
+      }
+      can_write_media_object: {
+        Args: { object_name: string }
         Returns: boolean
       }
       commit_family_operations: {
@@ -904,6 +1045,7 @@ export type Database = {
         }
         Returns: Json
       }
+      discard_media_upload: { Args: { p_upload_id: string }; Returns: Json }
       get_family_commit_status: {
         Args: { p_commit_id: string; p_workspace_id: string }
         Returns: Json
@@ -915,6 +1057,31 @@ export type Database = {
       is_workspace_owner: {
         Args: { target_workspace_id: string }
         Returns: boolean
+      }
+      media_object_upload_id: { Args: { object_name: string }; Returns: string }
+      media_object_workspace_id: {
+        Args: { object_name: string }
+        Returns: string
+      }
+      prepare_media_upload: {
+        Args: {
+          p_person_legacy_id: string
+          p_profile_legacy_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      verify_media_upload: {
+        Args: {
+          p_byte_size: number
+          p_checksum: string
+          p_mime_type: string
+          p_original_path: string
+          p_thumbnail_byte_size: number
+          p_thumbnail_path: string
+          p_upload_id: string
+        }
+        Returns: Json
       }
       workspace_role: {
         Args: { target_workspace_id: string }
@@ -936,6 +1103,13 @@ export type Database = {
       fact_confidence: "confirmed" | "likely" | "estimated" | "unknown"
       gender_type: "male" | "female" | "other" | "unknown"
       invitation_status: "pending" | "accepted" | "revoked" | "expired"
+      media_cleanup_status: "pending" | "completed" | "failed"
+      media_upload_status:
+        | "staging"
+        | "verified"
+        | "attached"
+        | "discarded"
+        | "expired"
       migration_status:
         | "pending"
         | "running"
@@ -1096,6 +1270,14 @@ export const Constants = {
       fact_confidence: ["confirmed", "likely", "estimated", "unknown"],
       gender_type: ["male", "female", "other", "unknown"],
       invitation_status: ["pending", "accepted", "revoked", "expired"],
+      media_cleanup_status: ["pending", "completed", "failed"],
+      media_upload_status: [
+        "staging",
+        "verified",
+        "attached",
+        "discarded",
+        "expired",
+      ],
       migration_status: [
         "pending",
         "running",

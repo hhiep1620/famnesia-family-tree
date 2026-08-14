@@ -28,7 +28,7 @@ export function workspaceInfo(row: WorkspaceRow, role: WorkspaceRole): Workspace
     role,
     canRead: true,
     canEdit: canCommitDirectly,
-    canUpload: false,
+    canUpload: role !== 'viewer',
     canManageMembers: false,
     canCommitDirectly,
     canSubmitDraft: false,

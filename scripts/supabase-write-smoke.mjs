@@ -67,7 +67,7 @@ const commitPath = `/api/workspaces/${familyId}/family?operation=commit`
 try {
   const initial = await request(owner.token, `/api/workspaces/${familyId}/family`)
   assert(initial.response.ok && initial.body.snapshot.revision.version === '7', 'Seed workspace should start at data version 7.')
-  assert(initial.body.workspace.canCommitDirectly === true && initial.body.workspace.canUpload === false, 'Owner should have metadata commit but not media upload capability.')
+  assert(initial.body.workspace.canCommitDirectly === true && initial.body.workspace.canUpload === true, 'Owner should have metadata commit and private media staging capability.')
 
   const ownerCommitId = 'commit_concurrent_owner'
   const editorCommitId = 'commit_concurrent_editor'

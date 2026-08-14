@@ -11,7 +11,8 @@ export default { fetch(request: Request) { return withErrors(async () => {
     await backend.media.delete(workspaceId, photoId)
     return new Response(null, { status: 204 })
   }
-  const source = await backend.media.read(workspaceId, photoId)
+  const variant = new URL(request.url).searchParams.get('variant') === 'thumb' ? 'thumb' : 'original'
+  const source = await backend.media.read(workspaceId, photoId, variant)
   const headers = new Headers()
   headers.set('Content-Type', source.headers.get('content-type') ?? 'application/octet-stream')
   headers.set('Cache-Control', 'private, no-store')

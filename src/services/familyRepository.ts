@@ -23,7 +23,7 @@ export interface FamilyRepositoryContract {
   backup(data: FamilyData, reason?: string): Promise<FamilyBackup>
   listBackups(): Promise<FamilyBackup[]>
   loadBackup(id: string): Promise<FamilyData>
-  uploadPhoto(file: File, profileId?: string, personId?: string): Promise<string>
+  uploadPhoto(file: File, profileId?: string, personId?: string, thumbnail?: File): Promise<string>
   deletePhoto(id: string): Promise<void>
   photoUrl(id: string): string
   listMembers(): Promise<WorkspaceMember[]>
@@ -139,8 +139,9 @@ export class FamilyRepository implements FamilyRepositoryContract {
     return (await apiRequest<{ data: FamilyData }>(`${workspacePath(this.workspace.id)}/backups?backupId=${encodeURIComponent(id)}`)).data
   }
 
-  async uploadPhoto(file: File, profileId?: string, personId?: string): Promise<string> {
+  async uploadPhoto(file: File, profileId?: string, personId?: string, thumbnail?: File): Promise<string> {
     const form = new FormData(); form.append('photo', file)
+    if (thumbnail) form.append('thumbnail', thumbnail)
     if (profileId) form.append('profileId', profileId)
     if (personId) form.append('personId', personId)
     return (await apiRequest<{ id: string }>(`${workspacePath(this.workspace.id)}/photos`, { method: 'POST', body: form })).id

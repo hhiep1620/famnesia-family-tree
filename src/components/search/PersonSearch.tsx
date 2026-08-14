@@ -1,7 +1,7 @@
 import { Search, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { calculateAge } from '../../calendar/dateUtils'
-import { useDriveImage } from '../../hooks/useDriveImage'
+import { useMediaImage } from '../../hooks/useMediaImage'
 import { createPrimaryMediaMap } from '../../media/mediaSelectors'
 import { PersonSearchIndex, type PersonSearchResult } from '../../search/personSearchIndex'
 import { mediaReferenceId } from '../../services/mediaReference'
@@ -22,7 +22,7 @@ const scopeLabels: Record<FamilyScope, string> = {
 }
 
 function SearchResultCard({ result, workspaceId, photoId, onSelect }: { result: PersonSearchResult; workspaceId?: string; photoId?: string; onSelect: () => void }) {
-  const { url } = useDriveImage(workspaceId, photoId)
+  const { url } = useMediaImage(workspaceId, photoId, 'thumb')
   const age = result.person.isDeceased ? undefined : calculateAge(result.person.birthDate ?? undefined)
   const life = result.person.isDeceased ? `${result.person.birthDate?.slice(0, 4) ?? '?'}–${result.person.deathDate?.slice(0, 4) ?? '?'}` : age === undefined ? undefined : `${age} tuổi`
   return <button type="button" className="search-result-card" onClick={onSelect}>

@@ -62,7 +62,7 @@ try {
   assert(family.body.snapshot?.data?.media?.[0]?.fileId === 'M01', 'Supabase media must use neutral fileId.')
   assert(!family.body.snapshot?.data?.media?.[0]?.driveFileId, 'Storage object must not be disguised as a Drive file ID.')
   assert(family.body.workspace?.canEdit === true && family.body.workspace?.canCommitDirectly === true, 'CR06 must expose owner metadata commit capability.')
-  assert(family.body.workspace?.canUpload === false, 'CR06 must keep Supabase media upload disabled.')
+  assert(family.body.workspace?.canUpload === true, 'CR07 must expose private media staging to the owner.')
 
   const activity = await request(owner.token, `/api/workspaces/${familyId}/family?resource=activity`)
   assert(activity.response.ok && activity.body.activity?.length === 2, 'Activity parity fixture should load.')
@@ -90,7 +90,7 @@ try {
   const outsiderFamily = await request(outsider.token, `/api/workspaces/${familyId}/family`)
   assert(outsiderFamily.response.status === 404, 'Non-member should not load another family workspace.')
 
-  console.log('Supabase read API smoke passed: owner/viewer/outsider, parity data, empty workspace, placeholder and metadata-only capabilities.')
+  console.log('Supabase read API smoke passed: owner/viewer/outsider, parity data, empty workspace and private-media capabilities.')
 } finally {
   await Promise.all([owner.client.auth.signOut(), viewer.client.auth.signOut(), outsider.client.auth.signOut()])
 }
