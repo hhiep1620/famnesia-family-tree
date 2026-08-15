@@ -41,21 +41,22 @@ Mixed mode bị chặn vì Supabase session không chứa Google Drive access/re
 5. Nhập Google Client ID/Secret vào Supabase Google provider rồi bật provider.
 6. Trong **Authentication → URL Configuration**:
    - Site URL production: `https://famnesia-family-tree.vercel.app`;
-   - Redirect allow list: production origin, `http://localhost:3000`, và Preview URL cần kiểm thử. Hạn chế wildcard rộng.
+   - Redirect allow list: `https://famnesia-family-tree-*-neptworks.vercel.app/**` cho Preview của đúng project/team và các origin localhost cần kiểm thử. Không dùng wildcard rộng hơn phạm vi này.
 
-Không yêu cầu `drive.file`, không yêu cầu offline access và không lưu `provider_token`/`provider_refresh_token`. Browser chỉ lưu Supabase session do SDK quản lý.
+Không yêu cầu `drive.file`, không yêu cầu offline access và không lưu `provider_token`/`provider_refresh_token`. Browser dùng PKCE để callback chỉ mang authorization code dùng một lần thay vì access/refresh token trong URL; SDK tự trao đổi code và quản lý Supabase session.
 
-## Local Google provider (tùy chọn)
+## Local Google provider
 
-Baseline commit giữ `[auth.external.google].enabled = false` để stack local chạy mà không cần secret. Nếu cần test Google local, đổi cục bộ thành `true`, điền `client_id`, export secret trước khi start:
+Config giữ Google provider bật để `supabase config push` không vô tình tắt provider hosted. Trước khi start local hoặc push config, cung cấp Client ID và secret qua biến môi trường:
 
 ```bash
+export SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID='<google-client-id>'
 export SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET='<google-client-secret>'
 npm run supabase:stop
 npm run supabase:start
 ```
 
-Không commit Client Secret hoặc file config đã điền Client ID riêng. Khi Google local chưa cấu hình, dùng email/password smoke test dưới đây.
+Không commit Client Secret. Khi Google local chưa cấu hình, dùng email/password smoke test dưới đây.
 
 ## Email/password local smoke
 
@@ -90,4 +91,4 @@ Sau khi có development Supabase project và cấu hình ba selector target tron
 5. Sign out xóa session browser; protected API sau đó trả `401`.
 6. Kiểm tra consent screen không có Google Drive scope.
 
-Remote Google/Preview chưa thể được chứng minh chỉ bằng local test; ghi rõ trạng thái này trong handoff cho đến khi project URL/key/provider thật được cung cấp.
+Preview thật đã xác minh Google callback về đúng Vercel origin, restore session, đọc workspace đã migrate và không yêu cầu Google Drive scope. Role matrix/RLS remote đầy đủ vẫn cần tài khoản member và outsider riêng.
