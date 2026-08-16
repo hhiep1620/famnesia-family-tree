@@ -20,13 +20,13 @@
 - [x] Phase 07 — Private Storage/media lifecycle. Commit `ecdddf6`; 111 app tests, 108 pgTAP tests, DB reset/lint, read/write/media API smoke, browser thumbnail/original smoke, lint và build pass.
 - [x] Phase 08 — Shared workspace và approval workflow. Commit `7f5cabb`; 111 app tests, 138 pgTAP tests, DB reset/lint, read/write/media/collaboration API smoke, owner browser approval/invitation smoke, lint và build pass.
 - [x] Phase 09 — Drive-to-Supabase migration tool và reconciliation. Commit `9f588b6`; 117 app tests, 159 pgTAP tests, DB reset/lint, dry/live/image/RLS/idempotent migration smoke, typecheck, lint và build pass.
-- [ ] Phase 10 — Preview, production cutover, rollback và cleanup. Safety/preflight tooling commit `168b095`; linked schema, hosted Preview migration/reconciliation (1 profile, 16 persons, 26 relationships, 3 media), Google PKCE login, owner tree/calendar/analytics và media smoke đã pass. Remote multi-role RLS, Production cutover/observation/cleanup chưa chạy.
+- [ ] Phase 10 — Preview, production cutover, rollback và cleanup. Safety/preflight tooling commits `168b095`/`ce6ba86`; linked schema, hosted Preview migration/reconciliation (1 profile, 16 persons, 26 relationships, 3 media), Google PKCE login, owner tree/calendar/analytics/media, ephemeral member/outsider remote RLS và Preview preflight rehearsal `status=ready` đã pass. Production cutover/observation/cleanup chưa chạy.
 
 ## Current blocker / next action
 
-- Phase 09 đã hoàn tất; Phase 10 đã sẵn sàng về tooling/runbook nhưng dừng đúng production stop condition: chưa có explicit authorization, final Production backup/reconciliation, remote RLS evidence và rollback/observation owner.
+- Phase 09 đã hoàn tất; Phase 10 đã sẵn sàng về tooling/runbook nhưng dừng đúng production stop condition: chưa có explicit authorization, final Production backup/migration/reconciliation, full product smoke matrix và rollback/observation owner.
 - Google provider và redirect đã cấu hình cho stable Production origin cùng wildcard giới hạn đúng project/team Vercel để các Preview mới không quay về localhost.
-- Supabase project/key và owner migration đã xác minh; remote multi-role RLS evidence vẫn chờ member/outsider riêng. Production selectors tiếp tục giữ Drive.
+- Supabase project/key, owner migration và remote RLS isolation đã xác minh ngày 2026-08-16 bằng ephemeral member/outsider rồi cleanup. Evidence hết hạn sau 24 giờ và phải chạy lại cho final Production migration; Production selectors tiếp tục giữ Drive.
 
 ## Update rule
 
