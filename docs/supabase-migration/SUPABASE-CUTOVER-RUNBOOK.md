@@ -90,6 +90,8 @@ Stop immediately on errors, warnings, a non-clean reconciliation or a source che
 
 Run `supabase:rls:remote-smoke` against the just-migrated workspace, then stage this exact environment in the controlled shell used for preflight:
 
+The preflight also requires server-only `SUPABASE_SECRET_KEY` in that shell to perform an authenticated PostgREST health probe. It is never written to the report and must never be exposed as a `VITE_*` variable.
+
 ```dotenv
 DATA_BACKEND=supabase
 AUTH_BACKEND=supabase

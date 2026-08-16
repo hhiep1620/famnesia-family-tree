@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { safeCutoverEnvironment, validateCutoverArtifacts, type CutoverMigrationReport, type CutoverRlsReport } from './lib/cutoverSafety.js'
+import { checkCutoverServiceHealth, safeCutoverEnvironment, validateCutoverArtifacts, type CutoverMigrationReport, type CutoverRlsReport } from './lib/cutoverSafety.js'
 
 function argument(name: string): string {
   const index = process.argv.indexOf(`--${name}`)
@@ -18,10 +18,8 @@ const backup = await json<CutoverMigrationReport>(argument('backup-report'))
 const rls = await json<CutoverRlsReport>(argument('rls-report'))
 const output = path.resolve(argument('report'))
 
-const authHealth = await fetch(`${environment.url}/auth/v1/health`, { headers: { apikey: environment.publishableKey } })
-const restHealth = await fetch(`${environment.url}/rest/v1/`, { headers: { apikey: environment.publishableKey } })
 const evidence = validateCutoverArtifacts({ migration, backup, rls, expectedSupabaseHost: environment.host })
-const health = { auth: authHealth.ok, rest: restHealth.ok }
+const health = await checkCutoverServiceHealth(environment)
 const clean = evidence.clean && health.auth && health.rest
 const report = {
   status: clean ? 'ready' : 'blocked', checkedAt: new Date().toISOString(), targetHost: environment.host,

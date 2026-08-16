@@ -21,6 +21,16 @@ export interface CutoverArtifacts {
   now?: Date
 }
 
+export interface CutoverEnvironment {
+  url: string
+  host: string
+  publishableKey: string
+  secretKey: string
+  selectors: { data?: string; auth?: string; media?: string }
+}
+
+type HealthFetch = (input: string | URL, init?: RequestInit) => Promise<{ ok: boolean }>
+
 export function validateCutoverArtifacts(input: CutoverArtifacts) {
   const errors: string[] = []
   const warnings = Array.isArray(input.migration.warnings) ? input.migration.warnings : []
@@ -40,14 +50,23 @@ export function validateCutoverArtifacts(input: CutoverArtifacts) {
   return { clean: errors.length === 0, errors, sourceChecksum: input.migration.sourceChecksum, workspaceId: input.rls.workspaceId }
 }
 
-export function safeCutoverEnvironment(environment: NodeJS.ProcessEnv) {
+export function safeCutoverEnvironment(environment: NodeJS.ProcessEnv): CutoverEnvironment {
   const url = environment.SUPABASE_URL?.trim() || environment.VITE_SUPABASE_URL?.trim()
   const publishableKey = environment.SUPABASE_PUBLISHABLE_KEY?.trim() || environment.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()
-  if (!url || !publishableKey) throw new Error('Supabase URL and publishable key are required.')
+  const secretKey = environment.SUPABASE_SECRET_KEY?.trim()
+  if (!url || !publishableKey || !secretKey) throw new Error('Supabase URL, publishable key and server-only secret key are required.')
   const host = new URL(url).host
   const selectors = { data: environment.DATA_BACKEND?.trim(), auth: environment.AUTH_BACKEND?.trim(), media: environment.MEDIA_BACKEND?.trim() }
   if (selectors.data !== 'supabase' || selectors.auth !== 'supabase' || selectors.media !== 'supabase') throw new Error('Preflight requires all three staged selectors to be supabase.')
   if (!/^CR10-[A-Za-z0-9._-]{8,80}$/.test(environment.SUPABASE_CUTOVER_APPROVAL_ID?.trim() ?? '')) throw new Error('SUPABASE_CUTOVER_APPROVAL_ID is missing or invalid.')
   if ((environment.FAMNESIA_MAINTENANCE_MODE?.trim() || 'off') !== 'read-only') throw new Error('Preflight requires FAMNESIA_MAINTENANCE_MODE=read-only.')
-  return { url, host, publishableKey, selectors }
+  return { url, host, publishableKey, secretKey, selectors }
+}
+
+export async function checkCutoverServiceHealth(environment: CutoverEnvironment, fetcher: HealthFetch = fetch) {
+  const [auth, rest] = await Promise.all([
+    fetcher(`${environment.url}/auth/v1/health`, { headers: { apikey: environment.publishableKey } }),
+    fetcher(`${environment.url}/rest/v1/`, { method: 'HEAD', headers: { apikey: environment.secretKey } }),
+  ])
+  return { auth: auth.ok, rest: rest.ok }
 }
