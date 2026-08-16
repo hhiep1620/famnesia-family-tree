@@ -1,18 +1,55 @@
-import type { ActivityEvent, FamilyBackup, FamilyData, WorkspaceInfo, WorkspaceMember, WorkspaceRole } from '../types/family'
-import type { FamilyCommitRequest, FamilyCommitResult } from '../types/familyOperations'
+import type { ActivityEvent, FamilyBackup, FamilyData, WorkspaceInfo, WorkspaceInvitationResult, WorkspaceMember, WorkspaceRole } from '../types/family'
+import type { FamilyCommitRequest, FamilyCommitResult, FamilyCommitStatusResult } from '../types/familyOperations'
 import type { CollaborationStatus, DraftReviewRequest, DraftReviewResult, MirrorSyncResult, ReviewDraft, SubmitDraftResult } from '../types/collaboration'
-import { apiRequest, jsonBody } from './apiClient'
+import { ApiError, apiRequest, jsonBody } from './apiClient'
 
 export interface FamilyDataRevision { modifiedTime?: string; version?: string }
 export interface FamilyDataSnapshot { data: FamilyData; revision: FamilyDataRevision }
+export type AssignableWorkspaceRole = Extract<WorkspaceRole, 'editor' | 'contributor' | 'viewer'>
+
+export interface FamilyRepositoryContract {
+  readonly workspace: WorkspaceInfo
+  readonly workspaces: WorkspaceInfo[]
+  load(): Promise<FamilyDataSnapshot>
+  save(data: FamilyData, expectedRevision?: FamilyDataRevision, mode?: 'save' | 'replace' | 'restore' | 'merge'): Promise<FamilyDataSnapshot>
+  commit(request: FamilyCommitRequest): Promise<FamilyCommitResult>
+  commitStatus(commitId: string): Promise<FamilyCommitStatusResult>
+  submitDraft(request: FamilyCommitRequest): Promise<SubmitDraftResult>
+  listDrafts(): Promise<ReviewDraft[]>
+  collaborationStatus(): Promise<CollaborationStatus>
+  reviewDraft(request: DraftReviewRequest): Promise<DraftReviewResult>
+  syncMirror(): Promise<MirrorSyncResult>
+  listActivity(): Promise<ActivityEvent[]>
+  backup(data: FamilyData, reason?: string): Promise<FamilyBackup>
+  listBackups(): Promise<FamilyBackup[]>
+  loadBackup(id: string): Promise<FamilyData>
+  uploadPhoto(file: File, profileId?: string, personId?: string, thumbnail?: File): Promise<string>
+  deletePhoto(id: string): Promise<void>
+  photoUrl(id: string): string
+  listMembers(): Promise<WorkspaceMember[]>
+  addMember(email: string, role: AssignableWorkspaceRole): Promise<WorkspaceInvitationResult | void>
+  updateMember(id: string, role: AssignableWorkspaceRole): Promise<void>
+  removeMember(id: string): Promise<void>
+}
 
 export class FamilyDataConflictError extends Error {
   constructor() { super('Dữ liệu gia đình đã được thay đổi ở phiên khác. Hãy tải lại bản mới nhất trước khi tiếp tục.'); this.name = 'FamilyDataConflictError' }
 }
 
+export class NoWorkspaceError extends Error {
+  constructor() { super('Bạn chưa có workspace Famnesia. Hãy tạo gia đình mới hoặc mở link mời của owner.'); this.name = 'NoWorkspaceError' }
+}
+
+export class CommitOutcomeUnknownError extends Error {
+  constructor() {
+    super('Chưa xác định được lần lưu trước đã hoàn tất hay chưa. Hãy thử Lưu tất cả lại trước khi chỉnh sửa thêm.')
+    this.name = 'CommitOutcomeUnknownError'
+  }
+}
+
 const workspacePath = (workspaceId: string) => `/api/workspaces/${encodeURIComponent(workspaceId)}`
 
-export class FamilyRepository {
+export class FamilyRepository implements FamilyRepositoryContract {
   readonly workspace: WorkspaceInfo
   readonly workspaces: WorkspaceInfo[]
 
@@ -23,12 +60,29 @@ export class FamilyRepository {
   }
 
   static async connect(preferredId?: string): Promise<FamilyRepository> {
+    const invitationToken = new URLSearchParams(window.location.search).get('invite')
+    if (invitationToken) {
+      const accepted = await apiRequest<{ workspace: WorkspaceInfo }>('/api/workspaces', {
+        method: 'POST', ...jsonBody({ invitationToken }),
+      })
+      const url = new URL(window.location.href); url.searchParams.delete('invite'); window.history.replaceState({}, '', url)
+      preferredId = accepted.workspace.id
+    }
     const workspaces = await this.listWorkspaces()
     const remembered = localStorage.getItem('family-tree-workspace') ?? undefined
     const workspace = workspaces.find((item) => item.id === preferredId) ?? workspaces.find((item) => item.id === remembered) ?? workspaces[0]
-    if (!workspace) throw new Error('Không tìm thấy workspace Famnesia.')
+    if (!workspace) throw new NoWorkspaceError()
     localStorage.setItem('family-tree-workspace', workspace.id)
     return new FamilyRepository(workspace, workspaces)
+  }
+
+  static async create(name: string): Promise<FamilyRepository> {
+    const result = await apiRequest<{ workspace: WorkspaceInfo }>('/api/workspaces', {
+      method: 'POST', ...jsonBody({ name }),
+    })
+    const workspaces = await this.listWorkspaces()
+    localStorage.setItem('family-tree-workspace', result.workspace.id)
+    return new FamilyRepository(result.workspace, workspaces)
   }
 
   static async connectShared(workspaceId: string): Promise<FamilyRepository> {
@@ -53,7 +107,23 @@ export class FamilyRepository {
   }
 
   async commit(request: FamilyCommitRequest): Promise<FamilyCommitResult> {
-    return apiRequest<FamilyCommitResult>(`${workspacePath(this.workspace.id)}/family/commit`, { method: 'POST', ...jsonBody(request) })
+    try {
+      return await apiRequest<FamilyCommitResult>(`${workspacePath(this.workspace.id)}/family?operation=commit`, { method: 'POST', ...jsonBody(request) })
+    } catch (caught) {
+      if (caught instanceof ApiError) throw caught
+      let status: FamilyCommitStatusResult
+      try {
+        status = await this.commitStatus(request.commitId)
+      } catch {
+        throw new CommitOutcomeUnknownError()
+      }
+      if (status.status === 'applied' && status.result) return status.result
+      throw caught
+    }
+  }
+
+  async commitStatus(commitId: string): Promise<FamilyCommitStatusResult> {
+    return apiRequest<FamilyCommitStatusResult>(`${workspacePath(this.workspace.id)}/family?resource=commit-status&commitId=${encodeURIComponent(commitId)}`)
   }
 
   async submitDraft(request: FamilyCommitRequest): Promise<SubmitDraftResult> {
@@ -90,8 +160,9 @@ export class FamilyRepository {
     return (await apiRequest<{ data: FamilyData }>(`${workspacePath(this.workspace.id)}/backups?backupId=${encodeURIComponent(id)}`)).data
   }
 
-  async uploadPhoto(file: File, profileId?: string, personId?: string): Promise<string> {
+  async uploadPhoto(file: File, profileId?: string, personId?: string, thumbnail?: File): Promise<string> {
     const form = new FormData(); form.append('photo', file)
+    if (thumbnail) form.append('thumbnail', thumbnail)
     if (profileId) form.append('profileId', profileId)
     if (personId) form.append('personId', personId)
     return (await apiRequest<{ id: string }>(`${workspacePath(this.workspace.id)}/photos`, { method: 'POST', body: form })).id
@@ -101,7 +172,10 @@ export class FamilyRepository {
   photoUrl(id: string): string { return `${workspacePath(this.workspace.id)}/photos/${encodeURIComponent(id)}` }
 
   async listMembers(): Promise<WorkspaceMember[]> { return (await apiRequest<{ members: WorkspaceMember[] }>(`${workspacePath(this.workspace.id)}/members`)).members }
-  async addMember(email: string, role: Exclude<WorkspaceRole, 'owner'>): Promise<void> { await apiRequest(`${workspacePath(this.workspace.id)}/members`, { method: 'POST', ...jsonBody({ email, role }) }) }
-  async updateMember(id: string, role: Exclude<WorkspaceRole, 'owner'>): Promise<void> { await apiRequest(`${workspacePath(this.workspace.id)}/members`, { method: 'PATCH', ...jsonBody({ permissionId: id, role }) }) }
+  async addMember(email: string, role: AssignableWorkspaceRole): Promise<WorkspaceInvitationResult | void> {
+    const result = await apiRequest<{ invitation?: WorkspaceInvitationResult }>(`${workspacePath(this.workspace.id)}/members`, { method: 'POST', ...jsonBody({ email, role }) })
+    return result.invitation
+  }
+  async updateMember(id: string, role: AssignableWorkspaceRole): Promise<void> { await apiRequest(`${workspacePath(this.workspace.id)}/members`, { method: 'PATCH', ...jsonBody({ permissionId: id, role }) }) }
   async removeMember(id: string): Promise<void> { await apiRequest(`${workspacePath(this.workspace.id)}/members`, { method: 'DELETE', ...jsonBody({ permissionId: id }) }) }
 }

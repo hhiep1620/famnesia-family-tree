@@ -1,16 +1,17 @@
 import { ArrowLeft, ChevronDown, ChevronRight, Network, UsersRound } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { calculateAge } from '../../calendar/dateUtils'
-import { useDriveImage } from '../../hooks/useDriveImage'
+import { useMediaImage } from '../../hooks/useMediaImage'
 import { createPrimaryMediaMap } from '../../media/mediaSelectors'
 import { getNearestRelatives, type NearestRelative } from '../../relatives/nearestRelatives'
 import { getAllKinships } from '../../kinship/kinshipEngine'
 import { classifyRelativeScope } from '../../lineage/lineageClassifier'
+import { mediaReferenceId } from '../../services/mediaReference'
 import type { FamilyGraph, Person, PersonMedia } from '../../types/family'
 import { getInitials } from '../../utils/initials'
 
 function RelativeCard({ relative, workspaceId, photoId, onOpen }: { relative: NearestRelative; workspaceId?: string; photoId?: string; onOpen: () => void }) {
-  const { url } = useDriveImage(workspaceId, photoId)
+  const { url } = useMediaImage(workspaceId, photoId, 'thumb')
   const age = relative.person.isDeceased ? undefined : calculateAge(relative.person.birthDate ?? undefined)
   return <button className="explorer-person-card" type="button" onClick={onOpen}>
     <span className="explorer-avatar">{url ? <img src={url} alt="" /> : getInitials(relative.person.name)}</span>
@@ -19,7 +20,7 @@ function RelativeCard({ relative, workspaceId, photoId, onOpen }: { relative: Ne
 }
 
 function TargetCard({ person, workspaceId, photoId }: { person: Person; workspaceId?: string; photoId?: string }) {
-  const { url } = useDriveImage(workspaceId, photoId)
+  const { url } = useMediaImage(workspaceId, photoId, 'thumb')
   return <div className="explorer-target"><span className="explorer-avatar large">{url ? <img src={url} alt="" /> : getInitials(person.name)}</span><span className="eyebrow">Người đang khám phá</span><h2>{person.name}</h2>{person.nickname && <p>“{person.nickname}”</p>}</div>
 }
 
@@ -82,7 +83,10 @@ export function RelativeExplorer({ targetId, graph, media, workspaceId, onClose,
     for (const members of Object.values(result)) members.sort((left, right) => right.generationDelta - left.generationDelta || left.distance - right.distance || left.person.name.localeCompare(right.person.name, 'vi'))
     return result
   }, [graph, maxDistance, targetId])
-  const photos = useMemo(() => new Map([...createPrimaryMediaMap(media)].map(([personId, item]) => [personId, item.driveFileId])), [media])
+  const photos = useMemo(() => new Map([...createPrimaryMediaMap(media)].flatMap(([personId, item]) => {
+    const reference = mediaReferenceId(item)
+    return reference ? [[personId, reference] as const] : []
+  })), [media])
   if (!target) return null
 
   return <div className="relative-explorer">

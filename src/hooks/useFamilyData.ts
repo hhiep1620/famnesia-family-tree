@@ -3,15 +3,16 @@ import { sampleFamilyData } from '../data/sampleFamily'
 import { FAMILY_DRAFT_SCHEMA_VERSION, deleteFamilyDraft, isExpiredFamilyDraft, loadFamilyDraft, saveFamilyDraft } from '../draft/draftStorage'
 import { compactFamilyOperations, createOperation, isFamilyOperation, mergeFamilyOperations, operationReferencesNewPhoto, removeOperationWithDependencies, replayFamilyOperations } from '../draft/familyOperations'
 import { validateRelationship } from '../graph/familyValidation'
-import { optimizePhoto } from '../media/imageOptimization'
+import { createPhotoThumbnail, optimizePhoto } from '../media/imageOptimization'
 import { generateNextMediaId } from '../media/mediaSelectors'
 import { duplicatePairId } from '../integrity/duplicateDetection'
 import { mergePeople } from '../integrity/mergePerson'
 import { CURRENT_SCHEMA_VERSION, requireValidFamilyData } from '../schema/familyDataSchema'
 import { ApiError } from '../services/apiClient'
-import { FamilyRepository, type FamilyDataRevision } from '../services/familyRepository'
+import { CommitOutcomeUnknownError, FamilyRepository, NoWorkspaceError, type FamilyDataRevision } from '../services/familyRepository'
+import { mediaReferenceId } from '../services/mediaReference'
 import { sharedWorkspaceForEmptyOwner } from '../services/workspaceSelection'
-import type { ActivityEvent, FamilyBackup, FamilyData, FamilyProfile, FriendlyRelationship, Person, PersonDraft, PersonMedia, Relationship, SaveStatus, SpouseStatus, WorkspaceInfo, WorkspaceMember } from '../types/family'
+import type { ActivityEvent, FamilyBackup, FamilyData, FamilyProfile, FriendlyRelationship, Person, PersonDraft, PersonMedia, Relationship, SaveStatus, SpouseStatus, WorkspaceInfo, WorkspaceInvitationResult, WorkspaceMember } from '../types/family'
 import type { FamilyCommitConflictDetails, FamilyOperation, FamilyOperationConflict, StoredFamilyDraft } from '../types/familyOperations'
 import type { CollaborationStatus, DraftReviewRequest, DraftReviewResult, MirrorSyncResult, ReviewDraft } from '../types/collaboration'
 import { generateNextPersonId } from '../utils/personId'
@@ -57,6 +58,7 @@ export function useFamilyData(userId = 'mock-user') {
   const pendingRef = useRef<FamilyOperation[]>([])
   const draftReady = useRef(false)
   const commitId = useRef<string | undefined>(undefined)
+  const commitOutcomeUnknown = useRef(false)
   const submittedDraftRevision = useRef<number | undefined>(undefined)
   const submittedOperationIds = useRef<Set<string>>(new Set())
   const collaborationRefreshing = useRef(false)
@@ -81,6 +83,7 @@ export function useFamilyData(userId = 'mock-user') {
   const [collaborationState, setCollaborationState] = useState<CollaborationStatus>()
   const [reviewDrafts, setReviewDrafts] = useState<ReviewDraft[]>([])
   const [mirrorSync, setMirrorSync] = useState<MirrorSyncResult>()
+  const [needsWorkspace, setNeedsWorkspace] = useState(false)
 
   const setOperations = useCallback((operations: FamilyOperation[]) => {
     pendingRef.current = operations
@@ -94,7 +97,7 @@ export function useFamilyData(userId = 'mock-user') {
 
   const applyCommittedSnapshot = useCallback((next: FamilyData, nextRevision?: FamilyDataRevision) => {
     setSavedData(next); setFamilyData(next); revision.current = nextRevision; setOperations([]); selectAvailableProfile(next)
-    setSaveStatus('saved'); setConflictDetails(undefined); commitId.current = undefined
+    setSaveStatus('saved'); setConflictDetails(undefined); commitId.current = undefined; commitOutcomeUnknown.current = false
   }, [selectAvailableProfile, setOperations])
 
   const restoreDraft = useCallback(async (next: FamilyData, nextRevision: FamilyDataRevision | undefined, workspaceId: string) => {
@@ -143,14 +146,19 @@ export function useFamilyData(userId = 'mock-user') {
           } else {
             setSavedData(snapshot.data); revision.current = snapshot.revision
             setFamilyData(requireValidFamilyData(replayFamilyOperations(snapshot.data, pendingRef.current)))
-            setSaveStatus('unsaved'); setNotice('Đã cập nhật Draft trên dữ liệu Drive mới nhất.')
+            setSaveStatus('unsaved'); setNotice('Đã cập nhật Draft trên dữ liệu mới nhất.')
           }
         } else await restoreDraft(snapshot.data, snapshot.revision, connected.workspace.id)
         setActivity(await connected.listActivity().catch(() => []))
+        setNeedsWorkspace(false)
       }
       draftReady.current = true
     } catch (caught) {
-      console.error(caught); setError(caught instanceof Error ? caught.message : 'Không thể tải dữ liệu gia đình.')
+      if (caught instanceof NoWorkspaceError) {
+        setNeedsWorkspace(true); setWorkspace(undefined); setWorkspaces([]); setError(undefined)
+      } else {
+        console.error(caught); setError(caught instanceof Error ? caught.message : 'Không thể tải dữ liệu gia đình.')
+      }
     } finally { setLoading(false) }
   }, [activeWorkspaceId, restoreDraft, selectAvailableProfile, useMockData, userId])
 
@@ -196,7 +204,7 @@ export function useFamilyData(userId = 'mock-user') {
   }, [rebaseFromRemote, useMockData, userId, workspace?.id])
 
   const continueMirrorSync = useCallback(async (status: CollaborationStatus) => {
-    if (!repository.current || status.workspaceRole !== 'contributor' || !navigator.onLine) return
+    if (!repository.current || status.workspaceRole !== 'contributor' || !status.mirror || !navigator.onLine) return
     const synced = status.mirror?.syncedGeneration ?? -1
     if (synced >= status.mirrorGeneration && status.mirror?.status !== 'failed') return
     try {
@@ -276,6 +284,7 @@ export function useFamilyData(userId = 'mock-user') {
 
   const stageOperations = useCallback((incoming: FamilyOperation[]) => {
     if (!useMockData && !workspace?.canEdit) throw new Error('Bạn chỉ có quyền xem workspace này.')
+    if (commitOutcomeUnknown.current) throw new Error('Hãy thử Lưu tất cả lại để xác minh lần lưu trước trước khi chỉnh sửa thêm.')
     const operations = compactFamilyOperations([...pendingRef.current, ...incoming])
     const next = requireValidFamilyData(replayFamilyOperations(savedData, operations))
     setFamilyData(next); setOperations(operations); setSaveStatus(operations.length ? (navigator.onLine ? 'unsaved' : 'offline') : 'saved')
@@ -293,10 +302,13 @@ export function useFamilyData(userId = 'mock-user') {
     if (!files.length) return []
     if (!useMockData && typeof navigator !== 'undefined' && !navigator.onLine) throw new Error('Không thể tải ảnh khi đang ngoại tuyến. Các chỉnh sửa khác vẫn có thể lưu vào Draft.')
     if (useMockData) return files.map((_, index) => `mock-${Date.now()}-${index}`)
-    if (!repository.current) throw new Error('Workspace Google Drive chưa sẵn sàng.')
-    const optimized = await Promise.all(files.map(optimizePhoto))
+    if (!repository.current) throw new Error('Workspace chưa sẵn sàng.')
+    const optimized = await Promise.all(files.map(async (file) => {
+      const original = await optimizePhoto(file)
+      return { original, thumbnail: await createPhotoThumbnail(original) }
+    }))
     const uploaded: string[] = []
-    try { for (const photo of optimized) uploaded.push(await repository.current.uploadPhoto(photo, profileId, personId)); return uploaded }
+    try { for (const photo of optimized) uploaded.push(await repository.current.uploadPhoto(photo.original, profileId, personId, photo.thumbnail)); return uploaded }
     catch (caught) { await Promise.allSettled(uploaded.map((id) => repository.current?.deletePhoto(id))); throw caught }
   }, [useMockData])
 
@@ -335,7 +347,7 @@ export function useFamilyData(userId = 'mock-user') {
 
   const mediaAttachOperations = useCallback((photoIds: string[], profileId: string, personId: string, existingCount: number): FamilyOperation[] => {
     const ids = familyData.media.map((item) => item.id); const now = new Date().toISOString()
-    return photoIds.map((driveFileId, index) => { const id = generateNextMediaId(ids); ids.push(id); const value: PersonMedia = { id, profileId, personId, driveFileId, type: 'photo', isPrimary: existingCount === 0 && index === 0, caption: '', takenDate: null, sortOrder: existingCount + index + 1, createdAt: now }; return createOperation({ type: 'media.attach', entityId: id, profileId, value }) })
+    return photoIds.map((fileId, index) => { const id = generateNextMediaId(ids); ids.push(id); const value: PersonMedia = { id, profileId, personId, fileId, type: 'photo', isPrimary: existingCount === 0 && index === 0, caption: '', takenDate: null, sortOrder: existingCount + index + 1, createdAt: now }; return createOperation({ type: 'media.attach', entityId: id, profileId, value }) })
   }, [familyData.media])
 
   const addPerson = useCallback(async (draft: PersonDraft, connection?: NewPersonConnection) => runUpload('Đang tải ảnh và thêm vào Draft…', async () => {
@@ -361,7 +373,7 @@ export function useFamilyData(userId = 'mock-user') {
     operations.push(...mediaAttachOperations(photoIds, current.profileId ?? '', id, familyData.media.filter((item) => item.personId === id).length)); if (operations.length) stageOperations(operations)
   }), [familyData.media, familyData.persons, mediaAttachOperations, personFromDraft, runUpload, stageOperations, uploadPhotos])
 
-  const addPersonMedia = useCallback(async (personId: string, files: File[]) => runUpload('Đang tải ảnh lên Google Drive…', async () => {
+  const addPersonMedia = useCallback(async (personId: string, files: File[]) => runUpload('Đang tải ảnh vào kho media riêng tư…', async () => {
     const person = familyData.persons.find((item) => item.id === personId); if (!person || !files.length) return
     const photoIds = await uploadPhotos(files, person.profileId ?? '', personId)
     stageOperations(mediaAttachOperations(photoIds, person.profileId ?? '', personId, familyData.media.filter((item) => item.personId === personId).length))
@@ -382,7 +394,8 @@ export function useFamilyData(userId = 'mock-user') {
     const target = familyData.media.find((item) => item.id === mediaId); if (!target) return
     const newlyUploaded = pendingRef.current.find((item) => item.type === 'media.attach' && item.entityId === mediaId)
     stageOperations([createOperation({ type: 'media.delete', entityId: mediaId, profileId: target.profileId, baseValues: { $entity: savedData.media.find((item) => item.id === mediaId) ?? target } })])
-    if (newlyUploaded && !useMockData) await repository.current?.deletePhoto(target.driveFileId).catch(() => setNotice('Ảnh không còn trong Draft và sẽ được dọn tự động sau.'))
+    const objectKey = mediaReferenceId(target)
+    if (newlyUploaded && objectKey && !useMockData) await repository.current?.deletePhoto(objectKey).catch(() => setNotice('Ảnh không còn trong Draft và sẽ được dọn tự động sau.'))
   }, [familyData.media, savedData.media, stageOperations, useMockData])
 
   const addRelationship = useCallback(async (input: Omit<Relationship, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -419,7 +432,7 @@ export function useFamilyData(userId = 'mock-user') {
       if (useMockData) {
         const saved = requireValidFamilyData({ ...replayFamilyOperations(mockData.current, operations), updatedAt: new Date().toISOString() }); mockData.current = cloneData(saved); applyCommittedSnapshot(saved)
       } else {
-        if (!repository.current) throw new Error('Workspace Google Drive chưa sẵn sàng.')
+        if (!repository.current) throw new Error('Workspace chưa sẵn sàng.')
         commitId.current ??= `commit_${crypto.randomUUID()}`
         const request = { commitId: commitId.current, baseRevision: revision.current, operations, clientCreatedAt: new Date().toISOString() }
         if (submitting) {
@@ -437,12 +450,14 @@ export function useFamilyData(userId = 'mock-user') {
       setNotice(`Đã lưu ${operations.length} thay đổi.`); return true
     } catch (caught) {
       console.error(caught)
-      if (caught instanceof ApiError && caught.code === 'FAMILY_COMMIT_CONFLICT') { setConflictDetails(caught.details as FamilyCommitConflictDetails); setSaveStatus('conflict'); setError('Có thay đổi trùng nhau cần bạn chọn phiên bản.'); return false }
+      if (caught instanceof ApiError && caught.code === 'FAMILY_COMMIT_CONFLICT') { commitOutcomeUnknown.current = false; setConflictDetails(caught.details as FamilyCommitConflictDetails); setSaveStatus('conflict'); setError('Có thay đổi trùng nhau cần bạn chọn phiên bản.'); return false }
+      commitOutcomeUnknown.current = caught instanceof CommitOutcomeUnknownError
       setSaveStatus('failed'); setError(caught instanceof Error ? `${caught.message} Draft vẫn an toàn.` : 'Lưu thất bại — Draft vẫn an toàn.'); return false
     } finally { setBusy(undefined) }
   }, [activity, applyCommittedSnapshot, useMockData, userId, workspace?.canSubmitDraft, workspace?.id])
 
   const discardDraft = useCallback(async () => {
+    if (commitOutcomeUnknown.current) { setError('Chưa thể hủy Draft khi kết quả lần lưu trước chưa được xác minh. Hãy thử Lưu tất cả lại.'); return }
     const photoIds = pendingRef.current.map(operationReferencesNewPhoto).filter((value): value is string => Boolean(value))
     setFamilyData(savedData); setOperations([]); selectAvailableProfile(savedData); setConflictDetails(undefined); setSaveStatus('saved'); commitId.current = undefined
     if (!useMockData) await Promise.allSettled(photoIds.map((photoId) => repository.current?.deletePhoto(photoId)))
@@ -485,7 +500,7 @@ export function useFamilyData(userId = 'mock-user') {
   const requireNoDraft = useCallback(() => { if (pendingRef.current.length) throw new Error('Hãy Lưu tất cả hoặc Hủy Draft trước khi Import, Restore hoặc Gộp trùng lặp.') }, [])
   const saveFullData = useCallback(async (next: FamilyData, mode: 'replace' | 'restore' | 'merge') => {
     if (useMockData) { const saved = requireValidFamilyData({ ...next, updatedAt: new Date().toISOString() }); mockData.current = cloneData(saved); applyCommittedSnapshot(saved); return }
-    if (!repository.current) throw new Error('Workspace Google Drive chưa sẵn sàng.'); const snapshot = await repository.current.save(next, revision.current, mode); applyCommittedSnapshot(snapshot.data, snapshot.revision); setActivity(await repository.current.listActivity().catch(() => []))
+    if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); const snapshot = await repository.current.save(next, revision.current, mode); applyCommittedSnapshot(snapshot.data, snapshot.revision); setActivity(await repository.current.listActivity().catch(() => []))
   }, [applyCommittedSnapshot, useMockData])
 
   const backupNow = useCallback(async (reason = 'manual'): Promise<FamilyBackup> => {
@@ -503,6 +518,15 @@ export function useFamilyData(userId = 'mock-user') {
   const mergeDuplicatePeople = useCallback(async (canonicalId: string, duplicateId: string) => { requireNoDraft(); setBusy('Đang gộp thành viên…'); try { await saveFullData(mergePeople(familyData, canonicalId, duplicateId), 'merge') } finally { setBusy(undefined) } }, [familyData, requireNoDraft, saveFullData])
 
   const switchWorkspace = useCallback((id: string) => { if (!workspaces.some((item) => item.id === id) || id === activeWorkspaceId) return; localStorage.setItem('family-tree-workspace', id); repository.current = undefined; revision.current = undefined; setActiveWorkspaceId(id) }, [activeWorkspaceId, workspaces])
+  const createWorkspace = useCallback(async (name: string) => {
+    if (pendingRef.current.length) throw new Error('Hãy xử lý Draft cục bộ trước khi tạo workspace khác.')
+    setBusy('Đang tạo workspace…'); setError(undefined)
+    try {
+      const connected = await FamilyRepository.create(name)
+      repository.current = connected; setNeedsWorkspace(false); setWorkspaces(connected.workspaces); setWorkspace(connected.workspace); setActiveWorkspaceId(connected.workspace.id)
+      setNotice('Đã tạo workspace Famnesia mới. Bạn là owner.')
+    } finally { setBusy(undefined) }
+  }, [])
   const connectSharedWorkspace = useCallback(async (id: string) => {
     if (pendingRef.current.length) throw new Error('Hãy Lưu tất cả hoặc Hủy Draft trước khi kết nối gia đình khác.')
     setBusy('Đang kết nối gia đình được chia sẻ…'); setError(undefined)
@@ -514,8 +538,8 @@ export function useFamilyData(userId = 'mock-user') {
     } finally { setBusy(undefined) }
   }, [])
   const refreshMembers = useCallback(async () => { if (useMockData || !repository.current?.workspace.canManageMembers) { setMembers([]); return [] } const next = await repository.current.listMembers(); setMembers(next); return next }, [useMockData])
-  const addMember = useCallback(async (email: string, role: 'contributor' | 'viewer') => { if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); await repository.current.addMember(email, role); await refreshMembers() }, [refreshMembers])
-  const updateMember = useCallback(async (id: string, role: 'contributor' | 'viewer') => { if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); await repository.current.updateMember(id, role); await refreshMembers() }, [refreshMembers])
+  const addMember = useCallback(async (email: string, role: 'editor' | 'contributor' | 'viewer'): Promise<WorkspaceInvitationResult | void> => { if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); const invitation = await repository.current.addMember(email, role); await refreshMembers(); return invitation }, [refreshMembers])
+  const updateMember = useCallback(async (id: string, role: 'editor' | 'contributor' | 'viewer') => { if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); await repository.current.updateMember(id, role); await refreshMembers() }, [refreshMembers])
   const removeMember = useCallback(async (id: string) => { if (!repository.current) throw new Error('Workspace chưa sẵn sàng.'); await repository.current.removeMember(id); await refreshMembers() }, [refreshMembers])
   const refreshActivity = useCallback(async () => { if (useMockData || !repository.current) return activity; const events = await repository.current.listActivity(); setActivity(events); return events }, [activity, useMockData])
   const reviewDraft = useCallback(async (request: DraftReviewRequest): Promise<DraftReviewResult> => {
@@ -538,10 +562,10 @@ export function useFamilyData(userId = 'mock-user') {
     finally { setBusy(undefined) }
   }, [refreshCollaboration])
 
-  return useMemo(() => ({ familyData, savedData, profiles: familyData.profiles, activeProfile, activeProfileId, persons, relationships, media, workspace, workspaces, activeWorkspaceId, members, activity, loading, busy, error, notice, saveStatus, useMockData,
+  return useMemo(() => ({ familyData, savedData, profiles: familyData.profiles, activeProfile, activeProfileId, persons, relationships, media, workspace, workspaces, activeWorkspaceId, members, activity, loading, busy, error, notice, saveStatus, useMockData, needsWorkspace,
     pendingOperations, conflictDetails, draftRecovery, refresh, setActiveProfileId, createProfile, updateProfile, setSubject, addPerson, updatePerson, addPersonMedia, setPrimaryMedia, updateMediaCaption, deletePersonMedia, addRelationship, updateRelationship, deleteRelationship, deletePerson,
     saveAll, discardDraft, undoOperation, resolveConflictsAndSave, downloadRecoveryDraft, deleteRecoveryDraft,
-    backupNow, listBackups, restoreBackup, replaceAllData, switchWorkspace, connectSharedWorkspace, refreshMembers, addMember, updateMember, removeMember, suppressDuplicate, mergeDuplicatePeople, refreshActivity,
+    backupNow, listBackups, restoreBackup, replaceAllData, switchWorkspace, createWorkspace, connectSharedWorkspace, refreshMembers, addMember, updateMember, removeMember, suppressDuplicate, mergeDuplicatePeople, refreshActivity,
     collaborationState, reviewDrafts, mirrorSync, refreshCollaboration, reviewDraft, retryMirrorSync,
-  }), [familyData, savedData, activeProfile, activeProfileId, persons, relationships, media, workspace, workspaces, activeWorkspaceId, members, activity, loading, busy, error, notice, saveStatus, useMockData, pendingOperations, conflictDetails, draftRecovery, refresh, setActiveProfileId, createProfile, updateProfile, setSubject, addPerson, updatePerson, addPersonMedia, setPrimaryMedia, updateMediaCaption, deletePersonMedia, addRelationship, updateRelationship, deleteRelationship, deletePerson, saveAll, discardDraft, undoOperation, resolveConflictsAndSave, downloadRecoveryDraft, deleteRecoveryDraft, backupNow, listBackups, restoreBackup, replaceAllData, switchWorkspace, connectSharedWorkspace, refreshMembers, addMember, updateMember, removeMember, suppressDuplicate, mergeDuplicatePeople, refreshActivity, collaborationState, reviewDrafts, mirrorSync, refreshCollaboration, reviewDraft, retryMirrorSync])
+  }), [familyData, savedData, activeProfile, activeProfileId, persons, relationships, media, workspace, workspaces, activeWorkspaceId, members, activity, loading, busy, error, notice, saveStatus, useMockData, needsWorkspace, pendingOperations, conflictDetails, draftRecovery, refresh, setActiveProfileId, createProfile, updateProfile, setSubject, addPerson, updatePerson, addPersonMedia, setPrimaryMedia, updateMediaCaption, deletePersonMedia, addRelationship, updateRelationship, deleteRelationship, deletePerson, saveAll, discardDraft, undoOperation, resolveConflictsAndSave, downloadRecoveryDraft, deleteRecoveryDraft, backupNow, listBackups, restoreBackup, replaceAllData, switchWorkspace, createWorkspace, connectSharedWorkspace, refreshMembers, addMember, updateMember, removeMember, suppressDuplicate, mergeDuplicatePeople, refreshActivity, collaborationState, reviewDrafts, mirrorSync, refreshCollaboration, reviewDraft, retryMirrorSync])
 }

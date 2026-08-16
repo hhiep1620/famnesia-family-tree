@@ -34,7 +34,10 @@ export function draftPayloadHash(payload: SubmittedFamilyDraft): string {
 export function draftAssetIds(operations: FamilyOperation[]): string[] {
   return [...new Set(operations
     .filter((operation) => operation.type === 'media.attach')
-    .map((operation) => (operation.value as { driveFileId?: unknown } | undefined)?.driveFileId)
+    .map((operation) => {
+      const value = operation.value as { fileId?: unknown; driveFileId?: unknown } | undefined
+      return value?.fileId ?? value?.driveFileId
+    })
     .filter((value): value is string => typeof value === 'string' && value.length > 0))]
 }
 

@@ -3,22 +3,27 @@ import { googleOAuthEnv } from '../_server/env.js'
 import { AppError, apiError, requireMethod } from '../_server/http.js'
 import { exchangeCode } from '../_server/oauth.js'
 import { sessions } from '../_server/sessionRepository.js'
+import { requireGoogleDriveAuthBackend } from '../_server/backendSelectors.js'
 
-function appOrigin(): string {
-  const redirect = new URL(googleOAuthEnv().redirectUri)
-  return redirect.origin
+function appOrigin(request?: Request): string {
+  try { return new URL(googleOAuthEnv().redirectUri).origin }
+  catch {
+    if (request) return new URL(request.url).origin
+    throw new AppError(500, 'GOOGLE_OAUTH_NOT_CONFIGURED', 'Google Drive OAuth is not configured.')
+  }
 }
 
-function failure(error: unknown): Response {
+function failure(error: unknown, request: Request): Response {
   const code = error instanceof AppError ? error.code : 'AUTH_CALLBACK_FAILED'
   apiError(error)
-  return new Response(null, { status: 302, headers: { Location: `${appOrigin()}/?auth_error=${encodeURIComponent(code)}`, 'Set-Cookie': clearOAuthStateCookie(), 'Cache-Control': 'no-store' } })
+  return new Response(null, { status: 302, headers: { Location: `${appOrigin(request)}/?auth_error=${encodeURIComponent(code)}`, 'Set-Cookie': clearOAuthStateCookie(), 'Cache-Control': 'no-store' } })
 }
 
 export default {
   async fetch(request: Request) {
     try {
       requireMethod(request, ['GET'])
+      requireGoogleDriveAuthBackend()
       const url = new URL(request.url)
       if (!validateOAuthState(request, url.searchParams.get('state'))) throw new AppError(400, 'OAUTH_STATE_INVALID', 'OAuth state is invalid or expired.')
       if (url.searchParams.get('error')) throw new AppError(400, 'GOOGLE_AUTH_CANCELLED', 'Google sign-in was cancelled.')
@@ -31,6 +36,6 @@ export default {
       headers.append('Set-Cookie', sessionCookie(session.id))
       headers.append('Set-Cookie', clearOAuthStateCookie())
       return new Response(null, { status: 302, headers })
-    } catch (error) { return failure(error) }
+    } catch (error) { return failure(error, request) }
   },
 }

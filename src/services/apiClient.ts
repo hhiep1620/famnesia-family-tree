@@ -12,8 +12,25 @@ export class ApiError extends Error {
   }
 }
 
+type AccessTokenProvider = () => Promise<string | undefined>
+let accessTokenProvider: AccessTokenProvider | undefined
+
+export function configureBearerAccessTokenProvider(provider?: AccessTokenProvider): void {
+  accessTokenProvider = provider
+}
+
+export async function authenticatedApiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers)
+  if (!headers.has('Accept')) headers.set('Accept', 'application/json')
+  if (!headers.has('Authorization') && accessTokenProvider) {
+    const accessToken = await accessTokenProvider()
+    if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
+  }
+  return fetch(path, { ...init, credentials: 'same-origin', headers })
+}
+
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, { ...init, credentials: 'same-origin', headers: { Accept: 'application/json', ...init?.headers } })
+  const response = await authenticatedApiFetch(path, init)
   if (response.status === 204) return undefined as T
   const contentType = response.headers.get('content-type') ?? ''
   const payload = contentType.includes('application/json') ? await response.json() as { error?: { code?: string; message?: string; details?: unknown } } : undefined

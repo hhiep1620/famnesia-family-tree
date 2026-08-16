@@ -32,6 +32,8 @@ export interface WorkspaceAccess {
   canCommitDirectly: boolean
   canSubmitDraft: boolean
   canReviewDrafts: boolean
+  canReplaceData: boolean
+  canCreateBackups: boolean
   migrationRequired?: boolean
   ownedByMe: boolean
   webViewLink?: string

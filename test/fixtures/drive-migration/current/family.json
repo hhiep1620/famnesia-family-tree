@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 3,
+  "updatedAt": "2026-08-14T00:00:00.000Z",
+  "profiles": [
+    {
+      "id": "F_MIGRATION",
+      "name": "Gia đình migration mẫu",
+      "lineageSurname": "Hoàng",
+      "description": "CR09 deterministic fixture",
+      "photoFileId": null,
+      "subjectPersonId": "P_MIGRATION",
+      "requiresSecret": false,
+      "isActive": true
+    }
+  ],
+  "persons": [
+    {
+      "id": "P_MIGRATION",
+      "profileId": "F_MIGRATION",
+      "name": "Hoàng Migration",
+      "nickname": null,
+      "gender": "unknown",
+      "birthDate": null,
+      "isDeceased": false,
+      "deathDate": null,
+      "deathLunar": null,
+      "phone1": "",
+      "phone2": "",
+      "address": "",
+      "note": "",
+      "ancestralRole": "none",
+      "createdAt": "2026-08-01T00:00:00.000Z",
+      "updatedAt": "2026-08-02T00:00:00.000Z"
+    }
+  ],
+  "relationships": [],
+  "media": [],
+  "settings": {
+    "timezone": "Asia/Ho_Chi_Minh",
+    "locale": "vi-VN",
+    "duplicateSuppressions": []
+  }
+}

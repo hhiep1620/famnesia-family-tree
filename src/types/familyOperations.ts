@@ -43,12 +43,19 @@ export interface FamilyCommitMeta {
   commitId: string
   operationCount: number
   idempotent?: boolean
+  autoMerged?: boolean
+  resultVersion?: number
   counts: Record<string, number>
 }
 
 export interface FamilyCommitResult {
   snapshot: { data: FamilyData; revision: FamilyRevision }
   commit: FamilyCommitMeta
+}
+
+export interface FamilyCommitStatusResult {
+  status: 'missing' | 'pending' | 'applied' | 'conflict' | 'failed'
+  result?: FamilyCommitResult
 }
 
 export interface FamilyOperationConflict {

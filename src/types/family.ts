@@ -72,7 +72,12 @@ export interface PersonMedia {
   id: string
   profileId: string
   personId: string
-  driveFileId: string
+  /** Legacy Google Drive object key. Present only while media comes from Drive. */
+  driveFileId?: string
+  /** Opaque key consumed by the selected media repository. */
+  fileId?: string
+  /** Private Supabase Storage path; never treated as a public URL. */
+  storagePath?: string
   type: 'photo'
   isPrimary: boolean
   caption?: string
@@ -150,7 +155,7 @@ export interface PersonDraft {
   photos?: File[]
 }
 
-export type WorkspaceRole = 'owner' | 'contributor' | 'viewer'
+export type WorkspaceRole = 'owner' | 'editor' | 'contributor' | 'viewer'
 
 export interface WorkspaceInfo {
   id: string
@@ -163,6 +168,8 @@ export interface WorkspaceInfo {
   canCommitDirectly: boolean
   canSubmitDraft: boolean
   canReviewDrafts: boolean
+  canReplaceData?: boolean
+  canCreateBackups?: boolean
   migrationRequired?: boolean
   ownedByMe: boolean
   webViewLink?: string
@@ -177,6 +184,16 @@ export interface WorkspaceMember {
   role: WorkspaceRole
   inherited: boolean
   migrationRequired?: boolean
+  pendingInvitation?: boolean
+  invitationExpiresAt?: string
+}
+
+export interface WorkspaceInvitationResult {
+  id: string
+  email: string
+  role: Extract<WorkspaceRole, 'editor' | 'contributor' | 'viewer'>
+  expiresAt: string
+  inviteUrl: string
 }
 
 export interface FamilyBackup {

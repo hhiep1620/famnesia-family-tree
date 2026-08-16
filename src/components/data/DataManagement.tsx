@@ -21,7 +21,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'reac
 import { downloadFamilyData, downloadFamilyDataExcel, downloadFamilyDataExcelTemplate, downloadFamilyDataTemplate } from '../../import/exportFamilyData'
 import { validateImportFile, type ImportValidationResult } from '../../import/validateImport'
 import { validateFamilyData } from '../../schema/familyDataSchema'
-import type { ActivityEvent, FamilyBackup, FamilyData, SaveStatus, WorkspaceInfo, WorkspaceMember } from '../../types/family'
+import type { ActivityEvent, FamilyBackup, FamilyData, SaveStatus, WorkspaceInfo, WorkspaceInvitationResult, WorkspaceMember } from '../../types/family'
 import type { DraftReviewRequest, MirrorSyncResult, ReviewDraft } from '../../types/collaboration'
 import { ActivityTimeline } from './ActivityTimeline'
 import { DataQualityCenter } from './DataQualityCenter'
@@ -43,8 +43,8 @@ interface Props {
   onRestore: (backupId: string) => Promise<void>
   members?: WorkspaceMember[]
   onRefreshMembers?: () => Promise<WorkspaceMember[]>
-  onAddMember?: (email: string, role: 'contributor' | 'viewer') => Promise<void>
-  onUpdateMember?: (id: string, role: 'contributor' | 'viewer') => Promise<void>
+  onAddMember?: (email: string, role: 'editor' | 'contributor' | 'viewer') => Promise<WorkspaceInvitationResult | void>
+  onUpdateMember?: (id: string, role: 'editor' | 'contributor' | 'viewer') => Promise<void>
   onRemoveMember?: (id: string) => Promise<void>
   activity?: ActivityEvent[]
   onOpenPerson?: (id: string) => void
@@ -111,8 +111,9 @@ export function DataManagement(props: Props) {
   const [backups, setBackups] = useState<FamilyBackup[]>([])
   const [backupError, setBackupError] = useState<string>()
   const [memberEmail, setMemberEmail] = useState('')
-  const [memberRole, setMemberRole] = useState<'contributor' | 'viewer'>('viewer')
+  const [memberRole, setMemberRole] = useState<'editor' | 'contributor' | 'viewer'>('viewer')
   const [memberError, setMemberError] = useState<string>()
+  const [inviteLink, setInviteLink] = useState<string>()
   const validation = validateFamilyData(props.data)
 
   const refreshBackups = useCallback(async () => {
@@ -162,19 +163,31 @@ export function DataManagement(props: Props) {
 
   async function inviteMember() {
     if (!memberEmail.trim() || !props.onAddMember) return
-    if (props.collaborationEnabled && memberRole === 'contributor' && !window.confirm('Mời với quyền Editor cần duyệt? Famnesia sẽ tạo một mirror trong Drive của người này. Nếu sau này gỡ quyền, owner chỉ dừng được đồng bộ và không thể xóa bản mirror họ đã sở hữu.')) return
-    try { await props.onAddMember(memberEmail.trim(), memberRole); setMemberEmail(''); setMemberError(undefined) }
+    try {
+      const invitation = await props.onAddMember(memberEmail.trim(), memberRole)
+      setMemberEmail(''); setMemberError(undefined)
+      if (invitation) {
+        const absolute = new URL(invitation.inviteUrl, window.location.origin).toString()
+        setInviteLink(absolute)
+        await navigator.clipboard?.writeText(absolute).catch(() => undefined)
+      }
+    }
     catch (caught) { setMemberError(caught instanceof Error ? caught.message : 'Không thể mời thành viên.') }
   }
 
+  // Supabase CR06 enables canonical metadata commits only. Destructive full
+  // dataset replacement and backups stay hidden until their repository path is enabled.
+  const canReplaceData = props.mock || Boolean(props.workspace?.canReplaceData)
+  const canCreateBackups = props.mock || Boolean(props.workspace?.canCreateBackups)
+
   return <div className="data-page">
-    <header className="data-page-heading"><div><span className="eyebrow">Cài đặt / Dữ liệu</span><h2>Kho dữ liệu gia đình</h2><p>Một tệp JSON có thể đọc, tải xuống và mang theo — nằm trong Drive của chính bạn.</p></div><span className={`save-state save-${props.saveStatus}`}><i />{saveLabels[props.saveStatus]}</span></header>
+    <header className="data-page-heading"><div><span className="eyebrow">Cài đặt / Dữ liệu</span><h2>Kho dữ liệu gia đình</h2><p>Dữ liệu có thể đọc, tải xuống và mang theo; bản chính thức được bảo vệ trong workspace của bạn.</p></div><span className={`save-state save-${props.saveStatus}`}><i />{saveLabels[props.saveStatus]}</span></header>
 
     <nav className="data-tabs" aria-label="Các mục quản lý dữ liệu">{([['overview', 'Tổng quan'], ['quality', 'Chất lượng'], ['issues', 'Vấn đề'], ['duplicates', 'Trùng lặp'], ['activity', 'Hoạt động'], ['import_export', 'Import / Export']] as const).map(([value, label]) => <button className={tab === value ? 'active' : ''} onClick={() => setTab(value)} key={value}>{label}</button>)}</nav>
 
     {tab === 'overview' ? <>
     <section className="workspace-ledger">
-      <div className="workspace-ledger-title"><Database size={20} /><div><strong>{props.workspace?.name ?? 'Famnesia'}</strong><span>{props.mock ? 'Workspace mô phỏng khi phát triển' : `Workspace Google Drive · quyền ${props.workspace?.role ?? 'đang tải'}`}</span></div><div className="workspace-ledger-actions">{!props.mock && props.onConnectSharedWorkspace && <SharedWorkspaceConnector compact onConnect={props.onConnectSharedWorkspace} />}{props.workspace?.rootFolderUrl && <a className="secondary-button" href={props.workspace.rootFolderUrl} target="_blank" rel="noreferrer"><FolderOpen size={15} /> Mở thư mục Drive</a>}</div></div>
+      <div className="workspace-ledger-title"><Database size={20} /><div><strong>{props.workspace?.name ?? 'Famnesia'}</strong><span>{props.mock ? 'Workspace mô phỏng khi phát triển' : `Workspace ${props.workspace?.rootFolderUrl ? 'Google Drive' : 'Supabase'} · quyền ${props.workspace?.role ?? 'đang tải'}${props.workspace && !props.workspace.canCommitDirectly ? ' · chỉ đọc' : ''}`}</span></div><div className="workspace-ledger-actions">{!props.mock && props.onConnectSharedWorkspace && props.workspace?.rootFolderUrl && <SharedWorkspaceConnector compact onConnect={props.onConnectSharedWorkspace} />}{props.workspace?.rootFolderUrl && <a className="secondary-button" href={props.workspace.rootFolderUrl} target="_blank" rel="noreferrer"><FolderOpen size={15} /> Mở thư mục Drive</a>}</div></div>
       <div className="workspace-files"><div className="is-primary"><FileJson /><strong>family.json</strong><span>Nguồn dữ liệu chính</span></div><div><Archive /><strong>backups/</strong><span>Bản sao trước thay đổi lớn</span></div><div><Image /><strong>photos/</strong><span>Ảnh lưu riêng, JSON chỉ giữ ID</span></div></div>
     </section>
 
@@ -184,23 +197,24 @@ export function DataManagement(props: Props) {
       <section className="data-action-panel"><span className="section-label">Kiểm tra</span><h3>Tính toàn vẹn</h3>{validation.errors.length === 0 ? <p className="data-valid"><CheckCircle2 size={16} /> Dữ liệu hiện tại hợp lệ theo schema v{props.data.schemaVersion}.</p> : <p className="data-invalid"><AlertTriangle size={16} /> Có {validation.errors.length} lỗi dữ liệu.</p>}{validation.warnings.length > 0 && <div className="data-integrity-warnings"><strong><AlertTriangle size={14} /> {validation.warnings.length} thông tin cần bổ sung</strong><ul>{validation.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div>}</section>
     </div>
 
-    <section className="backup-section"><div className="backup-heading"><div><span className="section-label">An toàn dữ liệu</span><h3>Bản sao lưu</h3><p>Import và khôi phục luôn tạo backup tự động. Khôi phục chỉ dành cho owner.</p></div>{(props.mock || props.workspace?.role === 'owner') && <button className="secondary-button" onClick={() => void createBackup()} disabled={Boolean(props.busy)}><Archive size={16} /> Backup ngay</button>}</div>
+    <section className="backup-section"><div className="backup-heading"><div><span className="section-label">An toàn dữ liệu</span><h3>Bản sao lưu</h3><p>Import và khôi phục luôn tạo backup tự động. Khôi phục chỉ dành cho owner.</p></div>{canCreateBackups && <button className="secondary-button" onClick={() => void createBackup()} disabled={Boolean(props.busy)}><Archive size={16} /> Backup ngay</button>}</div>
       {backupError && <p className="form-error">{backupError}</p>}
-      <div className="backup-list">{backups.length ? backups.map((backup) => <div className="backup-row" key={backup.id}><Archive size={16} /><div><strong>{backup.name}</strong><span>{formatBackupTime(backup.createdTime ?? backup.modifiedTime)}{backup.reason ? ` · ${backup.reason}` : ''}</span></div>{(props.mock || props.workspace?.role === 'owner') && <button className="secondary-button" onClick={() => void restore(backup)}><RotateCcw size={14} /> Khôi phục</button>}</div>) : <div className="backup-empty">Chưa có bản sao lưu nào.</div>}</div>
+      <div className="backup-list">{backups.length ? backups.map((backup) => <div className="backup-row" key={backup.id}><Archive size={16} /><div><strong>{backup.name}</strong><span>{formatBackupTime(backup.createdTime ?? backup.modifiedTime)}{backup.reason ? ` · ${backup.reason}` : ''}</span></div>{canReplaceData && <button className="secondary-button" onClick={() => void restore(backup)}><RotateCcw size={14} /> Khôi phục</button>}</div>) : <div className="backup-empty">Chưa có bản sao lưu nào.</div>}</div>
     </section>
 
     {props.workspace?.canReviewDrafts && props.onReviewDraft ? <DraftInbox drafts={props.drafts ?? []} data={props.data} workspaceId={props.workspace.id} onReview={props.onReviewDraft} /> : null}
     {props.workspace?.role === 'contributor' && props.onRetryMirror ? <MirrorStatusCard status={props.mirrorStatus} mirror={props.mirrorSync} onRetry={props.onRetryMirror} /> : null}
 
-    {props.workspace?.canManageMembers && <section className="backup-section collaboration-section"><div className="backup-heading"><div><span className="section-label">Cộng tác</span><h3><Users size={18} /> Thành viên workspace</h3><p>{props.collaborationEnabled ? 'Editor cần duyệt chỉ gửi đề xuất; viewer chỉ được xem. Bản mirror trong Drive thành viên không thể bị owner thu hồi.' : 'Editor được sửa dữ liệu trực tiếp; viewer chỉ được xem. Bật Approval V2 sau khi hoàn tất smoke test Production.'}</p></div></div>
-      <div className="member-invite"><input type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="email@gmail.com" aria-label="Email thành viên" /><select value={memberRole} onChange={(event) => setMemberRole(event.target.value as 'contributor' | 'viewer')}><option value="viewer">Viewer</option><option value="contributor">{props.collaborationEnabled ? 'Editor cần duyệt' : 'Editor'}</option></select><button className="primary-button" onClick={() => void inviteMember()}><UserPlus size={16} /> Mời</button></div>
+    {props.workspace?.canManageMembers && <section className="backup-section collaboration-section"><div className="backup-heading"><div><span className="section-label">Cộng tác</span><h3><Users size={18} /> Thành viên workspace</h3><p>{props.collaborationEnabled ? 'Editor sửa trực tiếp; Editor cần duyệt gửi Draft; Viewer chỉ xem. Link mời hết hạn sau 7 ngày.' : 'Editor được sửa dữ liệu trực tiếp; viewer chỉ được xem.'}</p></div></div>
+      <div className="member-invite"><input type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="email@gmail.com" aria-label="Email thành viên" /><select value={memberRole} onChange={(event) => setMemberRole(event.target.value as 'editor' | 'contributor' | 'viewer')}><option value="viewer">Viewer</option>{props.collaborationEnabled && <option value="editor">Editor</option>}<option value="contributor">{props.collaborationEnabled ? 'Editor cần duyệt' : 'Editor'}</option></select><button className="primary-button" onClick={() => void inviteMember()}><UserPlus size={16} /> Tạo link mời</button></div>
       {memberError && <p className="form-error">{memberError}</p>}
-      <div className="backup-list">{props.members?.map((member) => <div className="backup-row member-row" key={member.id}><Users size={16} /><div><strong>{member.name ?? member.email ?? 'Tài khoản Google'}</strong><span>{member.email}{member.inherited ? ' · quyền kế thừa' : ''}{member.migrationRequired ? ' · cần migration lại' : ''}</span></div>{member.role === 'owner' ? <span className="session-badge">owner</span> : <><select value={member.role} disabled={member.inherited} onChange={(event) => void props.onUpdateMember?.(member.id, event.target.value as 'contributor' | 'viewer')}><option value="viewer">viewer</option><option value="contributor">{props.collaborationEnabled ? 'editor cần duyệt' : 'editor'}</option></select><button className="icon-button" disabled={member.inherited} onClick={() => { const warning = props.collaborationEnabled ? ' Mirror đã nằm trong Drive của họ sẽ không bị xóa.' : ''; if (window.confirm(`Gỡ quyền của ${member.email ?? member.name}?${warning}`)) void props.onRemoveMember?.(member.id) }} aria-label="Gỡ thành viên"><Trash2 size={16} /></button></>}</div>)}</div>
+      {inviteLink && <div className="invite-link-result"><strong>Link đã được copy</strong><input readOnly value={inviteLink} aria-label="Link mời Famnesia" /><button className="secondary-button" onClick={() => void navigator.clipboard?.writeText(inviteLink)}>Copy lại</button></div>}
+      <div className="backup-list">{props.members?.map((member) => <div className="backup-row member-row" key={member.id}><Users size={16} /><div><strong>{member.name ?? member.email ?? 'Tài khoản'}</strong><span>{member.email}{member.pendingInvitation ? ` · chờ nhận lời${member.invitationExpiresAt ? ` · hết hạn ${formatBackupTime(member.invitationExpiresAt)}` : ''}` : ''}</span></div>{member.role === 'owner' ? <span className="session-badge">owner</span> : <><select value={member.role} disabled={member.inherited} onChange={(event) => void props.onUpdateMember?.(member.id, event.target.value as 'editor' | 'contributor' | 'viewer')}><option value="viewer">viewer</option>{props.collaborationEnabled && <option value="editor">editor</option>}<option value="contributor">{props.collaborationEnabled ? 'editor cần duyệt' : 'editor'}</option></select><button className="icon-button" disabled={member.inherited} onClick={() => { if (window.confirm(`${member.pendingInvitation ? 'Thu hồi lời mời' : 'Gỡ quyền của'} ${member.email ?? member.name}?`)) void props.onRemoveMember?.(member.id) }} aria-label={member.pendingInvitation ? 'Thu hồi lời mời' : 'Gỡ thành viên'}><Trash2 size={16} /></button></>}</div>)}</div>
     </section>}
     </> : null}
 
-    {tab === 'import_export' ? <section className="portability-center"><header><span className="eyebrow">Data portability</span><h3>Mang dữ liệu theo cách phù hợp</h3><p>JSON giữ toàn bộ mô hình Famnesia. Excel dành cho nhập liệu và chỉnh sửa hàng loạt; ảnh vẫn nằm riêng trong Google Drive.</p></header><div className="portability-grid"><article><FileJson /><h4>JSON chuẩn Famnesia</h4><p>Backup/migration đầy đủ schema, profile, thành viên, quan hệ, cài đặt và tham chiếu ảnh.</p><div>{(props.mock || props.workspace?.role === 'owner') ? <button className="primary-button" onClick={() => openImport('json')}><FileUp size={15} /> Import JSON</button> : null}<button className="secondary-button" onClick={() => downloadFamilyData(props.data)}><Download size={15} /> Export JSON</button><button className="secondary-button" onClick={downloadFamilyDataTemplate}>Tải JSON mẫu</button></div></article><article><FileSpreadsheet /><h4>Excel cho chỉnh sửa hàng loạt</h4><p>Workbook `.xlsx` gồm README, profiles, persons, relationships và media; không nhận macro hoặc công thức.</p><div>{(props.mock || props.workspace?.role === 'owner') ? <button className="primary-button" onClick={() => openImport('xlsx')}><FileUp size={15} /> Import Excel</button> : null}<button className="secondary-button" onClick={() => downloadFamilyDataExcel(props.data)}><Download size={15} /> Export Excel</button><button className="secondary-button" onClick={downloadFamilyDataExcelTemplate}>Tải Excel mẫu</button></div></article></div><div className="import-security-contract"><ShieldCheck /><div><strong>File bên ngoài luôn được coi là không tin cậy</strong><p>Kiểm tra loại file, chữ ký ZIP, kích thước, độ phức tạp, macro/OLE/external link, công thức, schema, ID và vòng lặp tổ tiên. Import lỗi không ghi đè family.json.</p></div></div></section> : null}
-    {(tab === 'quality' || tab === 'issues' || tab === 'duplicates') ? <DataQualityCenter data={props.data} mode={tab} canEdit={props.mock || Boolean(props.workspace?.canEdit)} onOpenPerson={props.onOpenPerson} onSuppressDuplicate={props.onSuppressDuplicate} onMerge={props.mock || props.workspace?.canCommitDirectly ? props.onMergePeople : undefined} /> : null}
+    {tab === 'import_export' ? <section className="portability-center"><header><span className="eyebrow">Data portability</span><h3>Mang dữ liệu theo cách phù hợp</h3><p>JSON giữ toàn bộ mô hình Famnesia. Excel dành cho nhập liệu và chỉnh sửa hàng loạt; ảnh vẫn nằm riêng trong kho media của workspace.</p></header><div className="portability-grid"><article><FileJson /><h4>JSON chuẩn Famnesia</h4><p>Backup/migration đầy đủ schema, profile, thành viên, quan hệ, cài đặt và tham chiếu ảnh.</p><div>{canReplaceData ? <button className="primary-button" onClick={() => openImport('json')}><FileUp size={15} /> Import JSON</button> : null}<button className="secondary-button" onClick={() => downloadFamilyData(props.data)}><Download size={15} /> Export JSON</button><button className="secondary-button" onClick={downloadFamilyDataTemplate}>Tải JSON mẫu</button></div></article><article><FileSpreadsheet /><h4>Excel cho chỉnh sửa hàng loạt</h4><p>Workbook `.xlsx` gồm README, profiles, persons, relationships và media; không nhận macro hoặc công thức.</p><div>{canReplaceData ? <button className="primary-button" onClick={() => openImport('xlsx')}><FileUp size={15} /> Import Excel</button> : null}<button className="secondary-button" onClick={() => downloadFamilyDataExcel(props.data)}><Download size={15} /> Export Excel</button><button className="secondary-button" onClick={downloadFamilyDataExcelTemplate}>Tải Excel mẫu</button></div></article></div><div className="import-security-contract"><ShieldCheck /><div><strong>File bên ngoài luôn được coi là không tin cậy</strong><p>Kiểm tra loại file, chữ ký ZIP, kích thước, độ phức tạp, macro/OLE/external link, công thức, schema, ID và vòng lặp tổ tiên. Import lỗi không ghi đè dữ liệu đang hoạt động.</p></div></div></section> : null}
+    {(tab === 'quality' || tab === 'issues' || tab === 'duplicates') ? <DataQualityCenter data={props.data} mode={tab} canEdit={props.mock || Boolean(props.workspace?.canEdit)} onOpenPerson={props.onOpenPerson} onSuppressDuplicate={props.onSuppressDuplicate} onMerge={canReplaceData ? props.onMergePeople : undefined} /> : null}
     {tab === 'activity' ? <ActivityTimeline events={props.activity ?? []} /> : null}
 
     {showImport && <ImportDialog result={importResult} busy={readingFile ? 'Đang đọc tệp…' : props.busy} preferredFormat={preferredFormat} onChoose={(event) => void chooseFile(event)} onClose={() => { setShowImport(false); setImportResult(undefined) }} onConfirm={confirmImport} />}
