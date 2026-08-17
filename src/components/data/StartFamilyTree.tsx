@@ -1,14 +1,15 @@
 import { Download, FileUp, FolderHeart } from 'lucide-react'
-import { SharedWorkspaceConnector } from './SharedWorkspaceConnector'
+import { SharedWorkspaceConnector, type SharedWorkspaceConnectionMode } from './SharedWorkspaceConnector'
 
 interface Props {
   onCreate: () => void
   onImport?: () => void
   onDownloadTemplate: () => void
   onConnectSharedWorkspace?: (workspaceId: string) => Promise<void>
+  sharedWorkspaceMode?: SharedWorkspaceConnectionMode
 }
 
-export function StartFamilyTree({ onCreate, onImport, onDownloadTemplate, onConnectSharedWorkspace }: Props) {
+export function StartFamilyTree({ onCreate, onImport, onDownloadTemplate, onConnectSharedWorkspace, sharedWorkspaceMode }: Props) {
   return <div className="start-family-state">
     <div className="start-family-mark"><FolderHeart size={30} /></div>
     <span className="eyebrow">Famnesia đã sẵn sàng</span>
@@ -19,6 +20,6 @@ export function StartFamilyTree({ onCreate, onImport, onDownloadTemplate, onConn
       {onImport && <button className="secondary-button" onClick={onImport}><FileUp size={17} /> Import JSON</button>}
       <button className="text-action" onClick={onDownloadTemplate}><Download size={15} /> Tải JSON mẫu</button>
     </div>
-    {onConnectSharedWorkspace && <SharedWorkspaceConnector onConnect={onConnectSharedWorkspace} />}
+    {sharedWorkspaceMode && <SharedWorkspaceConnector mode={sharedWorkspaceMode} onConnect={onConnectSharedWorkspace} />}
   </div>
 }
