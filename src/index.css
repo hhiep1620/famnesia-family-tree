@@ -401,6 +401,9 @@ h1, h2, h3 { font-family: 'Newsreader', serif; }
 .shared-workspace-copy > div { min-width: 0; display: grid; gap: 3px; }
 .shared-workspace-copy strong { color: var(--ink); font-size: 11px; }
 .shared-workspace-copy span { color: var(--muted); font-size: 9px; line-height: 1.5; }
+.shared-workspace-connector.is-invite .shared-workspace-copy { grid-column: 1 / -1; }
+.shared-workspace-invite-input { width: 100%; min-width: 0; height: 42px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255, 255, 255, .76); padding: 0 12px; color: var(--ink); font: inherit; font-size: 11px; outline: none; }
+.shared-workspace-invite-input:focus { border-color: var(--moss); box-shadow: 0 0 0 3px rgba(63, 111, 98, .12); }
 .shared-workspace-connector > .form-error { grid-column: 1 / -1; margin: 0; text-align: left; }
 .shared-workspace-connector.is-compact { width: auto; display: block; margin: 0; border: 0; padding: 0; background: transparent; box-shadow: none; }
 .shared-workspace-connector.is-compact > .form-error { max-width: 300px; margin-top: 5px; }
