@@ -58,4 +58,4 @@ Cả ba gate đã hoàn thành. Theo chỉ đạo hiện tại, dừng sau CR-01
 - `npm run lint`: pass.
 - `npm run build`: pass; chỉ còn cảnh báo bundle chunk >500 kB, không liên quan CR-01 docs.
 - `git diff --check`: pass.
-- Commit: `PENDING`.
+- CR-01 implementation/evidence commit: `6e28f0c` (`docs: complete CR-01 security boundary`).

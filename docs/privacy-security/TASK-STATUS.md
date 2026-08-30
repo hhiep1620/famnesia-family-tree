@@ -15,7 +15,7 @@
 
 ## To-do
 
-- [x] CR-01 — Threat model and boundary — [evidence](./evidence/CR-01/README.md); reader/security review pass; owner approved `2026-08-30T14:32:09Z`.
+- [x] CR-01 — Threat model and boundary — [evidence](./evidence/CR-01/README.md); commit `6e28f0c`; reader/security review pass; owner approved `2026-08-30T14:32:09Z`.
 - [ ] CR-02 — Crypto and key contract.
 - [ ] CR-03 — Google Drive key vault.
 - [ ] CR-04 — Encrypted data contract.
