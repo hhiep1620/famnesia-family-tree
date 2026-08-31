@@ -551,6 +551,7 @@ export type Database = {
           row_version: number
           updated_at: string
           workspace_id: string
+          writer_id: string | null
           writer_principal_id: string
         }
         Insert: {
@@ -563,6 +564,7 @@ export type Database = {
           row_version: number
           updated_at?: string
           workspace_id: string
+          writer_id?: string | null
           writer_principal_id: string
         }
         Update: {
@@ -575,6 +577,7 @@ export type Database = {
           row_version?: number
           updated_at?: string
           workspace_id?: string
+          writer_id?: string | null
           writer_principal_id?: string
         }
         Relationships: [
@@ -695,6 +698,7 @@ export type Database = {
           row_version: number
           updated_at: string
           workspace_id: string
+          writer_id: string | null
           writer_principal_id: string
         }
         Insert: {
@@ -707,6 +711,7 @@ export type Database = {
           row_version: number
           updated_at?: string
           workspace_id: string
+          writer_id?: string | null
           writer_principal_id: string
         }
         Update: {
@@ -719,6 +724,7 @@ export type Database = {
           row_version?: number
           updated_at?: string
           workspace_id?: string
+          writer_id?: string | null
           writer_principal_id?: string
         }
         Relationships: [
@@ -2062,6 +2068,7 @@ export type Database = {
         | "person_core"
         | "relationship"
         | "media_manifest"
+        | "workspace_settings"
       encrypted_key_purpose: "workspace" | "contact" | "media"
       fact_confidence: "confirmed" | "likely" | "estimated" | "unknown"
       gender_type: "male" | "female" | "other" | "unknown"
@@ -2099,7 +2106,6 @@ export type Database = {
     }
   }
 }
-
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
 type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
@@ -2248,6 +2254,7 @@ export const Constants = {
         "person_core",
         "relationship",
         "media_manifest",
+        "workspace_settings",
       ],
       encrypted_key_purpose: ["workspace", "contact", "media"],
       fact_confidence: ["confirmed", "likely", "estimated", "unknown"],

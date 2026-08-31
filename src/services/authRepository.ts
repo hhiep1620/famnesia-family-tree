@@ -35,6 +35,11 @@ export function createSupabaseAuthRepository(
   client: SupabaseClient<Database>,
   origin: () => string = () => window.location.origin,
 ): AuthRepositoryContract {
+  let refreshFlight: ReturnType<typeof client.auth.refreshSession> | undefined
+  const refreshLocalSession = () => {
+    refreshFlight ??= client.auth.refreshSession().finally(() => { refreshFlight = undefined })
+    return refreshFlight
+  }
   const startGoogleSignIn = async () => {
     const { error } = await client.auth.signInWithOAuth({
       provider: 'google',
@@ -47,11 +52,23 @@ export function createSupabaseAuthRepository(
     return data.session?.access_token
   })
   const verifiedSession = async (): Promise<AuthSessionInfo> => {
-    const { data, error } = await client.auth.getSession()
+    let { data, error } = await client.auth.getSession()
     if (error) throw new ApiError(401, 'SUPABASE_SESSION_INVALID', 'Phiên Supabase không hợp lệ hoặc đã hết hạn.')
-    if (!data.session) throw new ApiError(401, 'AUTH_REQUIRED', 'Bạn chưa đăng nhập.')
+    if (!data.session) {
+      const refreshed = await refreshLocalSession()
+      data = refreshed.data
+      error = refreshed.error
+    }
+    if (error || !data.session) throw new ApiError(401, 'AUTH_REQUIRED', 'Bạn chưa đăng nhập.')
     installTokenProvider()
-    return authApi.getSession()
+    try { return await authApi.getSession() }
+    catch (caught) {
+      if (!(caught instanceof ApiError) || caught.status !== 401) throw caught
+      const refreshed = await refreshLocalSession()
+      if (refreshed.error || !refreshed.data.session) throw caught
+      installTokenProvider()
+      return authApi.getSession()
+    }
   }
   return {
     backend: 'supabase',
@@ -64,7 +81,7 @@ export function createSupabaseAuthRepository(
     },
     reconnect: startGoogleSignIn,
     async refreshSession() {
-      const { error } = await client.auth.refreshSession()
+      const { error } = await refreshLocalSession()
       if (error) {
         configureBearerAccessTokenProvider(undefined)
         throw new ApiError(401, 'SUPABASE_SESSION_EXPIRED', 'Phiên Supabase đã hết hạn. Hãy đăng nhập lại.')
@@ -72,7 +89,10 @@ export function createSupabaseAuthRepository(
       return verifiedSession()
     },
     onAuthStateChange(listener) {
-      const { data } = client.auth.onAuthStateChange(() => queueMicrotask(listener))
+      const { data } = client.auth.onAuthStateChange((event) => {
+        if (event === 'SIGNED_OUT') configureBearerAccessTokenProvider(undefined)
+        queueMicrotask(listener)
+      })
       return () => data.subscription.unsubscribe()
     },
   }

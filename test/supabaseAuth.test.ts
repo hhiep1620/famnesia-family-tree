@@ -20,16 +20,17 @@ function verifier(overrides?: Partial<SupabaseAuthVerifier>): SupabaseAuthVerifi
   }
 }
 
-function browserClient(accessToken = token()) {
+function browserClient(accessToken = token(), initialSession = true) {
   const unsubscribe = vi.fn()
+  let listener: ((event: string) => void) | undefined
   const auth = {
-    getSession: vi.fn(async () => ({ data: { session: { access_token: accessToken } }, error: null })),
+    getSession: vi.fn(async () => ({ data: { session: initialSession ? { access_token: accessToken } : null }, error: null })),
     signInWithOAuth: vi.fn(async () => ({ data: { provider: 'google', url: 'https://accounts.google.test' }, error: null })),
     signOut: vi.fn(async () => ({ error: null })),
     refreshSession: vi.fn(async () => ({ data: { session: { access_token: accessToken } }, error: null })),
-    onAuthStateChange: vi.fn((_listener: () => void) => ({ data: { subscription: { unsubscribe } } })),
+    onAuthStateChange: vi.fn((next: (event: string) => void) => { listener = next; return { data: { subscription: { unsubscribe } } } }),
   }
-  return { client: { auth } as unknown as SupabaseClient<Database>, auth, unsubscribe }
+  return { client: { auth } as unknown as SupabaseClient<Database>, auth, unsubscribe, emit: (event: string) => listener?.(event) }
 }
 
 function okSessionResponse() {
@@ -107,6 +108,27 @@ describe('Supabase browser auth adapter', () => {
     const repository = createSupabaseAuthRepository(client, () => 'http://localhost:3000')
     await repository.refreshSession()
     expect(auth.refreshSession).toHaveBeenCalledOnce()
+  })
+
+  it('recovers a cross-tab persisted session when the initial lookup races storage restoration', async () => {
+    const { client, auth } = browserClient(token(), false)
+    vi.stubGlobal('fetch', vi.fn(async () => okSessionResponse()))
+    const repository = createSupabaseAuthRepository(client, () => 'http://localhost:3000')
+    await expect(repository.getSession()).resolves.toMatchObject({ authenticated: true })
+    expect(auth.refreshSession).toHaveBeenCalledOnce()
+  })
+
+  it('deduplicates concurrent token refresh and propagates cross-tab sign-out events', async () => {
+    const { client, auth, emit } = browserClient()
+    vi.stubGlobal('fetch', vi.fn(async () => okSessionResponse()))
+    const repository = createSupabaseAuthRepository(client, () => 'http://localhost:3000')
+    const listener = vi.fn()
+    repository.onAuthStateChange(listener)
+    await Promise.all([repository.refreshSession(), repository.refreshSession()])
+    expect(auth.refreshSession).toHaveBeenCalledOnce()
+    emit('SIGNED_OUT')
+    await new Promise((resolve) => queueMicrotask(resolve))
+    expect(listener).toHaveBeenCalledOnce()
   })
 
   it('signs out, clears Bearer state and unsubscribes auth listeners', async () => {

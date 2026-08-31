@@ -2,7 +2,7 @@ import { canonicalize, parseEncryptedEnvelope, type EncryptedEnvelopeV1 } from '
 import { parseWrappedKeyEnvelope, type WrappedKeyEnvelopeV1 } from './keyContract'
 
 export const ENCRYPTED_SCHEMA_VERSION = 1 as const
-export const SHARED_FIELD_CLASSES = ['family_profile', 'person_core', 'relationship', 'media_manifest'] as const
+export const SHARED_FIELD_CLASSES = ['family_profile', 'person_core', 'relationship', 'media_manifest', 'workspace_settings'] as const
 export const PRIVATE_FIELD_CLASSES = ['phone', 'email', 'address', 'private_note'] as const
 
 export type SharedFieldClass = (typeof SHARED_FIELD_CLASSES)[number]
@@ -16,6 +16,7 @@ export interface EncryptedEntityRecord {
   keyId: string
   keyEpoch: number
   writerPrincipalId: string
+  writerId: string
   envelope: EncryptedEnvelopeV1
 }
 
@@ -27,6 +28,7 @@ export interface EncryptedPrivateFieldRecord {
   keyId: string
   keyEpoch: number
   writerPrincipalId: string
+  writerId: string
   envelope: EncryptedEnvelopeV1
 }
 
@@ -117,7 +119,7 @@ function assertEnvelopeBinding(
     rowVersion: number
     keyId: string
     keyEpoch: number
-    writerPrincipalId: string
+    writerId: string
     purpose: 'family-content' | 'contact'
   },
 ): void {
@@ -129,7 +131,7 @@ function assertEnvelopeBinding(
     dataVersion: expected.rowVersion,
     keyId: expected.keyId,
     keyEpoch: expected.keyEpoch,
-    writerId: expected.writerPrincipalId,
+    writerId: expected.writerId,
     purpose: expected.purpose,
   }
   if (canonicalize(envelope.aad) !== canonicalize(expectedAad)) throw new Error('AAD_RECORD_BINDING_MISMATCH')
@@ -137,7 +139,7 @@ function assertEnvelopeBinding(
 
 export function parseEncryptedEntityRecord(value: unknown): EncryptedEntityRecord {
   const input = record(value, 'ENCRYPTED_ENTITY')
-  exact(input, ['workspaceId', 'entityId', 'fieldClass', 'rowVersion', 'keyId', 'keyEpoch', 'writerPrincipalId', 'envelope'], 'ENCRYPTED_ENTITY')
+  exact(input, ['workspaceId', 'entityId', 'fieldClass', 'rowVersion', 'keyId', 'keyEpoch', 'writerPrincipalId', 'writerId', 'envelope'], 'ENCRYPTED_ENTITY')
   const result: EncryptedEntityRecord = {
     workspaceId: id(input.workspaceId, 'WORKSPACE_ID'),
     entityId: id(input.entityId, 'ENTITY_ID'),
@@ -146,6 +148,7 @@ export function parseEncryptedEntityRecord(value: unknown): EncryptedEntityRecor
     keyId: id(input.keyId, 'KEY_ID'),
     keyEpoch: positive(input.keyEpoch, 'KEY_EPOCH'),
     writerPrincipalId: id(input.writerPrincipalId, 'WRITER_PRINCIPAL_ID'),
+    writerId: id(input.writerId, 'WRITER_ID'),
     envelope: parseEncryptedEnvelope(input.envelope),
   }
   assertEnvelopeBinding(result.envelope, { ...result, purpose: 'family-content' })
@@ -154,7 +157,7 @@ export function parseEncryptedEntityRecord(value: unknown): EncryptedEntityRecor
 
 export function parseEncryptedPrivateFieldRecord(value: unknown): EncryptedPrivateFieldRecord {
   const input = record(value, 'ENCRYPTED_PRIVATE_FIELD')
-  exact(input, ['workspaceId', 'personId', 'fieldClass', 'rowVersion', 'keyId', 'keyEpoch', 'writerPrincipalId', 'envelope'], 'ENCRYPTED_PRIVATE_FIELD')
+  exact(input, ['workspaceId', 'personId', 'fieldClass', 'rowVersion', 'keyId', 'keyEpoch', 'writerPrincipalId', 'writerId', 'envelope'], 'ENCRYPTED_PRIVATE_FIELD')
   const result: EncryptedPrivateFieldRecord = {
     workspaceId: id(input.workspaceId, 'WORKSPACE_ID'),
     personId: id(input.personId, 'PERSON_ID'),
@@ -163,6 +166,7 @@ export function parseEncryptedPrivateFieldRecord(value: unknown): EncryptedPriva
     keyId: id(input.keyId, 'KEY_ID'),
     keyEpoch: positive(input.keyEpoch, 'KEY_EPOCH'),
     writerPrincipalId: id(input.writerPrincipalId, 'WRITER_PRINCIPAL_ID'),
+    writerId: id(input.writerId, 'WRITER_ID'),
     envelope: parseEncryptedEnvelope(input.envelope),
   }
   assertEnvelopeBinding(result.envelope, {
@@ -172,7 +176,7 @@ export function parseEncryptedPrivateFieldRecord(value: unknown): EncryptedPriva
     rowVersion: result.rowVersion,
     keyId: result.keyId,
     keyEpoch: result.keyEpoch,
-    writerPrincipalId: result.writerPrincipalId,
+    writerId: result.writerId,
     purpose: 'contact',
   })
   return result
@@ -253,7 +257,8 @@ export function parseEncryptedCommitRequest(value: unknown): EncryptedCommitRequ
         exact(operation, ['type', 'entityId', 'fieldClass', 'expectedRowVersion', 'keyId', 'keyEpoch', 'envelope'], 'ENTITY_OPERATION')
         const parsed = parseEncryptedEntityRecord({ workspaceId, entityId: operation.entityId, fieldClass: operation.fieldClass,
           rowVersion: expectedDataVersion + 1, keyId: operation.keyId, keyEpoch: operation.keyEpoch,
-          writerPrincipalId: parseEncryptedEnvelope(operation.envelope).aad.writerId, envelope: operation.envelope })
+          writerPrincipalId: parseEncryptedEnvelope(operation.envelope).aad.writerId,
+          writerId: parseEncryptedEnvelope(operation.envelope).aad.writerId, envelope: operation.envelope })
         if (parsed.keyEpoch !== expectedKeyEpoch) throw new Error('STALE_KEY_EPOCH')
         return { type: 'entity_upsert', entityId: parsed.entityId, fieldClass: parsed.fieldClass,
           expectedRowVersion: nonnegative(operation.expectedRowVersion, 'EXPECTED_ROW_VERSION'), keyId: parsed.keyId,
@@ -268,7 +273,8 @@ export function parseEncryptedCommitRequest(value: unknown): EncryptedCommitRequ
         exact(operation, ['type', 'personId', 'fieldClass', 'expectedRowVersion', 'keyId', 'keyEpoch', 'authorizationId', 'envelope'], 'PRIVATE_OPERATION')
         const parsed = parseEncryptedPrivateFieldRecord({ workspaceId, personId: operation.personId, fieldClass: operation.fieldClass,
           rowVersion: expectedDataVersion + 1, keyId: operation.keyId, keyEpoch: operation.keyEpoch,
-          writerPrincipalId: parseEncryptedEnvelope(operation.envelope).aad.writerId, envelope: operation.envelope })
+          writerPrincipalId: parseEncryptedEnvelope(operation.envelope).aad.writerId,
+          writerId: parseEncryptedEnvelope(operation.envelope).aad.writerId, envelope: operation.envelope })
         if (parsed.keyEpoch !== expectedKeyEpoch) throw new Error('STALE_KEY_EPOCH')
         return { type: 'private_upsert', personId: parsed.personId, fieldClass: parsed.fieldClass,
           expectedRowVersion: nonnegative(operation.expectedRowVersion, 'EXPECTED_ROW_VERSION'), keyId: parsed.keyId,

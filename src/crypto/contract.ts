@@ -42,6 +42,10 @@ export interface WriterAeadKey {
   readonly [writerKeyBrand]: true
 }
 
+export interface WorkspaceRootKey {
+  readonly cryptoKey: CryptoKey
+}
+
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder('utf-8', { fatal: true })
 const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
@@ -179,10 +183,26 @@ export async function deriveWriterAeadKey(
   usages: KeyUsage[],
 ): Promise<WriterAeadKey> {
   if (rootKeyMaterial.length !== 32) throw new Error('INVALID_ROOT_KEY_LENGTH')
+  const rootKey = await importWorkspaceRootKey(rootKeyMaterial)
+  return deriveWriterAeadKeyFromRootKey(rootKey, writerId, keyId, keyEpoch, allowedPurpose, usages)
+}
+
+export async function importWorkspaceRootKey(rootKeyMaterial: Uint8Array): Promise<WorkspaceRootKey> {
+  if (rootKeyMaterial.length !== 32) throw new Error('INVALID_ROOT_KEY_LENGTH')
+  return { cryptoKey: await crypto.subtle.importKey('raw', rootKeyMaterial as BufferSource, 'HKDF', false, ['deriveKey']) }
+}
+
+export async function deriveWriterAeadKeyFromRootKey(
+  rootKey: WorkspaceRootKey,
+  writerId: string,
+  keyId: string,
+  keyEpoch: number,
+  allowedPurpose: EnvelopePurpose,
+  usages: KeyUsage[],
+): Promise<WriterAeadKey> {
   assertIdentifier(writerId, 'writer_id')
   assertIdentifier(keyId, 'key_id')
   assertPositiveInteger(keyEpoch, 'key_epoch')
-  const hkdf = await crypto.subtle.importKey('raw', rootKeyMaterial as BufferSource, 'HKDF', false, ['deriveKey'])
   const cryptoKey = await crypto.subtle.deriveKey(
     {
       name: 'HKDF',
@@ -190,7 +210,7 @@ export async function deriveWriterAeadKey(
       salt: textEncoder.encode(writerId) as BufferSource,
       info: textEncoder.encode(canonicalize({ label: 'famnesia:writer-aead:v1', keyId, keyEpoch })) as BufferSource,
     },
-    hkdf,
+    rootKey.cryptoKey,
     { name: 'AES-GCM', length: 256 },
     false,
     usages,

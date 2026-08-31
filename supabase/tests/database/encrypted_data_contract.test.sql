@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(24);
 
 create function public.throws_ok(test_sql text, description text)
 returns text language sql as $$
@@ -62,6 +62,18 @@ values ('42000000-0000-4000-8000-000000000001', 'person-1', 'person_core', 1, 'w
   jsonb_build_object('version',1,'suite','FAMNESIA-P256-AESGCM-HKDF-SHA256-V1','nonce','ICEiIyQlJicoKSor','ciphertext',repeat('A',32),
     'aad',jsonb_build_object('workspaceId','42000000-0000-4000-8000-000000000001','entityId','person-1','fieldClass','person_core',
       'schemaVersion',1,'dataVersion',1,'keyId','wk-family-1','keyEpoch',1,'writerId','cp_aaaaaaaaaaaaaaaaaaaaaaaa','purpose','family-content')));
+
+select is((select count(*)::integer from pg_enum e join pg_type t on t.oid=e.enumtypid
+  where t.typnamespace='public'::regnamespace and t.typname='encrypted_entity_class' and e.enumlabel='workspace_settings'), 1,
+  'workspace settings is an explicit encrypted entity class');
+insert into public.encrypted_entities(workspace_id, entity_id, field_class, row_version, key_id, key_epoch, writer_principal_id, envelope)
+values ('42000000-0000-4000-8000-000000000001', 'writer-probe', 'workspace_settings', 1, 'wk-family-1', 1, 'cp_aaaaaaaaaaaaaaaaaaaaaaaa',
+  jsonb_build_object('version',1,'suite','FAMNESIA-P256-AESGCM-HKDF-SHA256-V1','nonce','ICEiIyQlJicoKSor','ciphertext',repeat('A',32),
+    'aad',jsonb_build_object('workspaceId','42000000-0000-4000-8000-000000000001','entityId','writer-probe','fieldClass','workspace_settings',
+      'schemaVersion',1,'dataVersion',1,'keyId','wk-family-1','keyEpoch',1,'writerId','cp_aaaaaaaaaaaaaaaaaaaaaaaa.tab.cr05','purpose','family-content')));
+select is((select writer_id from public.encrypted_entities where entity_id='writer-probe'), 'cp_aaaaaaaaaaaaaaaaaaaaaaaa.tab.cr05',
+  'generated writer identity preserves per-tab nonce namespace separately from principal authorization');
+delete from public.encrypted_entities where entity_id='writer-probe';
 
 insert into public.encrypted_key_envelopes(workspace_id, envelope_id, entity_id, key_id, key_purpose, key_epoch, directory_revision,
   recipient_principal_id, recipient_unwrap_fingerprint, issuer_principal_id, issuer_signing_fingerprint, wrapped_envelope, expires_at)

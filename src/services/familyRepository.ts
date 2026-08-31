@@ -2,6 +2,7 @@ import type { ActivityEvent, FamilyBackup, FamilyData, WorkspaceInfo, WorkspaceI
 import type { FamilyCommitRequest, FamilyCommitResult, FamilyCommitStatusResult } from '../types/familyOperations'
 import type { CollaborationStatus, DraftReviewRequest, DraftReviewResult, MirrorSyncResult, ReviewDraft, SubmitDraftResult } from '../types/collaboration'
 import { ApiError, apiRequest, jsonBody } from './apiClient'
+import { assertLegacyFamilyPathEnabled } from './familyRepositoryMode'
 
 export interface FamilyDataRevision { modifiedTime?: string; version?: string }
 export interface FamilyDataSnapshot { data: FamilyData; revision: FamilyDataRevision }
@@ -56,6 +57,7 @@ export class FamilyRepository implements FamilyRepositoryContract {
   private constructor(workspace: WorkspaceInfo, workspaces: WorkspaceInfo[]) { this.workspace = workspace; this.workspaces = workspaces }
 
   static async listWorkspaces(): Promise<WorkspaceInfo[]> {
+    assertLegacyFamilyPathEnabled(import.meta.env.VITE_FAMILY_REPOSITORY_MODE)
     return (await apiRequest<{ workspaces: WorkspaceInfo[] }>('/api/workspaces')).workspaces
   }
 
@@ -77,6 +79,7 @@ export class FamilyRepository implements FamilyRepositoryContract {
   }
 
   static async create(name: string): Promise<FamilyRepository> {
+    assertLegacyFamilyPathEnabled(import.meta.env.VITE_FAMILY_REPOSITORY_MODE)
     const result = await apiRequest<{ workspace: WorkspaceInfo }>('/api/workspaces', {
       method: 'POST', ...jsonBody({ name }),
     })
@@ -86,6 +89,7 @@ export class FamilyRepository implements FamilyRepositoryContract {
   }
 
   static async connectShared(workspaceId: string): Promise<FamilyRepository> {
+    assertLegacyFamilyPathEnabled(import.meta.env.VITE_FAMILY_REPOSITORY_MODE)
     const result = await apiRequest<{ workspace: WorkspaceInfo }>('/api/workspaces', {
       method: 'POST', ...jsonBody({ workspaceId }),
     })

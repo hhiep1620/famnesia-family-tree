@@ -41,7 +41,7 @@ function wrappedEnvelope(overrides: Record<string, unknown> = {}) {
 describe('CR-04 encrypted relational contract', () => {
   it('accepts a correctly bound shared row and rejects workspace/entity substitution', () => {
     const row = { workspaceId, entityId: 'person-1', fieldClass: 'person_core', rowVersion: 8,
-      keyId: 'wk-family-1', keyEpoch: 2, writerPrincipalId: writerId,
+      keyId: 'wk-family-1', keyEpoch: 2, writerPrincipalId: writerId, writerId,
       envelope: envelope('person-1', 'person_core', 'family-content') }
     expect(parseEncryptedEntityRecord(row)).toMatchObject({ entityId: 'person-1', fieldClass: 'person_core' })
     expect(() => parseEncryptedEntityRecord({ ...row, workspaceId: '91000000-0000-4000-8000-000000000099' }))
@@ -51,7 +51,7 @@ describe('CR-04 encrypted relational contract', () => {
 
   it('keeps contact fields separate and forbids bundle replacement', () => {
     const row = { workspaceId, personId: 'person-1', fieldClass: 'phone', rowVersion: 8,
-      keyId: 'ck-person-1-phone', keyEpoch: 2, writerPrincipalId: writerId,
+      keyId: 'ck-person-1-phone', keyEpoch: 2, writerPrincipalId: writerId, writerId,
       envelope: envelope('person-1', 'phone', 'contact') }
     expect(parseEncryptedPrivateFieldRecord(row)).toMatchObject({ fieldClass: 'phone' })
     expect(() => parseEncryptedPrivateFieldRecord({ ...row, fieldClass: 'bundle' })).toThrow('INVALID_PRIVATE_FIELD_CLASS')
@@ -94,4 +94,3 @@ describe('CR-04 encrypted relational contract', () => {
     expect(() => assertContactEditAuthorization(authorization, { ...expected, now: new Date('2031-01-01') })).toThrow('CONTACT_AUTHORIZATION_INACTIVE')
   })
 })
-
