@@ -28,6 +28,7 @@ export class SupabaseRecoveryPrivateKeyRepository implements RecoveryPrivateKeyR
       .maybeSingle()
     if (error) throw error
     if (!data) return undefined
+    if (data.state !== 'pending_drive' && data.state !== 'active') throw new Error('INVALID_PRIVATE_KEY_BUNDLE_STATE')
     return { record: parseEncryptedPrivateKeyRecord(data.bundle), state: data.state }
   }
 

@@ -90,6 +90,55 @@ export type Database = {
           },
         ]
       }
+      authorization_nonce_ledger: {
+        Row: {
+          authorization_id: string
+          consumed_at: string
+          consumed_by_commit_id: string
+          consumed_by_principal_id: string
+          nonce_hash: string
+          workspace_id: string
+        }
+        Insert: {
+          authorization_id: string
+          consumed_at?: string
+          consumed_by_commit_id: string
+          consumed_by_principal_id: string
+          nonce_hash: string
+          workspace_id: string
+        }
+        Update: {
+          authorization_id?: string
+          consumed_at?: string
+          consumed_by_commit_id?: string
+          consumed_by_principal_id?: string
+          nonce_hash?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "authorization_nonce_ledger_authorization_id_fkey"
+            columns: ["authorization_id"]
+            isOneToOne: false
+            referencedRelation: "signed_policy_authorizations"
+            referencedColumns: ["authorization_id"]
+          },
+          {
+            foreignKeyName: "authorization_nonce_ledger_consumed_by_principal_id_fkey"
+            columns: ["consumed_by_principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["principal_id"]
+          },
+          {
+            foreignKeyName: "authorization_nonce_ledger_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_crypto_states"
+            referencedColumns: ["workspace_id"]
+          },
+        ]
+      }
       commits: {
         Row: {
           actor_user_id: string
@@ -149,6 +198,94 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "workspaces"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      crypto_invitations: {
+        Row: {
+          artifact_hash: string
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          invitation_id: string
+          invited_email_hash: string
+          state: Database["public"]["Enums"]["crypto_invitation_state"]
+          token_hash: string
+          workspace_id: string
+        }
+        Insert: {
+          artifact_hash: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          invitation_id?: string
+          invited_email_hash: string
+          state?: Database["public"]["Enums"]["crypto_invitation_state"]
+          token_hash: string
+          workspace_id: string
+        }
+        Update: {
+          artifact_hash?: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          invitation_id?: string
+          invited_email_hash?: string
+          state?: Database["public"]["Enums"]["crypto_invitation_state"]
+          token_hash?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crypto_invitations_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_crypto_states"
+            referencedColumns: ["workspace_id"]
+          },
+        ]
+      }
+      crypto_principals: {
+        Row: {
+          auth_user_id: string
+          created_at: string
+          principal_id: string
+          recovery_epoch: number
+          signing_fingerprint: string
+          signing_public_key: Json
+          unwrap_fingerprint: string
+          unwrap_public_key: Json
+          updated_at: string
+        }
+        Insert: {
+          auth_user_id: string
+          created_at?: string
+          principal_id: string
+          recovery_epoch: number
+          signing_fingerprint: string
+          signing_public_key: Json
+          unwrap_fingerprint: string
+          unwrap_public_key: Json
+          updated_at?: string
+        }
+        Update: {
+          auth_user_id?: string
+          created_at?: string
+          principal_id?: string
+          recovery_epoch?: number
+          signing_fingerprint?: string
+          signing_public_key?: Json
+          unwrap_fingerprint?: string
+          unwrap_public_key?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crypto_principals_active_bundle_fk"
+            columns: ["auth_user_id", "principal_id"]
+            isOneToOne: false
+            referencedRelation: "encrypted_private_key_bundles"
+            referencedColumns: ["auth_user_id", "principal_id"]
           },
         ]
       }
@@ -351,6 +488,291 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      encrypted_commits: {
+        Row: {
+          actor_principal_id: string
+          base_data_version: number
+          commit_id: string
+          created_at: string
+          operation_count: number
+          request_checksum: string
+          request_payload: Json
+          result_data_version: number
+          workspace_id: string
+        }
+        Insert: {
+          actor_principal_id: string
+          base_data_version: number
+          commit_id: string
+          created_at?: string
+          operation_count: number
+          request_checksum: string
+          request_payload: Json
+          result_data_version: number
+          workspace_id: string
+        }
+        Update: {
+          actor_principal_id?: string
+          base_data_version?: number
+          commit_id?: string
+          created_at?: string
+          operation_count?: number
+          request_checksum?: string
+          request_payload?: Json
+          result_data_version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "encrypted_commits_actor_principal_id_fkey"
+            columns: ["actor_principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["principal_id"]
+          },
+          {
+            foreignKeyName: "encrypted_commits_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_crypto_states"
+            referencedColumns: ["workspace_id"]
+          },
+        ]
+      }
+      encrypted_entities: {
+        Row: {
+          created_at: string
+          entity_id: string
+          envelope: Json
+          field_class: Database["public"]["Enums"]["encrypted_entity_class"]
+          key_epoch: number
+          key_id: string
+          row_version: number
+          updated_at: string
+          workspace_id: string
+          writer_principal_id: string
+        }
+        Insert: {
+          created_at?: string
+          entity_id: string
+          envelope: Json
+          field_class: Database["public"]["Enums"]["encrypted_entity_class"]
+          key_epoch: number
+          key_id: string
+          row_version: number
+          updated_at?: string
+          workspace_id: string
+          writer_principal_id: string
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string
+          envelope?: Json
+          field_class?: Database["public"]["Enums"]["encrypted_entity_class"]
+          key_epoch?: number
+          key_id?: string
+          row_version?: number
+          updated_at?: string
+          workspace_id?: string
+          writer_principal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "encrypted_entities_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_crypto_states"
+            referencedColumns: ["workspace_id"]
+          },
+          {
+            foreignKeyName: "encrypted_entities_writer_principal_id_fkey"
+            columns: ["writer_principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["principal_id"]
+          },
+        ]
+      }
+      encrypted_key_envelopes: {
+        Row: {
+          created_at: string
+          directory_revision: number
+          entity_id: string
+          envelope_id: string
+          expires_at: string | null
+          issuer_principal_id: string
+          issuer_signing_fingerprint: string
+          key_epoch: number
+          key_id: string
+          key_purpose: Database["public"]["Enums"]["encrypted_key_purpose"]
+          recipient_principal_id: string
+          recipient_unwrap_fingerprint: string
+          revoked_at: string | null
+          workspace_id: string
+          wrapped_envelope: Json
+        }
+        Insert: {
+          created_at?: string
+          directory_revision: number
+          entity_id: string
+          envelope_id: string
+          expires_at?: string | null
+          issuer_principal_id: string
+          issuer_signing_fingerprint: string
+          key_epoch: number
+          key_id: string
+          key_purpose: Database["public"]["Enums"]["encrypted_key_purpose"]
+          recipient_principal_id: string
+          recipient_unwrap_fingerprint: string
+          revoked_at?: string | null
+          workspace_id: string
+          wrapped_envelope: Json
+        }
+        Update: {
+          created_at?: string
+          directory_revision?: number
+          entity_id?: string
+          envelope_id?: string
+          expires_at?: string | null
+          issuer_principal_id?: string
+          issuer_signing_fingerprint?: string
+          key_epoch?: number
+          key_id?: string
+          key_purpose?: Database["public"]["Enums"]["encrypted_key_purpose"]
+          recipient_principal_id?: string
+          recipient_unwrap_fingerprint?: string
+          revoked_at?: string | null
+          workspace_id?: string
+          wrapped_envelope?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "encrypted_key_envelope_issuer_directory_fk"
+            columns: ["workspace_id", "issuer_principal_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_principal_directory"
+            referencedColumns: ["workspace_id", "principal_id"]
+          },
+          {
+            foreignKeyName: "encrypted_key_envelope_recipient_directory_fk"
+            columns: ["workspace_id", "recipient_principal_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_principal_directory"
+            referencedColumns: ["workspace_id", "principal_id"]
+          },
+          {
+            foreignKeyName: "encrypted_key_envelopes_issuer_principal_id_fkey"
+            columns: ["issuer_principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["principal_id"]
+          },
+          {
+            foreignKeyName: "encrypted_key_envelopes_recipient_principal_id_fkey"
+            columns: ["recipient_principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["principal_id"]
+          },
+          {
+            foreignKeyName: "encrypted_key_envelopes_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_crypto_states"
+            referencedColumns: ["workspace_id"]
+          },
+        ]
+      }
+      encrypted_private_fields: {
+        Row: {
+          created_at: string
+          envelope: Json
+          field_class: Database["public"]["Enums"]["private_field_class"]
+          key_epoch: number
+          key_id: string
+          person_id: string
+          row_version: number
+          updated_at: string
+          workspace_id: string
+          writer_principal_id: string
+        }
+        Insert: {
+          created_at?: string
+          envelope: Json
+          field_class: Database["public"]["Enums"]["private_field_class"]
+          key_epoch: number
+          key_id: string
+          person_id: string
+          row_version: number
+          updated_at?: string
+          workspace_id: string
+          writer_principal_id: string
+        }
+        Update: {
+          created_at?: string
+          envelope?: Json
+          field_class?: Database["public"]["Enums"]["private_field_class"]
+          key_epoch?: number
+          key_id?: string
+          person_id?: string
+          row_version?: number
+          updated_at?: string
+          workspace_id?: string
+          writer_principal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "encrypted_private_fields_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_crypto_states"
+            referencedColumns: ["workspace_id"]
+          },
+          {
+            foreignKeyName: "encrypted_private_fields_writer_principal_id_fkey"
+            columns: ["writer_principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["principal_id"]
+          },
+        ]
+      }
+      encrypted_private_key_bundles: {
+        Row: {
+          auth_user_id: string
+          bundle: Json
+          created_at: string
+          principal_id: string
+          recovery_epoch: number
+          signing_fingerprint: string
+          state: string
+          unwrap_fingerprint: string
+          updated_at: string
+        }
+        Insert: {
+          auth_user_id?: string
+          bundle: Json
+          created_at?: string
+          principal_id: string
+          recovery_epoch: number
+          signing_fingerprint: string
+          state?: string
+          unwrap_fingerprint: string
+          updated_at?: string
+        }
+        Update: {
+          auth_user_id?: string
+          bundle?: Json
+          created_at?: string
+          principal_id?: string
+          recovery_epoch?: number
+          signing_fingerprint?: string
+          state?: string
+          unwrap_fingerprint?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       family_profiles: {
         Row: {
@@ -677,6 +1099,101 @@ export type Database = {
           },
         ]
       }
+      opaque_backup_audit: {
+        Row: {
+          actor_user_id: string
+          capability_id: string | null
+          created_at: string
+          entity_count: number
+          envelope_count: number
+          id: number
+          private_field_count: number
+          status: string
+          workspace_id: string
+        }
+        Insert: {
+          actor_user_id: string
+          capability_id?: string | null
+          created_at?: string
+          entity_count?: number
+          envelope_count?: number
+          id?: never
+          private_field_count?: number
+          status: string
+          workspace_id: string
+        }
+        Update: {
+          actor_user_id?: string
+          capability_id?: string | null
+          created_at?: string
+          entity_count?: number
+          envelope_count?: number
+          id?: never
+          private_field_count?: number
+          status?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opaque_backup_audit_capability_id_fkey"
+            columns: ["capability_id"]
+            isOneToOne: false
+            referencedRelation: "opaque_backup_capabilities"
+            referencedColumns: ["capability_id"]
+          },
+          {
+            foreignKeyName: "opaque_backup_audit_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opaque_backup_capabilities: {
+        Row: {
+          capability_id: string
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          owner_user_id: string
+          reauthenticated_at: string
+          state: Database["public"]["Enums"]["backup_capability_state"]
+          token_hash: string
+          workspace_id: string
+        }
+        Insert: {
+          capability_id?: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          owner_user_id: string
+          reauthenticated_at: string
+          state?: Database["public"]["Enums"]["backup_capability_state"]
+          token_hash: string
+          workspace_id: string
+        }
+        Update: {
+          capability_id?: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          owner_user_id?: string
+          reauthenticated_at?: string
+          state?: Database["public"]["Enums"]["backup_capability_state"]
+          token_hash?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opaque_backup_capabilities_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_crypto_states"
+            referencedColumns: ["workspace_id"]
+          },
+        ]
+      }
       persons: {
         Row: {
           address: string
@@ -848,6 +1365,82 @@ export type Database = {
           },
         ]
       }
+      signed_policy_authorizations: {
+        Row: {
+          actor_principal_id: string
+          artifact: Json
+          authorization_id: string
+          binding_revision: number
+          created_at: string
+          expires_at: string
+          field_class: Database["public"]["Enums"]["private_field_class"] | null
+          graph_revision: number
+          key_epoch: number
+          nonce_hash: string
+          person_id: string | null
+          policy_revision: number
+          purpose: Database["public"]["Enums"]["policy_authorization_purpose"]
+          revoked_at: string | null
+          verified_at: string
+          workspace_id: string
+        }
+        Insert: {
+          actor_principal_id: string
+          artifact: Json
+          authorization_id: string
+          binding_revision: number
+          created_at?: string
+          expires_at: string
+          field_class?:
+            | Database["public"]["Enums"]["private_field_class"]
+            | null
+          graph_revision: number
+          key_epoch: number
+          nonce_hash: string
+          person_id?: string | null
+          policy_revision: number
+          purpose: Database["public"]["Enums"]["policy_authorization_purpose"]
+          revoked_at?: string | null
+          verified_at: string
+          workspace_id: string
+        }
+        Update: {
+          actor_principal_id?: string
+          artifact?: Json
+          authorization_id?: string
+          binding_revision?: number
+          created_at?: string
+          expires_at?: string
+          field_class?:
+            | Database["public"]["Enums"]["private_field_class"]
+            | null
+          graph_revision?: number
+          key_epoch?: number
+          nonce_hash?: string
+          person_id?: string | null
+          policy_revision?: number
+          purpose?: Database["public"]["Enums"]["policy_authorization_purpose"]
+          revoked_at?: string | null
+          verified_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signed_policy_authorizations_actor_principal_id_fkey"
+            columns: ["actor_principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["principal_id"]
+          },
+          {
+            foreignKeyName: "signed_policy_authorizations_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_crypto_states"
+            referencedColumns: ["workspace_id"]
+          },
+        ]
+      }
       user_profiles: {
         Row: {
           avatar_url: string | null
@@ -874,6 +1467,56 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      workspace_crypto_states: {
+        Row: {
+          binding_revision: number
+          crypto_version: number
+          data_version: number
+          directory_revision: number
+          encrypted_schema_version: number
+          graph_revision: number
+          key_epoch: number
+          migration_state: Database["public"]["Enums"]["crypto_migration_state"]
+          policy_revision: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          binding_revision?: number
+          crypto_version?: number
+          data_version?: number
+          directory_revision?: number
+          encrypted_schema_version?: number
+          graph_revision?: number
+          key_epoch?: number
+          migration_state?: Database["public"]["Enums"]["crypto_migration_state"]
+          policy_revision?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          binding_revision?: number
+          crypto_version?: number
+          data_version?: number
+          directory_revision?: number
+          encrypted_schema_version?: number
+          graph_revision?: number
+          key_epoch?: number
+          migration_state?: Database["public"]["Enums"]["crypto_migration_state"]
+          policy_revision?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_crypto_states_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       workspace_invitations: {
         Row: {
@@ -969,6 +1612,62 @@ export type Database = {
           },
         ]
       }
+      workspace_principal_directory: {
+        Row: {
+          auth_user_id: string
+          directory_revision: number
+          enrolled_at: string
+          principal_id: string
+          revoked_at: string | null
+          workspace_id: string
+        }
+        Insert: {
+          auth_user_id: string
+          directory_revision: number
+          enrolled_at?: string
+          principal_id: string
+          revoked_at?: string | null
+          workspace_id: string
+        }
+        Update: {
+          auth_user_id?: string
+          directory_revision?: number
+          enrolled_at?: string
+          principal_id?: string
+          revoked_at?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_directory_member_fk"
+            columns: ["workspace_id", "auth_user_id"]
+            isOneToOne: true
+            referencedRelation: "workspace_members"
+            referencedColumns: ["workspace_id", "user_id"]
+          },
+          {
+            foreignKeyName: "workspace_directory_principal_identity_fk"
+            columns: ["auth_user_id", "principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["auth_user_id", "principal_id"]
+          },
+          {
+            foreignKeyName: "workspace_principal_directory_principal_id_fkey"
+            columns: ["principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["principal_id"]
+          },
+          {
+            foreignKeyName: "workspace_principal_directory_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_snapshots: {
         Row: {
           created_at: string
@@ -1009,42 +1708,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      encrypted_private_key_bundles: {
-        Row: {
-          auth_user_id: string
-          bundle: Json
-          created_at: string
-          principal_id: string
-          recovery_epoch: number
-          signing_fingerprint: string
-          state: "pending_drive" | "active"
-          unwrap_fingerprint: string
-          updated_at: string
-        }
-        Insert: {
-          auth_user_id?: string
-          bundle: Json
-          created_at?: string
-          principal_id: string
-          recovery_epoch: number
-          signing_fingerprint: string
-          state?: "pending_drive" | "active"
-          unwrap_fingerprint: string
-          updated_at?: string
-        }
-        Update: {
-          auth_user_id?: string
-          bundle?: Json
-          created_at?: string
-          principal_id?: string
-          recovery_epoch?: number
-          signing_fingerprint?: string
-          state?: "pending_drive" | "active"
-          unwrap_fingerprint?: string
-          updated_at?: string
-        }
-        Relationships: []
       }
       workspaces: {
         Row: {
@@ -1096,10 +1759,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      activate_private_key_bundle: {
-        Args: { expected_principal_id: string }
-        Returns: undefined
-      }
       _family_apply_operations: {
         Args: { data: Json; operations: Json }
         Returns: Json
@@ -1131,6 +1790,10 @@ export type Database = {
       accept_workspace_invitation: {
         Args: { p_token_hash: string }
         Returns: string
+      }
+      activate_private_key_bundle: {
+        Args: { expected_principal_id: string }
+        Returns: undefined
       }
       can_commit_workspace: {
         Args: { target_workspace_id: string }
@@ -1166,6 +1829,17 @@ export type Database = {
         Args: { p_workspace_id: string }
         Returns: number
       }
+      commit_encrypted_workspace: {
+        Args: {
+          p_commit_id: string
+          p_expected_data_version: number
+          p_expected_key_epoch: number
+          p_operations: Json
+          p_request_checksum: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       commit_family_operations: {
         Args: {
           p_base_data_version: number
@@ -1191,12 +1865,34 @@ export type Database = {
         }
         Returns: Json
       }
+      current_crypto_principal: {
+        Args: { target_workspace_id: string }
+        Returns: string
+      }
       discard_media_upload: { Args: { p_upload_id: string }; Returns: Json }
       discard_reviewed_media_upload: {
         Args: { p_upload_id: string; p_workspace_id: string }
         Returns: Json
       }
       drive_migration_snapshot: { Args: { p_run_id: string }; Returns: Json }
+      encrypted_envelope_matches: {
+        Args: {
+          candidate: Json
+          expected_data_version: number
+          expected_entity_id: string
+          expected_field_class: string
+          expected_key_epoch: number
+          expected_key_id: string
+          expected_purpose: string
+          expected_workspace_id: string
+          expected_writer_id: string
+        }
+        Returns: boolean
+      }
+      export_opaque_workspace_backup: {
+        Args: { p_capability_token: string; p_workspace_id: string }
+        Returns: Json
+      }
       fail_drive_bundle_migration: {
         Args: { p_report: Json; p_resume_cursor: number; p_run_id: string }
         Returns: undefined
@@ -1216,6 +1912,10 @@ export type Database = {
       get_family_commit_status: {
         Args: { p_commit_id: string; p_workspace_id: string }
         Returns: Json
+      }
+      initialize_workspace_crypto: {
+        Args: { p_principal_id: string; p_workspace_id: string }
+        Returns: undefined
       }
       is_workspace_member: {
         Args: { target_workspace_id: string }
@@ -1248,6 +1948,16 @@ export type Database = {
         Args: { object_name: string }
         Returns: string
       }
+      mint_opaque_backup_capability: {
+        Args: {
+          p_expires_at: string
+          p_owner_user_id: string
+          p_reauthenticated_at: string
+          p_token_hash: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
       prepare_media_upload: {
         Args: {
           p_person_legacy_id: string
@@ -1259,6 +1969,17 @@ export type Database = {
       publish_drive_bundle_migration: {
         Args: { p_report: Json; p_run_id: string }
         Returns: Json
+      }
+      register_crypto_principal: {
+        Args: {
+          p_principal_id: string
+          p_recovery_epoch: number
+          p_signing_fingerprint: string
+          p_signing_public_key: Json
+          p_unwrap_fingerprint: string
+          p_unwrap_public_key: Json
+        }
+        Returns: undefined
       }
       replace_family_dataset: {
         Args: {
@@ -1319,7 +2040,14 @@ export type Database = {
     }
     Enums: {
       ancestral_role: "none" | "founding_ancestor"
+      backup_capability_state: "active" | "consumed" | "revoked" | "expired"
       commit_status: "pending" | "applied" | "conflict" | "failed"
+      crypto_invitation_state: "pending" | "consumed" | "revoked" | "expired"
+      crypto_migration_state:
+        | "parallel"
+        | "preview_ready"
+        | "canonical"
+        | "blocked"
       draft_operation_status: "pending" | "approved" | "rejected" | "conflict"
       draft_status:
         | "draft"
@@ -1329,6 +2057,12 @@ export type Database = {
         | "approved"
         | "rejected"
         | "invalid"
+      encrypted_entity_class:
+        | "family_profile"
+        | "person_core"
+        | "relationship"
+        | "media_manifest"
+      encrypted_key_purpose: "workspace" | "contact" | "media"
       fact_confidence: "confirmed" | "likely" | "estimated" | "unknown"
       gender_type: "male" | "female" | "other" | "unknown"
       invitation_status: "pending" | "accepted" | "revoked" | "expired"
@@ -1345,6 +2079,11 @@ export type Database = {
         | "completed"
         | "failed"
         | "cancelled"
+      policy_authorization_purpose:
+        | "contact_view"
+        | "contact_edit"
+        | "portability_export"
+      private_field_class: "phone" | "email" | "address" | "private_note"
       relationship_type: "spouse" | "parent"
       spouse_status:
         | "married"
@@ -1485,7 +2224,15 @@ export const Constants = {
   public: {
     Enums: {
       ancestral_role: ["none", "founding_ancestor"],
+      backup_capability_state: ["active", "consumed", "revoked", "expired"],
       commit_status: ["pending", "applied", "conflict", "failed"],
+      crypto_invitation_state: ["pending", "consumed", "revoked", "expired"],
+      crypto_migration_state: [
+        "parallel",
+        "preview_ready",
+        "canonical",
+        "blocked",
+      ],
       draft_operation_status: ["pending", "approved", "rejected", "conflict"],
       draft_status: [
         "draft",
@@ -1496,6 +2243,13 @@ export const Constants = {
         "rejected",
         "invalid",
       ],
+      encrypted_entity_class: [
+        "family_profile",
+        "person_core",
+        "relationship",
+        "media_manifest",
+      ],
+      encrypted_key_purpose: ["workspace", "contact", "media"],
       fact_confidence: ["confirmed", "likely", "estimated", "unknown"],
       gender_type: ["male", "female", "other", "unknown"],
       invitation_status: ["pending", "accepted", "revoked", "expired"],
@@ -1514,6 +2268,12 @@ export const Constants = {
         "failed",
         "cancelled",
       ],
+      policy_authorization_purpose: [
+        "contact_view",
+        "contact_edit",
+        "portability_export",
+      ],
+      private_field_class: ["phone", "email", "address", "private_note"],
       relationship_type: ["spouse", "parent"],
       spouse_status: [
         "married",
