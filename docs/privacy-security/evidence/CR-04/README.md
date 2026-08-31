@@ -53,11 +53,10 @@ This proves the migration, local RLS fixtures, SQL privilege shape and client pa
 
 ## Gate
 
-Status: `AWAITING_OWNER_APPROVAL`.
+Status: `APPROVED`.
 
 | Owner | Decision | Recorded at |
 |---|---|---|
-| `hoanghiep.0179@gmail.com` | Pending approval of the six locked CR-04 decisions | — |
+| `hoanghiep.0179@gmail.com` | Approved all six locked CR-04 decisions | `2026-08-31T12:04:46Z` |
 
-No Production migration or deployment was performed. CR-05 must not start until a separate owner instruction.
-
+No Production migration or deployment was performed. The owner separately authorized CR-05 to start on `2026-08-31`.
