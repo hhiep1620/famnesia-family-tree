@@ -14,7 +14,7 @@ CR-03 implements the browser-only recovery identity bootstrap: a visible app-cre
 - Owner-only encrypted-key schema: [`supabase/migrations/20260831000100_crypto_private_key_vault.sql`](../../../../supabase/migrations/20260831000100_crypto_private_key_vault.sql)
 - User confirmation UI: [`src/components/data/RecoveryVaultPanel.tsx`](../../../../src/components/data/RecoveryVaultPanel.tsx)
 
-## Locked decisions pending owner approval
+## Approved locked decisions
 
 1. Use a visible app-created `Famnesia Key Vault/vault-v1.json` with the non-sensitive `drive.file` scope; no Google Picker and no broad Drive scope.
 2. Drive authorization is separate from Supabase login. Google Identity Services issues a short-lived browser access token held in memory only; Famnesia stores no Drive refresh token.
@@ -48,6 +48,10 @@ These checks prove local code/schema behavior with mocked Drive responses. The S
 
 ## Gate
 
-Status: `AWAITING_OWNER_APPROVAL`.
+Status: `APPROVED`.
 
-CR-03 remains incomplete until owner approval is recorded. CR-04 must not start automatically.
+| Owner | Approved at (UTC) | Decision |
+|---|---|---|
+| `hoanghiep.0179@gmail.com` | `2026-08-31T10:42:52Z` | Approved all five locked CR-03 decisions |
+
+CR-03 is complete at its local approval gate. Production migration, OAuth configuration and real-browser/RLS smoke remain unexecuted deployment gates. CR-04 may start only on an explicit follow-up request; this approval does not authorize deployment or start CR-04 automatically.
