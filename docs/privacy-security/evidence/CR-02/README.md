@@ -26,6 +26,8 @@ CR-02 freezes the platform-Web-Crypto contract, typed content envelope, key hier
 
 Validated at `2026-08-31T02:50:09Z`:
 
+- Implementation commit: `5375af7`.
+
 - `npm test`: 31 files / 147 tests pass; CR-02 target tests 19/19 pass.
 - `npm run lint`: pass.
 - `npm run build`: pass; existing non-blocking Vite chunk-size warning only.
