@@ -13,9 +13,9 @@ describe('CR-03 direct Google Drive key vault', () => {
     const responses = [
       jsonResponse({ user: { emailAddress: 'owner@example.com', permissionId: 'permission-1' } }),
       jsonResponse({ files: [] }),
-      jsonResponse({ id: 'folder-1', name: 'Famnesia Key Vault', mimeType: 'application/vnd.google-apps.folder', ownedByMe: true }),
+      jsonResponse({ id: 'folder-1', name: 'Famnesia Key Vault', mimeType: 'application/vnd.google-apps.folder', ownedByMe: true, appProperties: { famnesiaKind: 'key-vault-folder-v1' } }),
       jsonResponse({ files: [] }),
-      jsonResponse({ id: 'vault-1', name: 'vault-v1.json', mimeType: 'application/json', ownedByMe: true }),
+      jsonResponse({ id: 'vault-1', name: 'vault-v1.json', mimeType: 'application/json', ownedByMe: true, parents: ['folder-1'], appProperties: { famnesiaKind: 'key-vault-v1', formatVersion: '1' } }),
     ]
     const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       calls.push({ url: String(input), init })
@@ -58,7 +58,10 @@ describe('CR-03 direct Google Drive key vault', () => {
   it('detects duplicates, corruption and an expired token', async () => {
     const duplicateResponses = [
       jsonResponse({ user: { emailAddress: 'owner@example.com', permissionId: 'permission-1' } }),
-      jsonResponse({ files: [{ id: 'a', ownedByMe: true }, { id: 'b', ownedByMe: true }] }),
+      jsonResponse({ files: [
+        { id: 'a', name: 'Famnesia Key Vault', mimeType: 'application/vnd.google-apps.folder', ownedByMe: true },
+        { id: 'b', name: 'Famnesia Key Vault', mimeType: 'application/vnd.google-apps.folder', ownedByMe: true },
+      ] }),
     ]
     const duplicate = new GoogleDriveKeyVaultClient(
       async () => ({ accessToken: 'token', expiresAt: Date.now() + 60_000 }),
@@ -68,5 +71,50 @@ describe('CR-03 direct Google Drive key vault', () => {
 
     const expired = new GoogleDriveKeyVaultClient(async () => ({ accessToken: 'token', expiresAt: Date.now() - 1 }))
     await expect(expired.getIdentity()).rejects.toEqual(expect.objectContaining<Partial<DriveVaultError>>({ code: 'DRIVE_RECONNECT_REQUIRED' }))
+  })
+
+  it('invalidates a rejected cached token before the next reconnect attempt', async () => {
+    const invalidate = vi.fn()
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response('', { status: 401 }))
+      .mockResolvedValueOnce(jsonResponse({ user: { emailAddress: 'owner@example.com', permissionId: 'permission-1' } })) as unknown as typeof fetch
+    let token = 'revoked-token'
+    const drive = new GoogleDriveKeyVaultClient(
+      async () => ({ accessToken: token, expiresAt: Date.now() + 60_000 }),
+      fetcher,
+      Date.now,
+      () => { invalidate(); token = 'fresh-token' },
+    )
+
+    await expect(drive.getIdentity()).rejects.toMatchObject({ code: 'DRIVE_RECONNECT_REQUIRED' })
+    await expect(drive.getIdentity()).resolves.toMatchObject({ emailAddress: 'owner@example.com' })
+    expect(invalidate).toHaveBeenCalledOnce()
+    expect(fetcher.mock.calls[1]?.[1]?.headers).toMatchObject({ Authorization: 'Bearer fresh-token' })
+  })
+
+  it('rejects unverified create metadata and corrupt vault JSON', async () => {
+    const identity = await provisionRecoveryIdentity()
+    const badCreateResponses = [
+      jsonResponse({ user: { emailAddress: 'owner@example.com', permissionId: 'permission-1' } }),
+      jsonResponse({ files: [] }),
+      jsonResponse({ id: 'folder-1', name: 'Famnesia Key Vault', mimeType: 'application/vnd.google-apps.folder', ownedByMe: false, appProperties: { famnesiaKind: 'key-vault-folder-v1' } }),
+    ]
+    const badCreate = new GoogleDriveKeyVaultClient(
+      async () => ({ accessToken: 'token', expiresAt: Date.now() + 60_000 }),
+      vi.fn(async () => badCreateResponses.shift()!) as unknown as typeof fetch,
+    )
+    await expect(badCreate.createVault('owner@example.com', identity.vault)).rejects.toMatchObject({ code: 'DRIVE_METADATA_INVALID' })
+
+    const corruptResponses = [
+      jsonResponse({ user: { emailAddress: 'owner@example.com', permissionId: 'permission-1' } }),
+      jsonResponse({ files: [{ id: 'folder-1', name: 'Famnesia Key Vault', mimeType: 'application/vnd.google-apps.folder', ownedByMe: true }] }),
+      jsonResponse({ files: [{ id: 'vault-1', name: 'vault-v1.json', mimeType: 'application/json', ownedByMe: true }] }),
+      new Response('{broken', { status: 200 }),
+    ]
+    const corrupt = new GoogleDriveKeyVaultClient(
+      async () => ({ accessToken: 'token', expiresAt: Date.now() + 60_000 }),
+      vi.fn(async () => corruptResponses.shift()!) as unknown as typeof fetch,
+    )
+    await expect(corrupt.restoreVault('owner@example.com')).rejects.toMatchObject({ code: 'KEY_VAULT_CORRUPT' })
   })
 })

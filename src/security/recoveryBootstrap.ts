@@ -1,12 +1,14 @@
 import {
   decodeBase64Url,
   decodeUtf8,
+  canonicalize,
   deriveRecoveryEnvelopeKey,
   encodeBase64Url,
   encodeUtf8,
   encryptEnvelopeWithWriterKey,
   decryptEnvelope,
   nonceFromCounter,
+  parseEncryptedEnvelope,
   type EncryptedEnvelopeV1,
 } from '../crypto/contract'
 import {
@@ -65,6 +67,7 @@ interface PrivateBundleV1 {
   principalId: string
   unwrapPrivateKey: JsonWebKey
   signingPrivateKey: JsonWebKey
+  trustPins: TrustPinV1[]
 }
 
 export interface ProvisionedRecoveryIdentity {
@@ -76,6 +79,8 @@ export interface ProvisionedRecoveryIdentity {
 }
 
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
+const principalPattern = /^cp_[A-Za-z0-9_-]{20,64}$/
+const fingerprintPattern = /^sha256:[A-Za-z0-9_-]{43}$/
 
 function randomId(prefix: string, bytes = 16): string {
   return `${prefix}_${encodeBase64Url(crypto.getRandomValues(new Uint8Array(bytes)))}`
@@ -91,6 +96,7 @@ function exactKeys(value: Record<string, unknown>, keys: string[]): boolean {
 
 function validateTrustPins(value: unknown): asserts value is TrustPinV1[] {
   if (!Array.isArray(value)) throw new Error('INVALID_TRUST_PINS')
+  if (value.length > 1_024) throw new Error('TOO_MANY_TRUST_PINS')
   const workspaces = new Set<string>()
   for (const pin of value) {
     if (!isRecord(pin) || !exactKeys(pin, ['workspaceId', 'genesisFingerprint', 'directoryCheckpointHash', 'freshnessCheckpointHash'])) {
@@ -109,23 +115,75 @@ export function parseDriveKeyVault(value: unknown): DriveKeyVaultV1 {
     'format', 'version', 'principalId', 'recoveryEpoch', 'recoverySecret', 'unwrapFingerprint', 'signingFingerprint', 'trustPins',
   ])) throw new Error('INVALID_KEY_VAULT')
   if (value.format !== RECOVERY_VAULT_FORMAT || value.version !== 1) throw new Error('UNSUPPORTED_KEY_VAULT')
-  if (typeof value.principalId !== 'string' || !idPattern.test(value.principalId)) throw new Error('INVALID_CRYPTO_PRINCIPAL')
+  if (typeof value.principalId !== 'string' || !principalPattern.test(value.principalId)) throw new Error('INVALID_CRYPTO_PRINCIPAL')
   if (!Number.isSafeInteger(value.recoveryEpoch) || Number(value.recoveryEpoch) < 1) throw new Error('INVALID_RECOVERY_EPOCH')
   if (typeof value.recoverySecret !== 'string' || decodeBase64Url(value.recoverySecret).length !== 32) throw new Error('INVALID_RECOVERY_SECRET')
-  if (typeof value.unwrapFingerprint !== 'string' || typeof value.signingFingerprint !== 'string') throw new Error('INVALID_KEY_FINGERPRINT')
+  if (typeof value.unwrapFingerprint !== 'string' || !fingerprintPattern.test(value.unwrapFingerprint)
+    || typeof value.signingFingerprint !== 'string' || !fingerprintPattern.test(value.signingFingerprint)) {
+    throw new Error('INVALID_KEY_FINGERPRINT')
+  }
   validateTrustPins(value.trustPins)
   return value as unknown as DriveKeyVaultV1
 }
 
 function parsePrivateBundle(value: unknown): PrivateBundleV1 {
-  if (!isRecord(value) || !exactKeys(value, ['format', 'version', 'principalId', 'unwrapPrivateKey', 'signingPrivateKey'])) {
+  if (!isRecord(value) || !exactKeys(value, ['format', 'version', 'principalId', 'unwrapPrivateKey', 'signingPrivateKey', 'trustPins'])) {
     throw new Error('INVALID_PRIVATE_KEY_BUNDLE')
   }
-  if (value.format !== 'famnesia-private-key-bundle' || value.version !== 1 || typeof value.principalId !== 'string') {
+  if (value.format !== 'famnesia-private-key-bundle' || value.version !== 1
+    || typeof value.principalId !== 'string' || !principalPattern.test(value.principalId)) {
     throw new Error('INVALID_PRIVATE_KEY_BUNDLE')
   }
   if (!isRecord(value.unwrapPrivateKey) || !isRecord(value.signingPrivateKey)) throw new Error('INVALID_PRIVATE_KEY_BUNDLE')
+  validateTrustPins(value.trustPins)
   return value as unknown as PrivateBundleV1
+}
+
+function validateEcJwk(value: unknown, kind: 'public' | 'private'): asserts value is JsonWebKey {
+  if (!isRecord(value) || value.kty !== 'EC' || value.crv !== 'P-256'
+    || typeof value.x !== 'string' || decodeBase64Url(value.x).length !== 32
+    || typeof value.y !== 'string' || decodeBase64Url(value.y).length !== 32) {
+    throw new Error('INVALID_RECOVERY_JWK')
+  }
+  if (kind === 'public' && value.d !== undefined) throw new Error('INVALID_RECOVERY_JWK')
+  if (kind === 'private' && (typeof value.d !== 'string' || decodeBase64Url(value.d).length !== 32)) {
+    throw new Error('INVALID_RECOVERY_JWK')
+  }
+}
+
+export function parseEncryptedPrivateKeyRecord(value: unknown): EncryptedPrivateKeyRecordV1 {
+  if (!isRecord(value) || !exactKeys(value, [
+    'format', 'version', 'principalId', 'recoveryEpoch', 'salt', 'unwrapPublicKey', 'signingPublicKey',
+    'unwrapFingerprint', 'signingFingerprint', 'envelope',
+  ])) throw new Error('INVALID_ENCRYPTED_PRIVATE_KEY_RECORD')
+  if (value.format !== 'famnesia-encrypted-private-key' || value.version !== 1
+    || typeof value.principalId !== 'string' || !principalPattern.test(value.principalId)
+    || !Number.isSafeInteger(value.recoveryEpoch) || Number(value.recoveryEpoch) < 1
+    || typeof value.salt !== 'string' || decodeBase64Url(value.salt).length !== 32
+    || typeof value.unwrapFingerprint !== 'string' || !fingerprintPattern.test(value.unwrapFingerprint)
+    || typeof value.signingFingerprint !== 'string' || !fingerprintPattern.test(value.signingFingerprint)) {
+    throw new Error('INVALID_ENCRYPTED_PRIVATE_KEY_RECORD')
+  }
+  validateEcJwk(value.unwrapPublicKey, 'public')
+  validateEcJwk(value.signingPublicKey, 'public')
+  const envelope = parseEncryptedEnvelope(value.envelope)
+  const expectedAad = privateBundleAad(value.principalId, Number(value.recoveryEpoch))
+  if (Object.entries(expectedAad).some(([key, expected]) => envelope.aad[key as keyof typeof envelope.aad] !== expected)) {
+    throw new Error('INVALID_RECOVERY_ENVELOPE_CONTEXT')
+  }
+  return value as unknown as EncryptedPrivateKeyRecordV1
+}
+
+export function parsePerUserRecoveryBackup(value: unknown): PerUserRecoveryBackupV1 {
+  if (!isRecord(value) || !exactKeys(value, ['format', 'version', 'principalId', 'encryptedPrivateKey', 'trustPins'])
+    || value.format !== RECOVERY_BACKUP_FORMAT || value.version !== 1
+    || typeof value.principalId !== 'string' || !principalPattern.test(value.principalId)) {
+    throw new Error('INVALID_RECOVERY_BACKUP')
+  }
+  const encryptedPrivateKey = parseEncryptedPrivateKeyRecord(value.encryptedPrivateKey)
+  if (encryptedPrivateKey.principalId !== value.principalId) throw new Error('RECOVERY_BACKUP_MISMATCH')
+  validateTrustPins(value.trustPins)
+  return value as unknown as PerUserRecoveryBackupV1
 }
 
 function privateBundleAad(principalId: string, recoveryEpoch: number) {
@@ -158,6 +216,7 @@ export async function provisionRecoveryIdentity(trustPins: TrustPinV1[] = []): P
     principalId,
     unwrapPrivateKey: await crypto.subtle.exportKey('jwk', unwrappingPair.privateKey),
     signingPrivateKey: await crypto.subtle.exportKey('jwk', signingPair.privateKey),
+    trustPins,
   }
   const recoveryKey = await deriveRecoveryEnvelopeKey(recoverySecret, salt, principalId, recoveryEpoch, ['encrypt'])
   const envelope = await encryptEnvelopeWithWriterKey(
@@ -202,9 +261,10 @@ export async function provisionRecoveryIdentity(trustPins: TrustPinV1[] = []): P
 
 export async function restoreRecoveryIdentity(
   vaultCandidate: unknown,
-  record: EncryptedPrivateKeyRecordV1,
+  recordCandidate: EncryptedPrivateKeyRecordV1,
 ): Promise<Pick<ProvisionedRecoveryIdentity, 'vault' | 'privateKeyRecord' | 'unwrappingPrivateKey' | 'signingPrivateKey'>> {
   const vault = parseDriveKeyVault(vaultCandidate)
+  const record = parseEncryptedPrivateKeyRecord(recordCandidate)
   if (record.format !== 'famnesia-encrypted-private-key' || record.version !== 1 || record.principalId !== vault.principalId) {
     throw new Error('RECOVERY_RECORD_MISMATCH')
   }
@@ -221,6 +281,13 @@ export async function restoreRecoveryIdentity(
   const plaintext = await decryptEnvelope(record.envelope, recoveryKey, privateBundleAad(vault.principalId, vault.recoveryEpoch))
   const bundle = parsePrivateBundle(JSON.parse(decodeUtf8(plaintext)) as unknown)
   if (bundle.principalId !== vault.principalId) throw new Error('RECOVERY_RECORD_MISMATCH')
+  if (canonicalize(bundle.trustPins) !== canonicalize(vault.trustPins)) throw new Error('RECOVERY_TRUST_PIN_MISMATCH')
+  validateEcJwk(bundle.unwrapPrivateKey, 'private')
+  validateEcJwk(bundle.signingPrivateKey, 'private')
+  if (bundle.unwrapPrivateKey.x !== record.unwrapPublicKey.x || bundle.unwrapPrivateKey.y !== record.unwrapPublicKey.y
+    || bundle.signingPrivateKey.x !== record.signingPublicKey.x || bundle.signingPrivateKey.y !== record.signingPublicKey.y) {
+    throw new Error('RECOVERY_KEY_PAIR_MISMATCH')
+  }
   const unwrappingPrivateKey = await importUnwrappingPrivateKey(bundle.unwrapPrivateKey)
   const signingPrivateKey = await importSigningPrivateKey(bundle.signingPrivateKey)
   // Public keys are intentionally extractable so their SPKI fingerprints can

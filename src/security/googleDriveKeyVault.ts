@@ -3,6 +3,7 @@ import { parseDriveKeyVault, serializeRecoveryArtifact, type DriveKeyVaultV1 } f
 export const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 export const VAULT_FOLDER_NAME = 'Famnesia Key Vault'
 export const VAULT_FILE_NAME = 'vault-v1.json'
+const MAX_VAULT_JSON_CHARACTERS = 256 * 1024
 
 export interface DriveToken {
   accessToken: string
@@ -22,6 +23,24 @@ interface DriveFileMetadata {
   ownedByMe?: boolean
   trashed?: boolean
   appProperties?: Record<string, string>
+}
+
+function parseDriveFileMetadata(value: unknown): DriveFileMetadata {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new DriveVaultError('DRIVE_METADATA_INVALID', 'Google Drive trả về metadata key vault không hợp lệ.')
+  }
+  const candidate = value as Record<string, unknown>
+  if (typeof candidate.id !== 'string' || !/^[A-Za-z0-9_-]+$/.test(candidate.id)
+    || typeof candidate.name !== 'string' || typeof candidate.mimeType !== 'string') {
+    throw new DriveVaultError('DRIVE_METADATA_INVALID', 'Google Drive trả về metadata key vault không hợp lệ.')
+  }
+  if (candidate.parents !== undefined && (!Array.isArray(candidate.parents) || candidate.parents.some((parent) => typeof parent !== 'string'))) {
+    throw new DriveVaultError('DRIVE_METADATA_INVALID', 'Google Drive trả về metadata key vault không hợp lệ.')
+  }
+  if (candidate.appProperties !== undefined && (!candidate.appProperties || typeof candidate.appProperties !== 'object' || Array.isArray(candidate.appProperties))) {
+    throw new DriveVaultError('DRIVE_METADATA_INVALID', 'Google Drive trả về metadata key vault không hợp lệ.')
+  }
+  return candidate as unknown as DriveFileMetadata
 }
 
 export class DriveVaultError extends Error {
@@ -46,20 +65,24 @@ export class GoogleDriveKeyVaultClient {
   private readonly tokenProvider: () => Promise<DriveToken>
   private readonly fetcher: typeof fetch
   private readonly now: () => number
+  private readonly invalidateToken: () => void
 
   constructor(
     tokenProvider: () => Promise<DriveToken>,
     fetcher: typeof fetch = fetch,
     now: () => number = Date.now,
+    invalidateToken: () => void = () => undefined,
   ) {
     this.tokenProvider = tokenProvider
     this.fetcher = fetcher
     this.now = now
+    this.invalidateToken = invalidateToken
   }
 
   private async request(url: string, init: RequestInit = {}): Promise<Response> {
     const token = await this.tokenProvider()
     if (!token.accessToken || token.expiresAt <= this.now() + 15_000) {
+      this.invalidateToken()
       throw new DriveVaultError('DRIVE_RECONNECT_REQUIRED', 'Kết nối Google Drive đã hết hạn. Hãy kết nối lại.')
     }
     const response = await this.fetcher(url, {
@@ -67,7 +90,10 @@ export class GoogleDriveKeyVaultClient {
       headers: { ...init.headers, Authorization: `Bearer ${token.accessToken}` },
       referrerPolicy: 'no-referrer',
     })
-    if (response.status === 401) throw new DriveVaultError('DRIVE_RECONNECT_REQUIRED', 'Kết nối Google Drive đã hết hạn. Hãy kết nối lại.')
+    if (response.status === 401) {
+      this.invalidateToken()
+      throw new DriveVaultError('DRIVE_RECONNECT_REQUIRED', 'Kết nối Google Drive đã hết hạn. Hãy kết nối lại.')
+    }
     if (response.status === 403) throw new DriveVaultError('DRIVE_ACCESS_DENIED', 'Google Drive từ chối quyền truy cập key vault.')
     if (!response.ok) throw new DriveVaultError('DRIVE_REQUEST_FAILED', 'Không thể truy cập key vault trên Google Drive.')
     return response
@@ -99,7 +125,7 @@ export class GoogleDriveKeyVaultClient {
     })
     const response = await this.request(`https://www.googleapis.com/drive/v3/files?${params}`)
     const body = await response.json() as { files?: DriveFileMetadata[] }
-    return Array.isArray(body.files) ? body.files : []
+    return Array.isArray(body.files) ? body.files.map(parseDriveFileMetadata) : []
   }
 
   private async createMultipart(metadata: Record<string, unknown>, content?: string): Promise<DriveFileMetadata> {
@@ -113,7 +139,7 @@ export class GoogleDriveKeyVaultClient {
       'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,parents,ownedByMe,trashed,appProperties',
       { method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${boundary}` }, body: parts.join('') },
     )
-    return response.json() as Promise<DriveFileMetadata>
+    return parseDriveFileMetadata(await response.json())
   }
 
   private async createMetadata(metadata: Record<string, unknown>): Promise<DriveFileMetadata> {
@@ -121,7 +147,7 @@ export class GoogleDriveKeyVaultClient {
       'https://www.googleapis.com/drive/v3/files?fields=id,name,mimeType,parents,ownedByMe,trashed,appProperties',
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(metadata) },
     )
-    return response.json() as Promise<DriveFileMetadata>
+    return parseDriveFileMetadata(await response.json())
   }
 
   private async findVaultFolders(): Promise<DriveFileMetadata[]> {
@@ -137,6 +163,7 @@ export class GoogleDriveKeyVaultClient {
     return this.list([
       `'${escapeQuery(folderId)}' in parents`,
       `name='${escapeQuery(VAULT_FILE_NAME)}'`,
+      "mimeType='application/json'",
       "appProperties has { key='famnesiaKind' and value='key-vault-v1' }",
       'trashed=false',
     ].join(' and '))
@@ -155,6 +182,10 @@ export class GoogleDriveKeyVaultClient {
         mimeType: 'application/vnd.google-apps.folder',
         appProperties: { famnesiaKind: 'key-vault-folder-v1' },
       })
+      if (!folder.ownedByMe || folder.name !== VAULT_FOLDER_NAME || folder.mimeType !== 'application/vnd.google-apps.folder'
+        || folder.appProperties?.famnesiaKind !== 'key-vault-folder-v1') {
+        throw new DriveVaultError('DRIVE_METADATA_INVALID', 'Không thể xác minh thư mục key vault vừa tạo.')
+      }
     }
     const existingFiles = await this.findVaultFiles(folder.id)
     if (existingFiles.length) throw new DriveVaultError('KEY_VAULT_ALREADY_EXISTS', 'Key vault đã tồn tại; Famnesia sẽ không ghi đè tự động.')
@@ -164,6 +195,11 @@ export class GoogleDriveKeyVaultClient {
       parents: [folder.id],
       appProperties: { famnesiaKind: 'key-vault-v1', formatVersion: '1' },
     }, serializeRecoveryArtifact(vault))
+    if (!file.ownedByMe || file.name !== VAULT_FILE_NAME || file.mimeType !== 'application/json'
+      || file.parents?.length !== 1 || file.parents[0] !== folder.id
+      || file.appProperties?.famnesiaKind !== 'key-vault-v1' || file.appProperties.formatVersion !== '1') {
+      throw new DriveVaultError('DRIVE_METADATA_INVALID', 'Không thể xác minh tệp key vault vừa tạo.')
+    }
     return { folderId: folder.id, fileId: file.id }
   }
 
@@ -179,7 +215,11 @@ export class GoogleDriveKeyVaultClient {
     if (!files[0].ownedByMe) throw new DriveVaultError('DRIVE_VAULT_NOT_OWNED', 'Tệp key vault không thuộc tài khoản Google Drive hiện tại.')
     const response = await this.request(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(files[0].id)}?alt=media`)
     let candidate: unknown
-    try { candidate = JSON.parse(await response.text()) as unknown }
+    try {
+      const serialized = await response.text()
+      if (serialized.length > MAX_VAULT_JSON_CHARACTERS) throw new Error('vault too large')
+      candidate = JSON.parse(serialized) as unknown
+    }
     catch { throw new DriveVaultError('KEY_VAULT_CORRUPT', 'Tệp key vault không phải JSON hợp lệ.') }
     try {
       return { folderId: folders[0].id, fileId: files[0].id, vault: parseDriveKeyVault(candidate) }

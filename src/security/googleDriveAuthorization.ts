@@ -34,13 +34,30 @@ function loadGoogleIdentityServices(): Promise<void> {
   if (browser.google?.accounts?.oauth2) return Promise.resolve()
   if (gisLoader) return gisLoader
   gisLoader = new Promise<void>((resolve, reject) => {
-    const finish = () => browser.google?.accounts?.oauth2
-      ? resolve()
-      : reject(new Error('GOOGLE_DRIVE_AUTH_UNAVAILABLE'))
+    let settled = false
+    const cleanup = () => {
+      window.clearInterval(poll)
+      window.clearTimeout(timeout)
+    }
+    const succeedIfReady = () => {
+      if (settled || !browser.google?.accounts?.oauth2) return
+      settled = true
+      cleanup()
+      resolve()
+    }
+    const fail = () => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(new Error('GOOGLE_DRIVE_AUTH_UNAVAILABLE'))
+    }
+    const poll = window.setInterval(succeedIfReady, 50)
+    const timeout = window.setTimeout(fail, 10_000)
     const existing = document.querySelector<HTMLScriptElement>(`script[src="${GIS_SCRIPT_URL}"]`)
     if (existing) {
-      existing.addEventListener('load', finish, { once: true })
-      existing.addEventListener('error', () => reject(new Error('GOOGLE_DRIVE_AUTH_UNAVAILABLE')), { once: true })
+      existing.addEventListener('load', succeedIfReady, { once: true })
+      existing.addEventListener('error', fail, { once: true })
+      succeedIfReady()
       return
     }
     const script = document.createElement('script')
@@ -48,9 +65,12 @@ function loadGoogleIdentityServices(): Promise<void> {
     script.async = true
     script.defer = true
     script.referrerPolicy = 'no-referrer'
-    script.addEventListener('load', finish, { once: true })
-    script.addEventListener('error', () => reject(new Error('GOOGLE_DRIVE_AUTH_UNAVAILABLE')), { once: true })
+    script.addEventListener('load', succeedIfReady, { once: true })
+    script.addEventListener('error', fail, { once: true })
     document.head.append(script)
+  }).catch((error) => {
+    gisLoader = undefined
+    throw error
   })
   return gisLoader
 }

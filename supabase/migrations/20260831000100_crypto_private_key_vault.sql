@@ -8,14 +8,49 @@ create table public.encrypted_private_key_bundles (
   signing_fingerprint text not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint encrypted_private_key_bundle_identity_matches check (
-    bundle ->> 'format' = 'famnesia-encrypted-private-key'
+  constraint encrypted_private_key_bundle_identity_matches check (coalesce((
+    jsonb_typeof(bundle) = 'object'
+    and bundle ?& array[
+      'format', 'version', 'principalId', 'recoveryEpoch', 'salt',
+      'unwrapPublicKey', 'signingPublicKey', 'unwrapFingerprint',
+      'signingFingerprint', 'envelope'
+    ]
+    and bundle - array[
+      'format', 'version', 'principalId', 'recoveryEpoch', 'salt',
+      'unwrapPublicKey', 'signingPublicKey', 'unwrapFingerprint',
+      'signingFingerprint', 'envelope'
+    ]::text[] = '{}'::jsonb
+    and bundle ->> 'format' = 'famnesia-encrypted-private-key'
     and (bundle ->> 'version')::integer = 1
     and bundle ->> 'principalId' = principal_id
     and (bundle ->> 'recoveryEpoch')::integer = recovery_epoch
     and bundle ->> 'unwrapFingerprint' = unwrap_fingerprint
     and bundle ->> 'signingFingerprint' = signing_fingerprint
-  )
+    and bundle ->> 'salt' ~ '^[A-Za-z0-9_-]{43}$'
+    and unwrap_fingerprint ~ '^sha256:[A-Za-z0-9_-]{43}$'
+    and signing_fingerprint ~ '^sha256:[A-Za-z0-9_-]{43}$'
+    and jsonb_typeof(bundle -> 'envelope') = 'object'
+    and (bundle -> 'envelope') ?& array['version', 'suite', 'nonce', 'ciphertext', 'aad']
+    and (bundle -> 'envelope') - array['version', 'suite', 'nonce', 'ciphertext', 'aad']::text[] = '{}'::jsonb
+    and bundle -> 'envelope' ->> 'suite' = 'FAMNESIA-P256-AESGCM-HKDF-SHA256-V1'
+    and jsonb_typeof(bundle -> 'envelope' -> 'aad') = 'object'
+    and (bundle -> 'envelope' -> 'aad') ?& array[
+      'workspaceId', 'entityId', 'fieldClass', 'schemaVersion', 'dataVersion',
+      'keyId', 'keyEpoch', 'writerId', 'purpose'
+    ]
+    and (bundle -> 'envelope' -> 'aad') - array[
+      'workspaceId', 'entityId', 'fieldClass', 'schemaVersion', 'dataVersion',
+      'keyId', 'keyEpoch', 'writerId', 'purpose'
+    ]::text[] = '{}'::jsonb
+    and bundle -> 'envelope' -> 'aad' ->> 'workspaceId' = 'principal'
+    and bundle -> 'envelope' -> 'aad' ->> 'purpose' = 'user-private-key-bundle'
+    and bundle -> 'envelope' -> 'aad' ->> 'entityId' = principal_id
+    and bundle -> 'envelope' -> 'aad' ->> 'fieldClass' = 'private-key-bundle'
+    and bundle -> 'envelope' -> 'aad' ->> 'keyId' = 'recovery-kek-' || principal_id
+    and bundle -> 'envelope' -> 'aad' ->> 'writerId' = 'recovery-' || principal_id
+    and (bundle -> 'envelope' -> 'aad' ->> 'dataVersion')::integer = recovery_epoch
+    and (bundle -> 'envelope' -> 'aad' ->> 'keyEpoch')::integer = recovery_epoch
+  ), false))
 );
 
 alter table public.encrypted_private_key_bundles enable row level security;

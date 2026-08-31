@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '../types/database.generated'
-import type { EncryptedPrivateKeyRecordV1 } from './recoveryBootstrap'
+import { parseEncryptedPrivateKeyRecord, type EncryptedPrivateKeyRecordV1 } from './recoveryBootstrap'
 
 export interface StoredPrivateKeyRecord {
   record: EncryptedPrivateKeyRecordV1
@@ -28,17 +28,18 @@ export class SupabaseRecoveryPrivateKeyRepository implements RecoveryPrivateKeyR
       .maybeSingle()
     if (error) throw error
     if (!data) return undefined
-    return { record: data.bundle as unknown as EncryptedPrivateKeyRecordV1, state: data.state }
+    return { record: parseEncryptedPrivateKeyRecord(data.bundle), state: data.state }
   }
 
   async savePending(record: EncryptedPrivateKeyRecordV1): Promise<void> {
+    const validated = parseEncryptedPrivateKeyRecord(record)
     const { error } = await this.client.from('encrypted_private_key_bundles').insert({
-      principal_id: record.principalId,
-      bundle: record as unknown as Json,
+      principal_id: validated.principalId,
+      bundle: validated as unknown as Json,
       state: 'pending_drive',
-      recovery_epoch: record.recoveryEpoch,
-      unwrap_fingerprint: record.unwrapFingerprint,
-      signing_fingerprint: record.signingFingerprint,
+      recovery_epoch: validated.recoveryEpoch,
+      unwrap_fingerprint: validated.unwrapFingerprint,
+      signing_fingerprint: validated.signingFingerprint,
     })
     if (error) throw error
   }
