@@ -1043,6 +1043,190 @@ export type Database = {
           },
         ]
       }
+      member_binding_events: {
+        Row: {
+          action: Database["public"]["Enums"]["member_person_binding_action"]
+          actor_principal_id: string
+          binding_id: string
+          binding_revision: number
+          created_at: string
+          event_id: number
+          from_state:
+            | Database["public"]["Enums"]["member_person_binding_state"]
+            | null
+          reason_code: string
+          request_hash: string
+          result: Json
+          to_state: Database["public"]["Enums"]["member_person_binding_state"]
+          transition_id: string
+          workspace_id: string
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["member_person_binding_action"]
+          actor_principal_id: string
+          binding_id: string
+          binding_revision: number
+          created_at?: string
+          event_id?: never
+          from_state?:
+            | Database["public"]["Enums"]["member_person_binding_state"]
+            | null
+          reason_code: string
+          request_hash: string
+          result: Json
+          to_state: Database["public"]["Enums"]["member_person_binding_state"]
+          transition_id: string
+          workspace_id: string
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["member_person_binding_action"]
+          actor_principal_id?: string
+          binding_id?: string
+          binding_revision?: number
+          created_at?: string
+          event_id?: never
+          from_state?:
+            | Database["public"]["Enums"]["member_person_binding_state"]
+            | null
+          reason_code?: string
+          request_hash?: string
+          result?: Json
+          to_state?: Database["public"]["Enums"]["member_person_binding_state"]
+          transition_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_binding_event_actor_directory_fk"
+            columns: ["workspace_id", "actor_principal_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_principal_directory"
+            referencedColumns: ["workspace_id", "principal_id"]
+          },
+          {
+            foreignKeyName: "member_binding_events_actor_principal_id_fkey"
+            columns: ["actor_principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["principal_id"]
+          },
+          {
+            foreignKeyName: "member_binding_events_binding_id_fkey"
+            columns: ["binding_id"]
+            isOneToOne: false
+            referencedRelation: "member_person_bindings"
+            referencedColumns: ["binding_id"]
+          },
+          {
+            foreignKeyName: "member_binding_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_crypto_states"
+            referencedColumns: ["workspace_id"]
+          },
+        ]
+      }
+      member_person_bindings: {
+        Row: {
+          binding_id: string
+          binding_version: number | null
+          confirmed_by_principal_id: string | null
+          created_at: string
+          decided_at: string | null
+          person_id: string
+          pinned_signing_fingerprint: string | null
+          pinned_unwrap_fingerprint: string | null
+          principal_id: string
+          profile_id: string
+          proposed_by_principal_id: string
+          revoked_at: string | null
+          state: Database["public"]["Enums"]["member_person_binding_state"]
+          workspace_id: string
+        }
+        Insert: {
+          binding_id?: string
+          binding_version?: number | null
+          confirmed_by_principal_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          person_id: string
+          pinned_signing_fingerprint?: string | null
+          pinned_unwrap_fingerprint?: string | null
+          principal_id: string
+          profile_id: string
+          proposed_by_principal_id: string
+          revoked_at?: string | null
+          state?: Database["public"]["Enums"]["member_person_binding_state"]
+          workspace_id: string
+        }
+        Update: {
+          binding_id?: string
+          binding_version?: number | null
+          confirmed_by_principal_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          person_id?: string
+          pinned_signing_fingerprint?: string | null
+          pinned_unwrap_fingerprint?: string | null
+          principal_id?: string
+          profile_id?: string
+          proposed_by_principal_id?: string
+          revoked_at?: string | null
+          state?: Database["public"]["Enums"]["member_person_binding_state"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_binding_confirmer_directory_fk"
+            columns: ["workspace_id", "confirmed_by_principal_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_principal_directory"
+            referencedColumns: ["workspace_id", "principal_id"]
+          },
+          {
+            foreignKeyName: "member_binding_principal_directory_fk"
+            columns: ["workspace_id", "principal_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_principal_directory"
+            referencedColumns: ["workspace_id", "principal_id"]
+          },
+          {
+            foreignKeyName: "member_binding_proposer_directory_fk"
+            columns: ["workspace_id", "proposed_by_principal_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_principal_directory"
+            referencedColumns: ["workspace_id", "principal_id"]
+          },
+          {
+            foreignKeyName: "member_person_bindings_confirmed_by_principal_id_fkey"
+            columns: ["confirmed_by_principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["principal_id"]
+          },
+          {
+            foreignKeyName: "member_person_bindings_principal_id_fkey"
+            columns: ["principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["principal_id"]
+          },
+          {
+            foreignKeyName: "member_person_bindings_proposed_by_principal_id_fkey"
+            columns: ["proposed_by_principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["principal_id"]
+          },
+          {
+            foreignKeyName: "member_person_bindings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_crypto_states"
+            referencedColumns: ["workspace_id"]
+          },
+        ]
+      }
       migration_runs: {
         Row: {
           completed_at: string | null
@@ -1801,6 +1985,7 @@ export type Database = {
         Args: { expected_principal_id: string }
         Returns: undefined
       }
+      binding_request_hash: { Args: { candidate: Json }; Returns: string }
       can_commit_workspace: {
         Args: { target_workspace_id: string }
         Returns: boolean
@@ -1874,6 +2059,16 @@ export type Database = {
       current_crypto_principal: {
         Args: { target_workspace_id: string }
         Returns: string
+      }
+      decide_member_person_binding: {
+        Args: {
+          p_binding_id: string
+          p_decision: string
+          p_expected_binding_revision: number
+          p_transition_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
       }
       discard_media_upload: { Args: { p_upload_id: string }; Returns: Json }
       discard_reviewed_media_upload: {
@@ -1968,6 +2163,15 @@ export type Database = {
         Args: {
           p_person_legacy_id: string
           p_profile_legacy_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      propose_member_person_binding: {
+        Args: {
+          p_person_id: string
+          p_profile_id: string
+          p_transition_id: string
           p_workspace_id: string
         }
         Returns: Json
@@ -2080,6 +2284,18 @@ export type Database = {
         | "attached"
         | "discarded"
         | "expired"
+      member_person_binding_action:
+        | "propose"
+        | "confirm"
+        | "reject"
+        | "revoke"
+        | "supersede"
+      member_person_binding_state:
+        | "pending"
+        | "confirmed"
+        | "rejected"
+        | "revoked"
+        | "superseded"
       migration_status:
         | "pending"
         | "running"
@@ -2267,6 +2483,20 @@ export const Constants = {
         "attached",
         "discarded",
         "expired",
+      ],
+      member_person_binding_action: [
+        "propose",
+        "confirm",
+        "reject",
+        "revoke",
+        "supersede",
+      ],
+      member_person_binding_state: [
+        "pending",
+        "confirmed",
+        "rejected",
+        "revoked",
+        "superseded",
       ],
       migration_status: [
         "pending",
