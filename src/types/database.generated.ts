@@ -201,6 +201,311 @@ export type Database = {
           },
         ]
       }
+      contact_field_states: {
+        Row: {
+          active_policy_id: string
+          field_class: Database["public"]["Enums"]["private_field_class"]
+          key_epoch: number
+          key_id: string
+          lifecycle: Database["public"]["Enums"]["contact_field_lifecycle"]
+          person_id: string
+          rotation_id: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          active_policy_id: string
+          field_class: Database["public"]["Enums"]["private_field_class"]
+          key_epoch: number
+          key_id: string
+          lifecycle: Database["public"]["Enums"]["contact_field_lifecycle"]
+          person_id: string
+          rotation_id?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          active_policy_id?: string
+          field_class?: Database["public"]["Enums"]["private_field_class"]
+          key_epoch?: number
+          key_id?: string
+          lifecycle?: Database["public"]["Enums"]["contact_field_lifecycle"]
+          person_id?: string
+          rotation_id?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_field_states_active_policy_id_fkey"
+            columns: ["active_policy_id"]
+            isOneToOne: false
+            referencedRelation: "contact_policy_artifacts"
+            referencedColumns: ["policy_id"]
+          },
+          {
+            foreignKeyName: "contact_field_states_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_crypto_states"
+            referencedColumns: ["workspace_id"]
+          },
+        ]
+      }
+      contact_key_rotations: {
+        Row: {
+          audience_manifest_hmac: string
+          completed_at: string | null
+          created_at: string
+          field_class: Database["public"]["Enums"]["private_field_class"]
+          from_key_epoch: number
+          from_key_id: string | null
+          person_id: string
+          policy_id: string
+          request_hash: string
+          result: Json | null
+          rotation_id: string
+          state: Database["public"]["Enums"]["contact_rotation_state"]
+          to_key_epoch: number
+          to_key_id: string
+          workspace_id: string
+        }
+        Insert: {
+          audience_manifest_hmac: string
+          completed_at?: string | null
+          created_at?: string
+          field_class: Database["public"]["Enums"]["private_field_class"]
+          from_key_epoch: number
+          from_key_id?: string | null
+          person_id: string
+          policy_id: string
+          request_hash: string
+          result?: Json | null
+          rotation_id: string
+          state?: Database["public"]["Enums"]["contact_rotation_state"]
+          to_key_epoch: number
+          to_key_id: string
+          workspace_id: string
+        }
+        Update: {
+          audience_manifest_hmac?: string
+          completed_at?: string | null
+          created_at?: string
+          field_class?: Database["public"]["Enums"]["private_field_class"]
+          from_key_epoch?: number
+          from_key_id?: string | null
+          person_id?: string
+          policy_id?: string
+          request_hash?: string
+          result?: Json | null
+          rotation_id?: string
+          state?: Database["public"]["Enums"]["contact_rotation_state"]
+          to_key_epoch?: number
+          to_key_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_key_rotations_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "contact_policy_artifacts"
+            referencedColumns: ["policy_id"]
+          },
+          {
+            foreignKeyName: "contact_key_rotations_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_crypto_states"
+            referencedColumns: ["workspace_id"]
+          },
+        ]
+      }
+      contact_policy_artifacts: {
+        Row: {
+          active: boolean
+          allow_principal_ids: Json
+          artifact: Json
+          audience: Database["public"]["Enums"]["contact_audience"]
+          binding_revision: number
+          created_at: string
+          deny_principal_ids: Json
+          expires_at: string
+          field_class: Database["public"]["Enums"]["private_field_class"]
+          graph_revision: number
+          key_epoch: number
+          nonce_hash: string
+          person_id: string
+          policy_id: string
+          policy_principal_id: string
+          policy_revision: number
+          profile_id: string
+          recipient_principal_ids: Json
+          revoked_at: string | null
+          signer_fingerprint: string
+          subject_binding_id: string | null
+          verified_at: string
+          workspace_id: string
+        }
+        Insert: {
+          active?: boolean
+          allow_principal_ids?: Json
+          artifact: Json
+          audience: Database["public"]["Enums"]["contact_audience"]
+          binding_revision: number
+          created_at?: string
+          deny_principal_ids?: Json
+          expires_at: string
+          field_class: Database["public"]["Enums"]["private_field_class"]
+          graph_revision: number
+          key_epoch: number
+          nonce_hash: string
+          person_id: string
+          policy_id: string
+          policy_principal_id: string
+          policy_revision: number
+          profile_id: string
+          recipient_principal_ids: Json
+          revoked_at?: string | null
+          signer_fingerprint: string
+          subject_binding_id?: string | null
+          verified_at: string
+          workspace_id: string
+        }
+        Update: {
+          active?: boolean
+          allow_principal_ids?: Json
+          artifact?: Json
+          audience?: Database["public"]["Enums"]["contact_audience"]
+          binding_revision?: number
+          created_at?: string
+          deny_principal_ids?: Json
+          expires_at?: string
+          field_class?: Database["public"]["Enums"]["private_field_class"]
+          graph_revision?: number
+          key_epoch?: number
+          nonce_hash?: string
+          person_id?: string
+          policy_id?: string
+          policy_principal_id?: string
+          policy_revision?: number
+          profile_id?: string
+          recipient_principal_ids?: Json
+          revoked_at?: string | null
+          signer_fingerprint?: string
+          subject_binding_id?: string | null
+          verified_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_policy_artifacts_policy_principal_id_fkey"
+            columns: ["policy_principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["principal_id"]
+          },
+          {
+            foreignKeyName: "contact_policy_artifacts_subject_binding_id_fkey"
+            columns: ["subject_binding_id"]
+            isOneToOne: false
+            referencedRelation: "member_person_bindings"
+            referencedColumns: ["binding_id"]
+          },
+          {
+            foreignKeyName: "contact_policy_artifacts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_crypto_states"
+            referencedColumns: ["workspace_id"]
+          },
+          {
+            foreignKeyName: "contact_policy_principal_directory_fk"
+            columns: ["workspace_id", "policy_principal_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_principal_directory"
+            referencedColumns: ["workspace_id", "principal_id"]
+          },
+        ]
+      }
+      contact_recipient_grants: {
+        Row: {
+          binding_id: string
+          binding_version: number
+          envelope_id: string
+          field_class: Database["public"]["Enums"]["private_field_class"]
+          granted_at: string
+          key_epoch: number
+          person_id: string
+          policy_id: string
+          recipient_principal_id: string
+          revoked_at: string | null
+          workspace_id: string
+        }
+        Insert: {
+          binding_id: string
+          binding_version: number
+          envelope_id: string
+          field_class: Database["public"]["Enums"]["private_field_class"]
+          granted_at?: string
+          key_epoch: number
+          person_id: string
+          policy_id: string
+          recipient_principal_id: string
+          revoked_at?: string | null
+          workspace_id: string
+        }
+        Update: {
+          binding_id?: string
+          binding_version?: number
+          envelope_id?: string
+          field_class?: Database["public"]["Enums"]["private_field_class"]
+          granted_at?: string
+          key_epoch?: number
+          person_id?: string
+          policy_id?: string
+          recipient_principal_id?: string
+          revoked_at?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_grant_envelope_fk"
+            columns: ["workspace_id", "envelope_id"]
+            isOneToOne: false
+            referencedRelation: "encrypted_key_envelopes"
+            referencedColumns: ["workspace_id", "envelope_id"]
+          },
+          {
+            foreignKeyName: "contact_grant_field_fk"
+            columns: ["workspace_id", "person_id", "field_class"]
+            isOneToOne: false
+            referencedRelation: "contact_field_states"
+            referencedColumns: ["workspace_id", "person_id", "field_class"]
+          },
+          {
+            foreignKeyName: "contact_recipient_grants_binding_id_fkey"
+            columns: ["binding_id"]
+            isOneToOne: false
+            referencedRelation: "member_person_bindings"
+            referencedColumns: ["binding_id"]
+          },
+          {
+            foreignKeyName: "contact_recipient_grants_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "contact_policy_artifacts"
+            referencedColumns: ["policy_id"]
+          },
+          {
+            foreignKeyName: "contact_recipient_grants_recipient_principal_id_fkey"
+            columns: ["recipient_principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["principal_id"]
+          },
+        ]
+      }
       crypto_invitations: {
         Row: {
           artifact_hash: string
@@ -1985,6 +2290,19 @@ export type Database = {
         Args: { expected_principal_id: string }
         Returns: undefined
       }
+      begin_contact_key_rotation: {
+        Args: {
+          p_audience_manifest_hmac: string
+          p_expected_from_epoch: number
+          p_field_class: Database["public"]["Enums"]["private_field_class"]
+          p_person_id: string
+          p_policy_id: string
+          p_rotation_id: string
+          p_to_key_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       binding_request_hash: { Args: { candidate: Json }; Returns: string }
       can_commit_workspace: {
         Args: { target_workspace_id: string }
@@ -2020,6 +2338,22 @@ export type Database = {
         Args: { p_workspace_id: string }
         Returns: number
       }
+      commit_contact_field_write: {
+        Args: {
+          p_authorization_id: string
+          p_clear?: boolean
+          p_commit_id: string
+          p_envelope: Json
+          p_expected_data_version: number
+          p_expected_row_version: number
+          p_field_class: Database["public"]["Enums"]["private_field_class"]
+          p_key_epoch: number
+          p_key_id: string
+          p_person_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       commit_encrypted_workspace: {
         Args: {
           p_commit_id: string
@@ -2038,6 +2372,16 @@ export type Database = {
           p_commit_id: string
           p_operations: Json
           p_workspace_id: string
+        }
+        Returns: Json
+      }
+      complete_contact_key_rotation: {
+        Args: {
+          p_envelope: Json
+          p_expected_data_version: number
+          p_rotation_id: string
+          p_workspace_id: string
+          p_wrapped_envelopes: Json
         }
         Returns: Json
       }
@@ -2126,6 +2470,7 @@ export type Database = {
         Args: { target_workspace_id: string }
         Returns: boolean
       }
+      jsonb_opaque_id_array: { Args: { candidate: Json }; Returns: boolean }
       load_drive_bundle_migration: {
         Args: {
           p_family_data: Json
@@ -2191,6 +2536,49 @@ export type Database = {
         }
         Returns: undefined
       }
+      register_verified_contact_edit_authorization: {
+        Args: {
+          p_actor_principal_id: string
+          p_artifact: Json
+          p_authorization_id: string
+          p_binding_revision: number
+          p_expires_at: string
+          p_field_class: Database["public"]["Enums"]["private_field_class"]
+          p_graph_revision: number
+          p_key_epoch: number
+          p_nonce_hash: string
+          p_person_id: string
+          p_policy_revision: number
+          p_verified_at: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
+      register_verified_contact_policy: {
+        Args: {
+          p_allow_principal_ids: Json
+          p_artifact: Json
+          p_audience: Database["public"]["Enums"]["contact_audience"]
+          p_binding_revision: number
+          p_deny_principal_ids: Json
+          p_expires_at: string
+          p_field_class: Database["public"]["Enums"]["private_field_class"]
+          p_graph_revision: number
+          p_key_epoch: number
+          p_nonce_hash: string
+          p_person_id: string
+          p_policy_id: string
+          p_policy_principal_id: string
+          p_policy_revision: number
+          p_profile_id: string
+          p_recipient_principal_ids: Json
+          p_signer_fingerprint: string
+          p_subject_binding_id: string
+          p_verified_at: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       replace_family_dataset: {
         Args: {
           p_expected_data_version: number
@@ -2252,6 +2640,15 @@ export type Database = {
       ancestral_role: "none" | "founding_ancestor"
       backup_capability_state: "active" | "consumed" | "revoked" | "expired"
       commit_status: "pending" | "applied" | "conflict" | "failed"
+      contact_audience:
+        | "self_only"
+        | "direct_family"
+        | "close_blood"
+        | "blood_only"
+        | "workspace_members"
+        | "custom"
+      contact_field_lifecycle: "active" | "rotating"
+      contact_rotation_state: "prepared" | "complete"
       crypto_invitation_state: "pending" | "consumed" | "revoked" | "expired"
       crypto_migration_state:
         | "parallel"
@@ -2448,6 +2845,16 @@ export const Constants = {
       ancestral_role: ["none", "founding_ancestor"],
       backup_capability_state: ["active", "consumed", "revoked", "expired"],
       commit_status: ["pending", "applied", "conflict", "failed"],
+      contact_audience: [
+        "self_only",
+        "direct_family",
+        "close_blood",
+        "blood_only",
+        "workspace_members",
+        "custom",
+      ],
+      contact_field_lifecycle: ["active", "rotating"],
+      contact_rotation_state: ["prepared", "complete"],
       crypto_invitation_state: ["pending", "consumed", "revoked", "expired"],
       crypto_migration_state: [
         "parallel",
