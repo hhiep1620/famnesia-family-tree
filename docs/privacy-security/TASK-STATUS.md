@@ -16,7 +16,7 @@
 ## To-do
 
 - [x] CR-01 — Threat model and boundary — [evidence](./evidence/CR-01/README.md); commit `6e28f0c`; reader/security review pass; owner approved `2026-08-30T14:32:09Z`.
-- [ ] CR-02 — Crypto and key contract — implementation/reviews pass; [evidence](./evidence/CR-02/README.md); commit `5375af7`; awaiting owner approval.
+- [x] CR-02 — Crypto and key contract — [evidence](./evidence/CR-02/README.md); implementation commit `5375af7`; reader/security review pass; owner approved `2026-08-31T03:04:42Z`.
 - [ ] CR-03 — Google Drive key vault.
 - [ ] CR-04 — Encrypted data contract.
 - [ ] CR-05 — Encrypted repository and migration harness; no real-data migration.
@@ -39,8 +39,8 @@ Mỗi CR giao diện/tính năng mới tiếp theo vẫn phải khai báo data c
 
 ## Current blocker / next action
 
-- CR-02 implementation, reader-test và internal security review đã pass; evidence tại [evidence/CR-02/README.md](./evidence/CR-02/README.md).
-- Chờ owner phê duyệt các quyết định CR-02. Không bắt đầu CR-03.
+- CR-02 Done; evidence tại [evidence/CR-02/README.md](./evidence/CR-02/README.md).
+- Sẵn sàng cho CR-03 nhưng chưa bắt đầu; chờ yêu cầu riêng của owner.
 
 ## Update rule
 

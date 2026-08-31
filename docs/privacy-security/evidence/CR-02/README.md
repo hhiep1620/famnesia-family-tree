@@ -40,4 +40,10 @@ No crypto dependency was added; implementation uses platform Web Crypto. Local v
 
 ## Gate
 
-Status: `AWAITING_OWNER_APPROVAL`. Do not begin CR-03 until owner approval is recorded here.
+Status: `APPROVED`.
+
+| Owner | Approved at (UTC) | Decision |
+|---|---|---|
+| `hoanghiep.0179@gmail.com` | `2026-08-31T03:04:42Z` | Approved all six locked CR-02 decisions |
+
+CR-02 is complete. CR-03 may start only on an explicit follow-up request; this approval does not start it automatically.
