@@ -39,8 +39,8 @@ Mỗi CR giao diện/tính năng mới tiếp theo vẫn phải khai báo data c
 
 ## Current blocker / next action
 
-- CR-01 Done; evidence tại [evidence/CR-01/README.md](./evidence/CR-01/README.md).
-- Dừng theo yêu cầu của owner. Không tạo crypto code và không bắt đầu CR-02.
+- CR-02 implementation, reader-test và internal security review đã pass; evidence tại [evidence/CR-02/README.md](./evidence/CR-02/README.md).
+- Chờ owner phê duyệt các quyết định CR-02. Không bắt đầu CR-03.
 
 ## Update rule
 
