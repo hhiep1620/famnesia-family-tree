@@ -1010,6 +1010,42 @@ export type Database = {
           },
         ]
       }
+      encrypted_private_key_bundles: {
+        Row: {
+          auth_user_id: string
+          bundle: Json
+          created_at: string
+          principal_id: string
+          recovery_epoch: number
+          signing_fingerprint: string
+          state: "pending_drive" | "active"
+          unwrap_fingerprint: string
+          updated_at: string
+        }
+        Insert: {
+          auth_user_id?: string
+          bundle: Json
+          created_at?: string
+          principal_id: string
+          recovery_epoch: number
+          signing_fingerprint: string
+          state?: "pending_drive" | "active"
+          unwrap_fingerprint: string
+          updated_at?: string
+        }
+        Update: {
+          auth_user_id?: string
+          bundle?: Json
+          created_at?: string
+          principal_id?: string
+          recovery_epoch?: number
+          signing_fingerprint?: string
+          state?: "pending_drive" | "active"
+          unwrap_fingerprint?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       workspaces: {
         Row: {
           canonical_ready: boolean
@@ -1060,6 +1096,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      activate_private_key_bundle: {
+        Args: { expected_principal_id: string }
+        Returns: undefined
+      }
       _family_apply_operations: {
         Args: { data: Json; operations: Json }
         Returns: Json
@@ -1487,4 +1527,3 @@ export const Constants = {
     },
   },
 } as const
-

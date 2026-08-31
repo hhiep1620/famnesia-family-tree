@@ -26,6 +26,7 @@ import type { DraftReviewRequest, MirrorSyncResult, ReviewDraft } from '../../ty
 import { ActivityTimeline } from './ActivityTimeline'
 import { DataQualityCenter } from './DataQualityCenter'
 import { SharedWorkspaceConnector } from './SharedWorkspaceConnector'
+import { RecoveryVaultPanel } from './RecoveryVaultPanel'
 import { DraftInbox, MirrorStatusCard } from '../draft/DraftInbox'
 
 interface Props {
@@ -201,6 +202,8 @@ export function DataManagement(props: Props) {
       {backupError && <p className="form-error">{backupError}</p>}
       <div className="backup-list">{backups.length ? backups.map((backup) => <div className="backup-row" key={backup.id}><Archive size={16} /><div><strong>{backup.name}</strong><span>{formatBackupTime(backup.createdTime ?? backup.modifiedTime)}{backup.reason ? ` · ${backup.reason}` : ''}</span></div>{canReplaceData && <button className="secondary-button" onClick={() => void restore(backup)}><RotateCcw size={14} /> Khôi phục</button>}</div>) : <div className="backup-empty">Chưa có bản sao lưu nào.</div>}</div>
     </section>
+
+    {!props.mock && import.meta.env.VITE_GOOGLE_DRIVE_CLIENT_ID ? <RecoveryVaultPanel /> : null}
 
     {props.workspace?.canReviewDrafts && props.onReviewDraft ? <DraftInbox drafts={props.drafts ?? []} data={props.data} workspaceId={props.workspace.id} onReview={props.onReviewDraft} /> : null}
     {props.workspace?.role === 'contributor' && props.onRetryMirror ? <MirrorStatusCard status={props.mirrorStatus} mirror={props.mirrorSync} onRetry={props.onRetryMirror} /> : null}

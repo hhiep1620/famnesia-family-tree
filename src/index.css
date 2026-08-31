@@ -911,3 +911,13 @@ h1, h2, h3 { font-family: 'Newsreader', serif; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+/* CR-03 recovery setup is deliberately explicit: activation remains blocked
+   until both independent artifacts have been downloaded and acknowledged. */
+.recovery-vault-panel { display: grid; gap: 16px; }
+.recovery-vault-panel h3 { display: flex; align-items: center; gap: 8px; }
+.recovery-warning { display: grid; gap: 5px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--danger, #9f4f4f) 35%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--danger, #9f4f4f) 7%, transparent); }
+.recovery-warning span { color: var(--muted, #707873); }
+.recovery-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.recovery-confirmation { display: grid; gap: 14px; }
+.recovery-confirmation label { display: flex; align-items: flex-start; gap: 10px; line-height: 1.45; }
+.recovery-confirmation input { margin-top: 4px; }
