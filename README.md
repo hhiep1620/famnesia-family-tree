@@ -128,6 +128,8 @@ Không đưa `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `TOKEN_ENCRYPTION_KEY` ho
 
 Giá trị hợp lệ là `DATA_BACKEND=drive|supabase`, `AUTH_BACKEND=google-drive-oauth|supabase` và `MEDIA_BACKEND=drive|supabase`. Preview Supabase đặt cả ba thành `supabase`; family runtime vẫn fail-closed trong code và không có env để bật lại plaintext.
 
+`VITE_JOIN_WORKFLOW_ENABLED=true` chỉ được đặt cho Preview sau khi toàn bộ migration Supabase đã áp trên database Preview cô lập. Mặc định `false` để create/join không gọi nhầm schema legacy hoặc database Production.
+
 Các biến Supabase dùng tên `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` và `SUPABASE_SECRET_KEY`. Secret key là server-only và tuyệt đối không được đặt trong biến `VITE_*`.
 
 ### Legacy Google Drive rollback
