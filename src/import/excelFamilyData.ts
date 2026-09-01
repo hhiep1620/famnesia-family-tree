@@ -6,6 +6,7 @@ import type { ImportValidationResult } from './validateImport'
 import { plainText, safeSpreadsheetText } from './security/contentSanitization'
 import { inspectXlsxContainer } from './security/excelSecurity'
 import { IMPORT_LIMITS } from './security/importLimits'
+import { parsePartialDate, serializePartialDate, toLegacyDate } from '../calendar/partialDate'
 
 const COLUMNS = {
   profiles: ['id', 'name', 'lineage_surname', 'description', 'photo_file_id', 'subject_person_id', 'requires_secret', 'is_active'],
@@ -69,9 +70,10 @@ function normalizeWorkbook(workbook: XLSX.WorkBook): FamilyData {
   }))
   const persons: Person[] = rows(workbook, 'persons').map((row) => {
     const lunarDay = number(row.death_lunar_day); const lunarMonth = number(row.death_lunar_month)
+    const birthDateParts = parsePartialDate(date(row.birth_date))
     return {
       id: plainText(row.id), profileId: plainText(row.profile_id), name: plainText(row.name), nickname: plainText(row.nickname) || null,
-      gender: gender(row.gender), birthDate: date(row.birth_date), isDeceased: bool(row.is_deceased), deathDate: date(row.death_date),
+      gender: gender(row.gender), birthDate: toLegacyDate(birthDateParts), birthDateParts, isDeceased: bool(row.is_deceased), deathDate: date(row.death_date),
       deathLunar: lunarDay && lunarMonth ? { day: lunarDay, month: lunarMonth, leapMonth: bool(row.death_lunar_leap_month) } : null,
       phone1: plainText(row.phone_1), phone2: plainText(row.phone_2), address: plainText(row.address), note: plainText(row.note),
       ancestralRole: plainText(row.ancestral_role) === 'founding_ancestor' ? 'founding_ancestor' : 'none', sortOrder: number(row.sort_order),
@@ -147,13 +149,13 @@ export function createFamilyWorkbook(data: FamilyData): Uint8Array {
   const readme = [
     ['FAMNESIA EXCEL DATA TEMPLATE'],
     ['Chỉ dùng giá trị thuần. Không dùng macro, công thức, external link hoặc đối tượng nhúng.'],
-    ['Ngày dùng định dạng YYYY-MM-DD. Gender: male/female/other/unknown. Relationship: parent/spouse.'],
+    ['Ngày sinh dùng YYYY, YYYY-MM hoặc YYYY-MM-DD; ngày khác dùng YYYY-MM-DD. Gender: male/female/other/unknown. Relationship: parent/spouse.'],
     ['Ảnh không được nhúng; sheet media chỉ lưu Google Drive file ID. Các cột tính toán như tuổi, đời và vai vế không được lưu.'],
     ['Import thay thế toàn bộ dữ liệu và luôn tạo backup trước khi ghi.'],
   ]
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(readme), 'README')
   addSheet(workbook, 'profiles', COLUMNS.profiles, data.profiles.map((item) => [item.id, item.name, item.lineageSurname, item.description, item.photoFileId, item.subjectPersonId, item.requiresSecret, item.isActive]))
-  addSheet(workbook, 'persons', COLUMNS.persons, data.persons.map((item) => [item.id, item.profileId, item.name, item.nickname, item.gender, item.birthDate, item.confidence?.birthDate, item.isDeceased, item.deathDate, item.confidence?.deathDate, item.deathLunar?.day, item.deathLunar?.month, item.deathLunar?.leapMonth, item.phone1, item.phone2, item.address, item.note, item.ancestralRole, item.sortOrder]))
+  addSheet(workbook, 'persons', COLUMNS.persons, data.persons.map((item) => [item.id, item.profileId, item.name, item.nickname, item.gender, serializePartialDate(item.birthDateParts ?? parsePartialDate(item.birthDate)), item.confidence?.birthDate, item.isDeceased, item.deathDate, item.confidence?.deathDate, item.deathLunar?.day, item.deathLunar?.month, item.deathLunar?.leapMonth, item.phone1, item.phone2, item.address, item.note, item.ancestralRole, item.sortOrder]))
   addSheet(workbook, 'relationships', COLUMNS.relationships, data.relationships.map((item) => [item.id, item.profileId, item.person1Id, item.person2Id, item.type, item.status, item.confidence, item.startDate, item.endDate, item.sortOrder]))
   addSheet(workbook, 'media', COLUMNS.media, data.media.map((item) => [item.id, item.profileId, item.personId, item.driveFileId, item.type, item.isPrimary, item.caption, item.takenDate, item.sortOrder]))
   const output = XLSX.write(workbook, { bookType: 'xlsx', type: 'array', compression: true }) as ArrayBuffer | Uint8Array

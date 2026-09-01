@@ -1,6 +1,7 @@
 import { CalendarSync, Camera, Check, X } from 'lucide-react'
 import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { convertSolarToLunar } from '../../calendar/lunarCalendar'
+import { parsePartialDate, personBirthDate, serializePartialDate, toLegacyDate, type PartialDatePrecision } from '../../calendar/partialDate'
 import { buildFamilyGraph } from '../../graph/familyGraph'
 import { getCurrentSpouses } from '../../graph/familySelectors'
 import type { NewPersonConnection } from '../../hooks/useFamilyData'
@@ -27,7 +28,9 @@ export function PersonModal({ mode, persons, relationships, person, initialKind 
   const [name, setName] = useState(mode === 'edit' ? person?.name ?? '' : '')
   const [nickname, setNickname] = useState(mode === 'edit' ? person?.nickname ?? '' : '')
   const [gender, setGender] = useState<Gender>(mode === 'edit' ? person?.gender ?? 'unknown' : 'unknown')
-  const [birthDate, setBirthDate] = useState(mode === 'edit' ? person?.birthDate ?? '' : '')
+  const initialBirthDate = mode === 'edit' && person ? personBirthDate(person) : null
+  const [birthPrecision, setBirthPrecision] = useState<PartialDatePrecision>(initialBirthDate?.precision ?? 'day')
+  const [birthDate, setBirthDate] = useState(serializePartialDate(initialBirthDate))
   const [birthDateConfidence, setBirthDateConfidence] = useState<FactConfidence>(mode === 'edit' ? person?.confidence?.birthDate ?? 'unknown' : 'unknown')
   const [isDeceased, setIsDeceased] = useState(mode === 'edit' ? person?.isDeceased ?? false : false)
   const [deathDate, setDeathDate] = useState(mode === 'edit' ? person?.deathDate ?? '' : '')
@@ -61,9 +64,11 @@ export function PersonModal({ mode, persons, relationships, person, initialKind 
     if (submittingRef.current || busy) return
     if (!name.trim()) return setLocalError('Hãy nhập họ tên.')
     if ((lunarDay && !lunarMonth) || (!lunarDay && lunarMonth)) return setLocalError('Ngày và tháng âm lịch cần được nhập cùng nhau.')
+    const birthDateParts = parsePartialDate(birthDate)
+    if (birthDate && (!birthDateParts || birthDateParts.precision !== birthPrecision)) return setLocalError('Ngày sinh không phù hợp với độ chính xác đã chọn.')
     const draft: PersonDraft = {
       name: name.trim(), nickname: nickname.trim() || undefined, gender,
-      birthDate: birthDate || undefined, birthDateConfidence, isDeceased,
+      birthDate: toLegacyDate(birthDateParts) ?? undefined, birthDateParts, birthDateConfidence, isDeceased,
       deathDate: isDeceased && deathDate ? deathDate : undefined,
       deathDateConfidence,
       deathLunarDay: isDeceased && lunarDay ? Number(lunarDay) : undefined,
@@ -108,7 +113,8 @@ export function PersonModal({ mode, persons, relationships, person, initialKind 
               <label className="field field-wide"><span>Họ và tên <b>*</b></span><input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Nguyễn Văn Minh" /></label>
               <label className="field"><span>Biệt danh</span><input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="Bé Minh, Ông Ba…" /></label>
               <label className="field"><span>Giới tính</span><select value={gender} onChange={(event) => setGender(event.target.value as Gender)}><option value="unknown">Không xác định</option><option value="male">Nam</option><option value="female">Nữ</option><option value="other">Khác</option></select></label>
-              <label className="field"><span>Ngày sinh dương lịch</span><input type="date" value={birthDate} onChange={(event) => setBirthDate(event.target.value)} /></label>
+              <label className="field"><span>Độ chính xác ngày sinh</span><select value={birthPrecision} onChange={(event) => { setBirthPrecision(event.target.value as PartialDatePrecision); setBirthDate('') }}><option value="day">Đủ ngày / tháng / năm</option><option value="month">Chỉ tháng và năm</option><option value="year">Chỉ năm</option></select></label>
+              <label className="field"><span>{birthPrecision === 'day' ? 'Ngày sinh dương lịch' : birthPrecision === 'month' ? 'Tháng sinh' : 'Năm sinh'}</span><input type={birthPrecision === 'day' ? 'date' : birthPrecision === 'month' ? 'month' : 'number'} min={birthPrecision === 'year' ? 1 : undefined} max={birthPrecision === 'year' ? 9999 : undefined} value={birthDate} onChange={(event) => setBirthDate(event.target.value)} placeholder={birthPrecision === 'year' ? 'Ví dụ: 1990' : undefined} /></label>
               <label className="field"><span>Độ tin cậy ngày sinh</span><select value={birthDateConfidence} onChange={(event) => setBirthDateConfidence(event.target.value as FactConfidence)}>{Object.entries(confidenceLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
               <label className="field"><span>Thứ tự trong anh chị em</span><input type="number" min="0" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} placeholder="Ví dụ: 1" /></label>
             </div>

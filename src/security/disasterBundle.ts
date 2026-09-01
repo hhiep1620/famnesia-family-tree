@@ -36,6 +36,15 @@ export interface DisasterBundleV1 {
 
 const id = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u
 const hash = /^sha256:[A-Za-z0-9_-]{43}$/u
+const ciphertext = /^[A-Za-z0-9_-]{22,}$/u
+
+function record(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function exact(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(value).sort().join('|') === [...keys].sort().join('|')
+}
 
 async function digest(bytes: Uint8Array): Promise<string> {
   const value = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource))
@@ -67,13 +76,31 @@ export function createDisasterBundleManifest(input: Omit<DisasterBundleManifest,
 }
 
 export function validateDisasterBundle(bundle: unknown): asserts bundle is DisasterBundleV1 {
-  if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle)) throw new Error('INVALID_DISASTER_BUNDLE')
-  const value = bundle as DisasterBundleV1
-  if (value.manifest?.format !== DISASTER_BUNDLE_FORMAT || value.manifest.version !== 1 || value.manifest.ciphertextOnly !== true || typeof value.encryptedFamilyCiphertext !== 'string' || !Array.isArray(value.media) || !value.trustCheckpoint || typeof value.trustCheckpoint !== 'object') throw new Error('INVALID_DISASTER_BUNDLE')
-  if (!value.media.every((item) => item.format === MEDIA_CIPHERTEXT_FORMAT && item.version === 1 && id.test(item.mediaId) && hash.test(item.checksum))) throw new Error('INVALID_DISASTER_BUNDLE')
+  if (!record(bundle) || !exact(bundle, ['manifest', 'encryptedFamilyCiphertext', 'media', 'trustCheckpoint'])) throw new Error('INVALID_DISASTER_BUNDLE')
+  const value = bundle as unknown as DisasterBundleV1
+  if (!record(value.manifest) || !exact(value.manifest as unknown as Record<string, unknown>, [
+    'format', 'version', 'workspaceId', 'createdAt', 'schemaVersion', 'dataVersion', 'keyEpoch', 'principalIds', 'mediaIds', 'ciphertextOnly',
+  ])) throw new Error('INVALID_DISASTER_BUNDLE')
+  const manifest = value.manifest
+  if (manifest.format !== DISASTER_BUNDLE_FORMAT || manifest.version !== 1 || manifest.ciphertextOnly !== true || !id.test(manifest.workspaceId) ||
+      Number.isNaN(Date.parse(manifest.createdAt)) || !Number.isSafeInteger(manifest.schemaVersion) || manifest.schemaVersion < 1 ||
+      !Number.isSafeInteger(manifest.dataVersion) || manifest.dataVersion < 1 || !Number.isSafeInteger(manifest.keyEpoch) || manifest.keyEpoch < 1 ||
+      !Array.isArray(manifest.principalIds) || !manifest.principalIds.every((item) => id.test(item)) ||
+      JSON.stringify(manifest.principalIds) !== JSON.stringify([...new Set(manifest.principalIds)].sort()) ||
+      !Array.isArray(manifest.mediaIds) || !manifest.mediaIds.every((item) => id.test(item)) ||
+      JSON.stringify(manifest.mediaIds) !== JSON.stringify([...new Set(manifest.mediaIds)].sort()) ||
+      typeof value.encryptedFamilyCiphertext !== 'string' || !ciphertext.test(value.encryptedFamilyCiphertext) ||
+      !Array.isArray(value.media) || !record(value.trustCheckpoint) || Object.keys(value.trustCheckpoint).length === 0) throw new Error('INVALID_DISASTER_BUNDLE')
+  if (!value.media.every((item) => record(item) && exact(item as unknown as Record<string, unknown>, [
+    'format', 'version', 'mediaId', 'mimeType', 'originalSize', 'ciphertext', 'checksum',
+  ]) && item.format === MEDIA_CIPHERTEXT_FORMAT && item.version === 1 && id.test(item.mediaId) &&
+    ['image/webp', 'image/jpeg', 'image/png'].includes(item.mimeType) && Number.isSafeInteger(item.originalSize) && item.originalSize > 0 &&
+    item.originalSize <= 4 * 1024 * 1024 && ciphertext.test(item.ciphertext) && hash.test(item.checksum))) throw new Error('INVALID_DISASTER_BUNDLE')
+  if (new Set(value.media.map((item) => item.mediaId)).size !== value.media.length ||
+      JSON.stringify(value.media.map((item) => item.mediaId).sort()) !== JSON.stringify(manifest.mediaIds)) throw new Error('INVALID_DISASTER_BUNDLE')
 }
 
 export function familyCiphertextPayload(data: FamilyData): string {
-  if (!data || !Array.isArray(data.persons) || !Array.isArray(data.relationships) || !Array.isArray(data.media)) throw new Error('INVALID_FAMILY_PAYLOAD')
-  return JSON.stringify({ schemaVersion: data.schemaVersion, dataVersion: data.updatedAt, persons: data.persons.length, relationships: data.relationships.length, media: data.media.length })
+  void data
+  throw new Error('ENCRYPTED_FAMILY_CIPHERTEXT_REQUIRED')
 }

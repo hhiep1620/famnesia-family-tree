@@ -30,7 +30,13 @@ export class SupabaseCollaborationRepository {
   async createWorkspace(name: string): Promise<WorkspaceInfo> {
     const result = await this.client.rpc('create_family_workspace', { p_name: name.trim() })
     if (result.error) errorCode(result.error, 'Không thể tạo workspace Famnesia.')
-    return this.writes.getWorkspace(result.data)
+    let workspace = await this.writes.getWorkspace(result.data)
+    if (!workspace.joinCode) {
+      const rotated = await this.client.rpc('rotate_workspace_join_code', { p_workspace_id: result.data })
+      if (rotated.error) errorCode(rotated.error, 'Không thể tạo mã tham gia cho workspace.')
+      workspace = await this.writes.getWorkspace(result.data)
+    }
+    return workspace
   }
 
   async acceptInvitation(token: string): Promise<WorkspaceInfo> {

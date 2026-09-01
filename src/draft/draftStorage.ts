@@ -30,20 +30,13 @@ async function requestResult<T>(request: IDBRequest<T>): Promise<T> {
 }
 
 export async function saveFamilyDraft(draft: StoredFamilyDraft): Promise<void> {
-  const database = await openDraftDatabase()
-  if (!database) return
-  try {
-    const transaction = database.transaction(STORE_NAME, 'readwrite')
-    await requestResult(transaction.objectStore(STORE_NAME).put(draft, familyDraftKey(draft.workspaceId, draft.userId)))
-  } finally { database.close() }
+  void draft
+  throw new Error('PLAINTEXT_DRAFT_STORAGE_DISABLED')
 }
 
 export async function loadFamilyDraft(workspaceId: string, userId: string): Promise<StoredFamilyDraft | undefined> {
-  const database = await openDraftDatabase()
-  if (!database) return undefined
-  try {
-    return await requestResult(database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get(familyDraftKey(workspaceId, userId))) as StoredFamilyDraft | undefined
-  } finally { database.close() }
+  void workspaceId; void userId
+  return undefined
 }
 
 export async function deleteFamilyDraft(workspaceId: string, userId: string): Promise<void> {

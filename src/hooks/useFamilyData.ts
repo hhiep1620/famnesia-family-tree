@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { sampleFamilyData } from '../data/sampleFamily'
-import { FAMILY_DRAFT_SCHEMA_VERSION, deleteFamilyDraft, isExpiredFamilyDraft, loadFamilyDraft, saveFamilyDraft } from '../draft/draftStorage'
-import { compactFamilyOperations, createOperation, isFamilyOperation, mergeFamilyOperations, operationReferencesNewPhoto, removeOperationWithDependencies, replayFamilyOperations } from '../draft/familyOperations'
+import { deleteFamilyDraft } from '../draft/draftStorage'
+import { compactFamilyOperations, createOperation, mergeFamilyOperations, operationReferencesNewPhoto, removeOperationWithDependencies, replayFamilyOperations } from '../draft/familyOperations'
 import { validateRelationship } from '../graph/familyValidation'
 import { createPhotoThumbnail, optimizePhoto } from '../media/imageOptimization'
 import { generateNextMediaId } from '../media/mediaSelectors'
@@ -16,6 +16,7 @@ import type { ActivityEvent, FamilyBackup, FamilyData, FamilyProfile, FriendlyRe
 import type { FamilyCommitConflictDetails, FamilyOperation, FamilyOperationConflict, StoredFamilyDraft } from '../types/familyOperations'
 import { generateNextPersonId } from '../utils/personId'
 import { generateNextRelationshipId } from '../utils/relationshipId'
+import { toLegacyDate } from '../calendar/partialDate'
 
 export interface NewPersonConnection {
   kind: FriendlyRelationship
@@ -55,7 +56,6 @@ export function useFamilyData(userId = 'mock-user') {
   const repository = useRef<FamilyRepository | undefined>(undefined)
   const revision = useRef<FamilyDataRevision | undefined>(undefined)
   const pendingRef = useRef<FamilyOperation[]>([])
-  const draftReady = useRef(false)
   const commitId = useRef<string | undefined>(undefined)
   const commitOutcomeUnknown = useRef(false)
   const mockData = useRef<FamilyData>(cloneData(sampleFamilyData))
@@ -93,25 +93,13 @@ export function useFamilyData(userId = 'mock-user') {
     setSaveStatus('saved'); setConflictDetails(undefined); commitId.current = undefined; commitOutcomeUnknown.current = false
   }, [selectAvailableProfile, setOperations])
 
-  const restoreDraft = useCallback(async (next: FamilyData, nextRevision: FamilyDataRevision | undefined, workspaceId: string) => {
+  const restoreDraft = useCallback(async (next: FamilyData, nextRevision: FamilyDataRevision | undefined, _workspaceId: string) => {
     setSavedData(next); revision.current = nextRevision; selectAvailableProfile(next); setDraftRecovery(undefined)
-    const stored = await loadFamilyDraft(workspaceId, userId).catch(() => undefined)
-    if (!stored) { setFamilyData(next); setOperations([]); setSaveStatus('saved'); return }
-    const validShape = stored.schemaVersion === FAMILY_DRAFT_SCHEMA_VERSION && Array.isArray(stored.operations) && stored.operations.every(isFamilyOperation)
-    if (!validShape || isExpiredFamilyDraft(stored)) {
-      setFamilyData(next); setOperations([])
-      setDraftRecovery({ draft: stored, reason: validShape ? 'Draft đã quá 7 ngày và cần bạn xác nhận.' : 'Phiên bản Draft không còn tương thích.' })
-      return
-    }
-    try {
-      const operations = compactFamilyOperations(stored.operations)
-      const restored = requireValidFamilyData(replayFamilyOperations(next, operations))
-      setFamilyData(restored); setOperations(operations); setSaveStatus(operations.length ? 'unsaved' : 'saved')
-      if (operations.length) setNotice(`Đã khôi phục ${operations.length} thay đổi chưa lưu.`)
-    } catch {
-      setFamilyData(next); setOperations([]); setDraftRecovery({ draft: stored, reason: 'Draft không thể áp dụng an toàn lên dữ liệu mới nhất.' })
-    }
-  }, [selectAvailableProfile, setOperations, userId])
+    // Protected family operations remain in tab memory until an encrypted local-cache
+    // contract is wired. Reading or writing the legacy plaintext IndexedDB draft is
+    // deliberately forbidden on the runtime path.
+    setFamilyData(next); setOperations([]); setSaveStatus('saved')
+  }, [selectAvailableProfile, setOperations])
 
   const refresh = useCallback(async () => {
     setLoading(true); setError(undefined)
@@ -123,8 +111,7 @@ export function useFamilyData(userId = 'mock-user') {
         if (!repository.current || (activeWorkspaceId && repository.current.workspace.id !== activeWorkspaceId)) repository.current = await FamilyRepository.connect(activeWorkspaceId)
         let connected = repository.current
         let snapshot = await connected.load()
-        const storedDraft = await loadFamilyDraft(connected.workspace.id, userId).catch(() => undefined)
-        const sharedWorkspace = sharedWorkspaceForEmptyOwner(connected.workspace, connected.workspaces, snapshot.data, Boolean(storedDraft))
+        const sharedWorkspace = sharedWorkspaceForEmptyOwner(connected.workspace, connected.workspaces, snapshot.data, false)
         if (sharedWorkspace) {
           repository.current = await FamilyRepository.connect(sharedWorkspace.id)
           connected = repository.current
@@ -145,7 +132,6 @@ export function useFamilyData(userId = 'mock-user') {
         setActivity(await connected.listActivity().catch(() => []))
         setNeedsWorkspace(false)
       }
-      draftReady.current = true
     } catch (caught) {
       if (caught instanceof NoWorkspaceError) {
         setNeedsWorkspace(true); setWorkspace(undefined); setWorkspaces([]); setError(undefined)
@@ -153,21 +139,14 @@ export function useFamilyData(userId = 'mock-user') {
         console.error(caught); setError(caught instanceof Error ? caught.message : 'Không thể tải dữ liệu gia đình.')
       }
     } finally { setLoading(false) }
-  }, [activeWorkspaceId, restoreDraft, selectAvailableProfile, useMockData, userId])
+  }, [activeWorkspaceId, restoreDraft, selectAvailableProfile, useMockData])
 
   useEffect(() => {
     if (repository.current?.workspace.id !== activeWorkspaceId) {
-      repository.current = undefined; revision.current = undefined; draftReady.current = false
+      repository.current = undefined; revision.current = undefined
     }
     void refresh()
   }, [activeWorkspaceId, refresh])
-
-  useEffect(() => {
-    if (!draftReady.current || useMockData || !workspace?.id || draftRecovery) return
-    if (!pendingOperations.length) { void deleteFamilyDraft(workspace.id, userId); return }
-    void saveFamilyDraft({ workspaceId: workspace.id, userId, baseRevision: revision.current, operations: pendingOperations, updatedAt: new Date().toISOString(), schemaVersion: FAMILY_DRAFT_SCHEMA_VERSION })
-      .catch(() => setError('Không thể lưu Draft trên thiết bị. Các thay đổi vẫn còn trong tab này.'))
-  }, [draftRecovery, pendingOperations, useMockData, userId, workspace?.id])
 
   useEffect(() => {
     if (!pendingOperations.length) return
@@ -252,7 +231,8 @@ export function useFamilyData(userId = 'mock-user') {
 
   const personFromDraft = useCallback((id: string, profileId: string, draft: PersonDraft, current?: Person): Person => {
     const now = new Date().toISOString()
-    return { ...current, id, profileId, name: draft.name.trim(), nickname: draft.nickname?.trim() || null, gender: draft.gender, birthDate: draft.birthDate || null, isDeceased: draft.isDeceased,
+    return { ...current, id, profileId, name: draft.name.trim(), nickname: draft.nickname?.trim() || null, gender: draft.gender,
+      birthDate: toLegacyDate(draft.birthDateParts) ?? null, birthDateParts: draft.birthDateParts ?? null, isDeceased: draft.isDeceased,
       deathDate: draft.isDeceased ? draft.deathDate || null : null, deathLunar: draft.isDeceased && draft.deathLunarDay && draft.deathLunarMonth ? { day: draft.deathLunarDay, month: draft.deathLunarMonth, leapMonth: Boolean(draft.deathLunarLeapMonth) } : null,
       phone1: draft.phone1?.trim() ?? '', phone2: draft.phone2?.trim() ?? '', address: draft.address?.trim() ?? '', note: draft.note?.trim() ?? '', ancestralRole: draft.ancestralRole, sortOrder: draft.sortOrder,
       createdAt: current?.createdAt ?? now, updatedAt: now, confidence: { birthDate: draft.birthDateConfidence, deathDate: draft.deathDateConfidence } }
@@ -437,7 +417,7 @@ export function useFamilyData(userId = 'mock-user') {
     setBusy('Đang kết nối gia đình được chia sẻ…'); setError(undefined)
     try {
       const connected = await FamilyRepository.connectShared(id)
-      repository.current = connected; revision.current = undefined; draftReady.current = false
+      repository.current = connected; revision.current = undefined
       setWorkspaces(connected.workspaces); setWorkspace(connected.workspace); setActiveWorkspaceId(connected.workspace.id)
       setNotice('Đã kết nối gia đình được chia sẻ. Những lần sau Famnesia sẽ tự mở gia đình này.')
     } finally { setBusy(undefined) }

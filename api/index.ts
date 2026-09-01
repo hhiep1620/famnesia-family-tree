@@ -3,6 +3,7 @@ import authLogin from '../server/auth/login.js'
 import authLogout from '../server/auth/logout.js'
 import authReconnect from '../server/auth/reconnect.js'
 import authSession from '../server/auth/session.js'
+import join from '../server/join.js'
 import workspaces from '../server/workspaces/index.js'
 import workspace from '../server/workspaces/[workspaceId]/index.js'
 import family from '../server/workspaces/[workspaceId]/family.js'
@@ -20,6 +21,7 @@ type FetchHandler = { fetch(request: Request): Response | Promise<Response> }
 const routes: Array<[RegExp, FetchHandler]> = [
   [/^\/api\/auth\/callback\/?$/, authCallback], [/^\/api\/auth\/login\/?$/, authLogin], [/^\/api\/auth\/logout\/?$/, authLogout],
   [/^\/api\/auth\/reconnect\/?$/, authReconnect], [/^\/api\/auth\/session\/?$/, authSession],
+  [/^\/api\/join\/?$/, join],
   [/^\/api\/workspaces\/?$/, workspaces], [/^\/api\/workspaces\/[^/]+\/backups\/?$/, backups],
   [/^\/api\/workspaces\/[^/]+\/checkpoint-intent\/?$/, checkpoint], [/^\/api\/workspaces\/[^/]+\/contact-authorization\/?$/, contactAuthorization],
   [/^\/api\/workspaces\/[^/]+\/contact-policy\/?$/, contactPolicy], [/^\/api\/workspaces\/[^/]+\/editor-delegation\/?$/, delegation],

@@ -32,6 +32,21 @@ describe('GEDCOM portability parser', () => {
     ])
   })
 
+  it('writes each child once for a two-parent family and imports it again', () => {
+    const data = parseGedcomText(`0 HEAD\n1 GEDC\n2 VERS 7.0\n0 @P1@ INDI\n1 NAME Father\n0 @P2@ INDI\n1 NAME Mother\n0 @P3@ INDI\n1 NAME Child\n0 @F1@ FAM\n1 HUSB @P1@\n1 WIFE @P2@\n1 CHIL @P3@\n0 TRLR\n`).data!
+    const serialized = serializeGedcom(data)
+    expect(serialized.match(/1 CHIL @P3@/gu)).toHaveLength(1)
+    expect(parseGedcomText(serialized).data?.relationships.filter((item) => item.type === 'parent')).toHaveLength(2)
+  })
+
+  it('keeps year-only birth precision without inventing January first', () => {
+    const parsed = parseGedcomText(`0 HEAD\n1 GEDC\n2 VERS 7.0\n0 @P1@ INDI\n1 NAME Person\n1 BIRT\n2 DATE 1990\n0 TRLR\n`).data!
+    expect(parsed.persons[0]).toMatchObject({ birthDateParts: { year: 1990, precision: 'year' } })
+    expect(parsed.persons[0].birthDate).toBeUndefined()
+    expect(serializeGedcom(parsed)).toContain('2 DATE 1990')
+    expect(serializeGedcom(parsed)).not.toContain('1 JAN 1990')
+  })
+
   it('maps export policy to one common redaction model', async () => {
     const module = await import('../src/privacy/portabilityExport')
     const data: FamilyData = { schemaVersion: 3, updatedAt: '2026-01-01T00:00:00.000Z', profiles: [{ id: 'F', name: 'Family', requiresSecret: false, isActive: true, subjectPersonId: 'P1' }],
@@ -41,5 +56,21 @@ describe('GEDCOM portability parser', () => {
     expect(result.data.persons.find((person) => person.id === 'P2')).toMatchObject({ phone1: '0911', address: 'old', note: 'memo' })
     expect(result.data.media).toEqual([])
     expect(result.report.mediaOmitted).toBe(1)
+  })
+
+  it('never retains a profile outside the signed portability scope', async () => {
+    const { applyPortabilityPolicy } = await import('../src/privacy/portabilityExport')
+    const data: FamilyData = {
+      schemaVersion: 3,
+      profiles: [
+        { id: 'F1', name: 'Allowed', requiresSecret: false, isActive: true, subjectPersonId: 'P1' },
+        { id: 'F2', name: 'Other family', requiresSecret: false, isActive: true, subjectPersonId: 'P2' },
+      ],
+      persons: [{ id: 'P1', profileId: 'F1', name: 'One' }, { id: 'P2', profileId: 'F2', name: 'Two' }],
+      relationships: [], media: [], settings: { timezone: 'Asia/Ho_Chi_Minh', locale: 'vi-VN' },
+    }
+    const result = applyPortabilityPolicy(data, { format: 'json', profileId: 'F1', personIds: new Set(['P1', 'P2']), fields: new Set(['shared']) })
+    expect(result.data.profiles.map((profile) => profile.id)).toEqual(['F1'])
+    expect(result.data.persons.map((person) => person.id)).toEqual(['P1'])
   })
 })

@@ -1,4 +1,4 @@
-import { clearOAuthStateCookie, sessionCookie, validateOAuthState } from '../_server/cookies.js'
+import { clearOAuthReturnCookie, clearOAuthStateCookie, readOAuthReturnPath, sessionCookie, validateOAuthState } from '../_server/cookies.js'
 import { googleOAuthEnv } from '../_server/env.js'
 import { AppError, apiError, requireMethod } from '../_server/http.js'
 import { exchangeCode } from '../_server/oauth.js'
@@ -32,9 +32,10 @@ export default {
       const repository = sessions()
       const session = await exchangeCode(code, repository)
       await repository.saveSession(session)
-      const headers = new Headers({ Location: `${appOrigin()}/`, 'Cache-Control': 'no-store' })
+      const headers = new Headers({ Location: `${appOrigin()}${readOAuthReturnPath(request)}`, 'Cache-Control': 'no-store' })
       headers.append('Set-Cookie', sessionCookie(session.id))
       headers.append('Set-Cookie', clearOAuthStateCookie())
+      headers.append('Set-Cookie', clearOAuthReturnCookie())
       return new Response(null, { status: 302, headers })
     } catch (error) { return failure(error, request) }
   },

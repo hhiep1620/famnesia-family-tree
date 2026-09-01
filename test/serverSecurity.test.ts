@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { createOAuthState, readCookie, SESSION_COOKIE, sessionCookie, validateOAuthState } from '../server/_server/cookies.js'
+import { createOAuthState, oauthReturnCookie, readCookie, readOAuthReturnPath, SESSION_COOKIE, sessionCookie, validateOAuthState } from '../server/_server/cookies.js'
 import { assertSameOrigin } from '../server/_server/http.js'
 import { collaborationApprovalEnabled, googlePickerEnv } from '../server/_server/env.js'
 import { sessions } from '../server/_server/sessionRepository.js'
@@ -36,6 +36,13 @@ describe('server security boundary', () => {
     const request = new Request('http://localhost/api/auth/callback', { headers: { cookie: state.cookie } })
     expect(validateOAuthState(request, state.state)).toBe(true)
     expect(validateOAuthState(request, `${state.state}forged`)).toBe(false)
+  })
+
+  it('preserves only same-origin OAuth return paths', () => {
+    const request = new Request('http://localhost/api/auth/callback', { headers: { cookie: oauthReturnCookie('/join/aB3cD4e5?from=home') } })
+    expect(readOAuthReturnPath(request)).toBe('/join/aB3cD4e5?from=home')
+    const attack = new Request('http://localhost/api/auth/callback', { headers: { cookie: oauthReturnCookie('//evil.example/steal') } })
+    expect(readOAuthReturnPath(attack)).toBe('/')
   })
 
   it('keeps sessions in the repository until their TTL expires', async () => {

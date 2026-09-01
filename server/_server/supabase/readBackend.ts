@@ -25,6 +25,7 @@ export function workspaceInfo(row: WorkspaceRow, role: WorkspaceRole): Workspace
   return {
     id: row.id,
     name: row.name,
+    joinCode: role === 'owner' ? row.join_code ?? undefined : undefined,
     role,
     canRead: true,
     canEdit: canCommitDirectly,

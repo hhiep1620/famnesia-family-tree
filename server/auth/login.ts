@@ -1,4 +1,4 @@
-import { createOAuthState } from '../_server/cookies.js'
+import { createOAuthState, oauthReturnCookie } from '../_server/cookies.js'
 import { authorizationUrl } from '../_server/oauth.js'
 import { requireMethod, withErrors } from '../_server/http.js'
 import { requireGoogleDriveAuthBackend } from '../_server/backendSelectors.js'
@@ -9,8 +9,12 @@ export default {
       requireMethod(request, ['GET'])
       requireGoogleDriveAuthBackend()
       const { state, cookie } = createOAuthState()
-      const reconnect = new URL(request.url).searchParams.get('reconnect') === '1'
-      return new Response(null, { status: 302, headers: { Location: authorizationUrl(state, reconnect), 'Set-Cookie': cookie, 'Cache-Control': 'no-store' } })
+      const url = new URL(request.url)
+      const reconnect = url.searchParams.get('reconnect') === '1'
+      const headers = new Headers({ Location: authorizationUrl(state, reconnect), 'Cache-Control': 'no-store' })
+      headers.append('Set-Cookie', cookie)
+      headers.append('Set-Cookie', oauthReturnCookie(url.searchParams.get('returnTo')))
+      return new Response(null, { status: 302, headers })
     })
   },
 }

@@ -8,7 +8,6 @@ import type { RequestBackend } from '../backendContracts.js'
 import type { BackendSelection } from '../backendSelectors.js'
 import { AppError } from '../http.js'
 import { createSupabaseUserClient } from './serverClient.js'
-import { SupabaseMediaRepository } from './mediaBackend.js'
 import { SupabaseReadRepository } from './readBackend.js'
 import { SupabaseCollaborationRepository } from './collaborationBackend.js'
 import type { FamilyData } from '../../../src/types/family.js'
@@ -161,10 +160,16 @@ export class SupabaseWriteRepository extends SupabaseReadRepository {
 export function createSupabaseWriteRequestBackend(auth: AuthContext, selection: BackendSelection): RequestBackend {
   const client = createSupabaseUserClient(auth.accessToken)
   const repository = new SupabaseWriteRepository(client, auth.user.id)
-  const media = new SupabaseMediaRepository(client)
   const collaboration = new SupabaseCollaborationRepository(client, auth.user, repository)
   const workspace = (workspaceId: string) => repository.getWorkspace(workspaceId)
   const unsupported = (operation: string): never => { throw new AppError(501, 'SUPABASE_WRITE_NOT_ENABLED', `${operation} is not enabled in the Supabase metadata-write phase.`) }
+  const encryptedRuntimeRequired = (): never => {
+    throw new AppError(
+      423,
+      'ENCRYPTED_FAMILY_RUNTIME_REQUIRED',
+      'Dữ liệu gia đình đang được khóa an toàn. Preview không đọc hoặc ghi đường plaintext legacy; hãy hoàn tất mở khóa mã hóa trên thiết bị.',
+    )
+  }
   return {
     selection,
     user: auth.user,
@@ -176,21 +181,17 @@ export function createSupabaseWriteRequestBackend(auth: AuthContext, selection: 
       acceptInvitation: (token) => collaboration.acceptInvitation(token),
     },
     family: {
-      load: (workspaceId) => repository.loadFamily(workspaceId),
-      save: (workspaceId, data, expected, mode = 'save') => repository.replaceFamily(workspaceId, data, expected, mode),
-      async commit(workspaceId, request) {
-        const result = await repository.commitFamily(workspaceId, request)
-        await media.cleanupQueued(workspaceId).catch((error) => console.error({ name: 'SupabaseMediaCleanupDeferred', workspaceId, error: error instanceof Error ? error.message : String(error) }))
-        return result
-      },
-      commitStatus: (workspaceId, commitId) => repository.commitStatus(workspaceId, commitId),
-      listActivity: (workspaceId) => repository.listActivity(workspaceId),
+      load: async () => encryptedRuntimeRequired(),
+      save: async () => encryptedRuntimeRequired(),
+      commit: async () => encryptedRuntimeRequired(),
+      commitStatus: async () => encryptedRuntimeRequired(),
+      listActivity: async () => encryptedRuntimeRequired(),
       recordActivity: async () => unsupported('Standalone activity write'),
     },
     media: {
-      upload: (workspaceId, file, _filename, profileId, personId, thumbnail) => media.upload(workspaceId, file, profileId, personId, thumbnail),
-      read: (workspaceId, mediaId, variant) => media.read(workspaceId, mediaId, variant),
-      delete: (workspaceId, mediaId) => media.delete(workspaceId, mediaId),
+      upload: async () => encryptedRuntimeRequired(),
+      read: async () => encryptedRuntimeRequired(),
+      delete: async () => encryptedRuntimeRequired(),
     },
     members: {
       list: (workspaceId) => collaboration.listMembers(workspaceId),
@@ -199,9 +200,9 @@ export function createSupabaseWriteRequestBackend(auth: AuthContext, selection: 
       remove: (workspaceId, memberId) => collaboration.removeMember(workspaceId, memberId),
     },
     backups: {
-      create: (workspaceId, _data, reason = 'manual') => repository.createBackup(workspaceId, reason),
-      list: (workspaceId) => repository.listBackups(workspaceId),
-      load: (workspaceId, backupId) => repository.loadBackup(workspaceId, backupId),
+      create: async () => encryptedRuntimeRequired(),
+      list: async () => encryptedRuntimeRequired(),
+      load: async () => encryptedRuntimeRequired(),
     },
   }
 }

@@ -2,7 +2,8 @@ import dagre from '@dagrejs/dagre'
 import type { Edge, Node } from '@xyflow/react'
 import type { FamilyGraph, FamilyUnit, Person } from '../types/family'
 import type { FamilyEventType, KinshipResult } from '../types/family'
-import { calculateAge } from '../calendar/dateUtils'
+import { todayInFamilyTimezone } from '../calendar/dateUtils'
+import { ageFromPartialDate, personBirthDate } from '../calendar/partialDate'
 import { SPOUSE_STATUS_LABELS } from '../kinship/kinshipRules'
 import { describeGeneration, formatGenerationLabel } from '../generation/generationLabels'
 
@@ -69,8 +70,9 @@ function generationFromSubject(personId: string, options?: SubjectLayoutOptions)
 }
 
 function getLifeLabel(person: Person): string | undefined {
-  if (person.isDeceased) return `${person.birthDate?.slice(0, 4) ?? '?'} – ${person.deathDate?.slice(0, 4) ?? '?'}`
-  const age = calculateAge(person.birthDate ?? undefined)
+  const birth = personBirthDate(person)
+  if (person.isDeceased) return `${birth?.year ?? '?'} – ${person.deathDate?.slice(0, 4) ?? '?'}`
+  const age = ageFromPartialDate(birth, todayInFamilyTimezone())
   return age === undefined ? undefined : `${age} tuổi`
 }
 

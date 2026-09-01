@@ -24,7 +24,10 @@ export interface AuthRepositoryContract {
 export const googleDriveAuthRepository: AuthRepositoryContract = {
   backend: 'google-drive-oauth',
   getSession: authApi.getSession,
-  async signIn() { window.location.assign('/api/auth/login') },
+  async signIn() {
+    const returnTo = `${window.location.pathname}${window.location.search}`
+    window.location.assign(`/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`)
+  },
   async signOut() { await authApi.logout() },
   reconnect: authApi.reconnect,
   refreshSession: authApi.getSession,
@@ -36,11 +39,25 @@ export function createSupabaseAuthRepository(
   origin: () => string = () => window.location.origin,
 ): AuthRepositoryContract {
   let refreshFlight: ReturnType<typeof client.auth.refreshSession> | undefined
+  const RETURN_TO_KEY = 'famnesia:auth:returnTo'
+  const captureReturnTo = () => {
+    if (typeof window === 'undefined') return
+    const path = `${window.location.pathname}${window.location.search}`
+    if (path.startsWith('/join/')) window.sessionStorage.setItem(RETURN_TO_KEY, path)
+  }
+  const restoreReturnTo = () => {
+    if (typeof window === 'undefined') return
+    const path = window.sessionStorage.getItem(RETURN_TO_KEY)
+    if (!path?.startsWith('/join/') || path.startsWith('//')) return
+    window.sessionStorage.removeItem(RETURN_TO_KEY)
+    window.history.replaceState({}, '', path)
+  }
   const refreshLocalSession = () => {
     refreshFlight ??= client.auth.refreshSession().finally(() => { refreshFlight = undefined })
     return refreshFlight
   }
   const startGoogleSignIn = async () => {
+    captureReturnTo()
     const { error } = await client.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: origin(), scopes: 'openid email profile' },
@@ -61,13 +78,19 @@ export function createSupabaseAuthRepository(
     }
     if (error || !data.session) throw new ApiError(401, 'AUTH_REQUIRED', 'Bạn chưa đăng nhập.')
     installTokenProvider()
-    try { return await authApi.getSession() }
+    try {
+      const session = await authApi.getSession()
+      restoreReturnTo()
+      return session
+    }
     catch (caught) {
       if (!(caught instanceof ApiError) || caught.status !== 401) throw caught
       const refreshed = await refreshLocalSession()
       if (refreshed.error || !refreshed.data.session) throw caught
       installTokenProvider()
-      return authApi.getSession()
+      const session = await authApi.getSession()
+      restoreReturnTo()
+      return session
     }
   }
   return {

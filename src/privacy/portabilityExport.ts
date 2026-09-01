@@ -84,12 +84,13 @@ function cleanPerson(person: Person, fields: ReadonlySet<PortabilityField>, pers
 
 export function applyPortabilityPolicy(data: FamilyData, options: {
   format: PortabilityFormat
+  profileId?: string
   personIds: ReadonlySet<string>
   fields: ReadonlySet<PortabilityField>
   livingPolicy?: 'omit'
   decryptableContactPersonIds?: ReadonlySet<string>
 }): { data: FamilyData; report: PortabilityScopeReport } {
-  const allowedPeople = new Set(data.persons.filter((person) => options.personIds.has(person.id)).map((person) => person.id))
+  const allowedPeople = new Set(data.persons.filter((person) => options.personIds.has(person.id) && (!options.profileId || person.profileId === options.profileId)).map((person) => person.id))
   const decryptable = options.decryptableContactPersonIds ?? allowedPeople
   const omittedPersonIds = data.persons.filter((person) => !allowedPeople.has(person.id)).map((person) => person.id)
   const omittedFields: PortabilityScopeReport['omittedFields'] = []
@@ -109,7 +110,9 @@ export function applyPortabilityPolicy(data: FamilyData, options: {
     return scoped
   })
   const personIds = new Set(persons.map((person) => person.id))
-  const profiles = data.profiles.map((profile) => ({ ...profile, subjectPersonId: personIds.has(profile.subjectPersonId ?? '') ? profile.subjectPersonId : null }))
+  const includedProfileIds = new Set(persons.map((person) => person.profileId).filter((value): value is string => Boolean(value)))
+  const profiles = data.profiles.filter((profile) => includedProfileIds.has(profile.id) && (!options.profileId || profile.id === options.profileId))
+    .map((profile) => ({ ...profile, subjectPersonId: personIds.has(profile.subjectPersonId ?? '') ? profile.subjectPersonId : null }))
   return {
     data: { ...data, profiles, persons, relationships: data.relationships.filter((r) => personIds.has(r.person1Id) && personIds.has(r.person2Id)), media: [] },
     report: { format: options.format, includedPersonIds: [...personIds].sort(), omittedPersonIds, omittedFields, mediaOmitted: data.media.length },

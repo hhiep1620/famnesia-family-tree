@@ -19,6 +19,13 @@ const CalendarDateSchema = z.string().refine(isCalendarDate, 'Ngày phải đún
 const IsoDateTimeSchema = z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'Thời gian ISO không hợp lệ.')
 const OptionalDateSchema = z.union([CalendarDateSchema, z.null()]).optional()
 const OptionalTextSchema = z.union([z.string(), z.null()]).optional()
+const PartialDateSchema = z.discriminatedUnion('precision', [
+  z.object({ year: z.number().int().min(1).max(9999), precision: z.literal('year') }).strict(),
+  z.object({ year: z.number().int().min(1).max(9999), month: z.number().int().min(1).max(12), precision: z.literal('month') }).strict(),
+  z.object({
+    year: z.number().int().min(1).max(9999), month: z.number().int().min(1).max(12), day: z.number().int().min(1).max(31), precision: z.literal('day'),
+  }).strict().refine((value) => isCalendarDate(`${String(value.year).padStart(4, '0')}-${String(value.month).padStart(2, '0')}-${String(value.day).padStart(2, '0')}`), 'Ngày không tồn tại.'),
+])
 
 export const ProfileSchema = z.object({
   id: z.string().trim().min(1, 'Profile ID không được để trống.'),
@@ -44,6 +51,7 @@ export const PersonSchema = z.object({
   nickname: OptionalTextSchema,
   gender: z.enum(GENDERS).default('unknown'),
   birthDate: OptionalDateSchema,
+  birthDateParts: z.union([PartialDateSchema, z.null()]).optional(),
   isDeceased: z.boolean().default(false),
   deathDate: OptionalDateSchema,
   deathLunar: z.union([DeathLunarSchema, z.null()]).optional(),
@@ -149,6 +157,12 @@ export const FamilyDataSchema = z.object({
   data.persons.forEach((person, index) => {
     if (!profiles.has(person.profileId ?? '')) {
       context.addIssue({ code: 'custom', path: ['persons', index, 'profileId'], message: `Không tìm thấy profile '${person.profileId}'.` })
+    }
+    if (person.birthDateParts?.precision === 'day') {
+      const canonical = `${String(person.birthDateParts.year).padStart(4, '0')}-${String(person.birthDateParts.month).padStart(2, '0')}-${String(person.birthDateParts.day).padStart(2, '0')}`
+      if (person.birthDate && person.birthDate !== canonical) context.addIssue({ code: 'custom', path: ['persons', index, 'birthDate'], message: 'Ngày sinh đầy đủ và partial-date không khớp nhau.' })
+    } else if (person.birthDateParts && person.birthDate) {
+      context.addIssue({ code: 'custom', path: ['persons', index, 'birthDate'], message: 'Không được lưu ngày đầy đủ khi chỉ biết năm hoặc tháng sinh.' })
     }
   })
   data.profiles.forEach((profile, index) => {
@@ -286,7 +300,10 @@ export function normalizePersonForStorage(person: Person): Person {
   return {
     ...person,
     nickname: person.nickname || null,
-    birthDate: person.birthDate || null,
+    birthDate: person.birthDateParts && person.birthDateParts.precision !== 'day' ? null : person.birthDate || null,
+    birthDateParts: person.birthDateParts ?? (person.birthDate ? {
+      year: Number(person.birthDate.slice(0, 4)), month: Number(person.birthDate.slice(5, 7)), day: Number(person.birthDate.slice(8, 10)), precision: 'day' as const,
+    } : null),
     deathDate: person.deathDate || null,
     deathLunar: person.deathLunar ?? null,
     phone1: person.phone1?.trim() ?? '',

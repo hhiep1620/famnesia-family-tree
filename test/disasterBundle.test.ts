@@ -12,9 +12,11 @@ describe('CR-10 encrypted disaster bundle', () => {
   })
 
   it('requires ciphertext-only manifest and rejects raw-key-shaped bundles', () => {
-    const manifest = createDisasterBundleManifest({ workspaceId: 'W1', createdAt: '2026-09-01T00:00:00Z', schemaVersion: 3, dataVersion: 4, keyEpoch: 2, principalIds: ['cp_b', 'cp_a'], mediaIds: ['M2', 'M1'] })
-    expect(manifest).toMatchObject({ format: 'famnesia-encrypted-disaster-bundle', ciphertextOnly: true, principalIds: ['cp_a', 'cp_b'], mediaIds: ['M1', 'M2'] })
-    expect(() => validateDisasterBundle({ manifest, encryptedFamilyCiphertext: 'ciphertext', media: [], trustCheckpoint: {} })).not.toThrow()
-    expect(() => validateDisasterBundle({ manifest: { ...manifest, ciphertextOnly: false }, encryptedFamilyCiphertext: 'raw-key', media: [], trustCheckpoint: {} })).toThrow('INVALID_DISASTER_BUNDLE')
+    const manifest = createDisasterBundleManifest({ workspaceId: 'W1', createdAt: '2026-09-01T00:00:00Z', schemaVersion: 3, dataVersion: 4, keyEpoch: 2, principalIds: ['cp_b', 'cp_a'], mediaIds: [] })
+    expect(manifest).toMatchObject({ format: 'famnesia-encrypted-disaster-bundle', ciphertextOnly: true, principalIds: ['cp_a', 'cp_b'], mediaIds: [] })
+    const valid = { manifest, encryptedFamilyCiphertext: 'A'.repeat(22), media: [], trustCheckpoint: { checkpointHash: 'opaque' } }
+    expect(() => validateDisasterBundle(valid)).not.toThrow()
+    expect(() => validateDisasterBundle({ ...valid, rawWorkspaceKey: 'plaintext-secret' })).toThrow('INVALID_DISASTER_BUNDLE')
+    expect(() => validateDisasterBundle({ ...valid, manifest: { ...manifest, ciphertextOnly: false } })).toThrow('INVALID_DISASTER_BUNDLE')
   })
 })

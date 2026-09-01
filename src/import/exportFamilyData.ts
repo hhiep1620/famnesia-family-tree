@@ -1,6 +1,5 @@
 import { CURRENT_SCHEMA_VERSION, normalizePersonForStorage, requireValidFamilyData } from '../schema/familyDataSchema.js'
 import type { FamilyData } from '../types/family.js'
-import { serializeGedcom } from './gedcom.js'
 
 export function prepareFamilyDataForExport(data: FamilyData, updatedAt = data.updatedAt ?? new Date().toISOString()): FamilyData {
   return requireValidFamilyData({
@@ -110,12 +109,13 @@ export async function downloadFamilyDataExcelTemplate(): Promise<void> {
   downloadFamilyWorkbook(createFamilyDataTemplate(), `famnesia-template-v${CURRENT_SCHEMA_VERSION}.xlsx`)
 }
 
-export function serializeFamilyDataGedcom(data: FamilyData): string {
-  return `${serializeGedcom(prepareFamilyDataForExport(data))}`
+export async function serializeFamilyDataGedcom(data: FamilyData): Promise<string> {
+  const { serializeGedcom } = await import('./gedcom.js')
+  return serializeGedcom(prepareFamilyDataForExport(data))
 }
 
-export function downloadFamilyDataGedcom(data: FamilyData): void {
+export async function downloadFamilyDataGedcom(data: FamilyData): Promise<void> {
   const date = new Date().toISOString().slice(0, 10)
-  const url = URL.createObjectURL(new Blob([serializeFamilyDataGedcom(data)], { type: 'text/plain;charset=utf-8' }))
+  const url = URL.createObjectURL(new Blob([await serializeFamilyDataGedcom(data)], { type: 'text/plain;charset=utf-8' }))
   const link = document.createElement('a'); link.href = url; link.download = `famnesia-${date}.ged`; document.body.append(link); link.click(); link.remove(); URL.revokeObjectURL(url)
 }

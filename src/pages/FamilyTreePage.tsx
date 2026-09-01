@@ -1,10 +1,9 @@
 import { AlertTriangle, CakeSlice, Flower2, Plus, RefreshCw } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { getUpcomingFamilyEvents } from '../calendar/familyCalendar'
 import { FamilyCalendar } from '../components/calendar/FamilyCalendar'
 import { FamilyAnalytics } from '../components/analytics/FamilyAnalytics'
 import { CreateProfileModal } from '../components/data/CreateProfileModal'
-import { DataManagement } from '../components/data/DataManagement'
 import { StartFamilyTree } from '../components/data/StartFamilyTree'
 import { DraftWorkspaceControls } from '../components/draft/DraftWorkspaceControls'
 import { PersonDetails } from '../components/family/PersonDetails'
@@ -19,6 +18,8 @@ import { getAllKinships } from '../kinship/kinshipEngine'
 import { classifyAllRelativeScopes } from '../lineage/lineageClassifier'
 import { getMaleSurnameSuggestions } from '../family/profileLineage'
 import type { FamilyEventType, FriendlyRelationship, GoogleUser } from '../types/family'
+
+const DataManagement = lazy(() => import('../components/data/DataManagement').then((module) => ({ default: module.DataManagement })))
 
 interface Props { user?: GoogleUser; onSignOut?: () => void }
 type ModalState = { type: 'add' } | { type: 'relative'; kind: FriendlyRelationship } | { type: 'edit' } | undefined
@@ -77,7 +78,7 @@ export function FamilyTreePage({ user, onSignOut }: Props) {
         : data.needsWorkspace ? <div className="center-state empty-state workspace-create-state"><span className="seed-mark">+</span><span className="eyebrow">Workspace Supabase</span><h2>Tạo gia đình đầu tiên</h2><p>Bạn chưa tham gia workspace nào. Tạo một workspace mới, hoặc mở đúng link mời do owner gửi.</p><label><span>Tên workspace</span><input value={workspaceName} maxLength={120} onChange={(event) => setWorkspaceName(event.target.value)} /></label><button className="primary-button" disabled={!workspaceName.trim() || Boolean(data.busy)} onClick={() => void data.createWorkspace(workspaceName)}><Plus size={17} /> Tạo workspace</button></div>
         : data.error && !data.familyData.updatedAt ? <div className="center-state error-state"><AlertTriangle /><h2>Không thể tải gia phả</h2><p>{data.error}</p><button className="secondary-button" onClick={() => void data.refresh()}><RefreshCw size={16} /> Thử lại</button></div>
           : explorerId ? <RelativeExplorer targetId={explorerId} graph={graph} media={data.media} workspaceId={data.workspace?.id} onClose={() => setExplorerId(undefined)} onOpenPerson={setExplorerId} onViewFullTree={openFamilyBranch} />
-          : view === 'data' ? <DataManagement data={data.familyData} workspace={data.workspace} mock={data.useMockData} busy={data.busy} saveStatus={data.saveStatus} openImportOnMount={openImportOnMount} onImportOpened={() => setOpenImportOnMount(false)} onCreateProfile={() => setProfileModal('create')} onImport={(replacement) => data.replaceAllData(replacement)} onBackup={() => data.backupNow()} onListBackups={data.listBackups} onRestore={data.restoreBackup} members={data.members} activity={data.activity} onRefreshMembers={data.refreshMembers} onAddMember={data.addMember} onUpdateMember={data.updateMember} onRemoveMember={data.removeMember} onOpenPerson={setSelectedId} onSuppressDuplicate={data.suppressDuplicate} onMergePeople={data.mergeDuplicatePeople} onConnectSharedWorkspace={data.connectSharedWorkspace} />
+          : view === 'data' ? <Suspense fallback={<div className="center-state"><span className="archive-loader" /><h2>Đang tải quản lý dữ liệu</h2></div>}><DataManagement data={data.familyData} workspace={data.workspace} mock={data.useMockData} busy={data.busy} saveStatus={data.saveStatus} openImportOnMount={openImportOnMount} onImportOpened={() => setOpenImportOnMount(false)} onCreateProfile={() => setProfileModal('create')} onImport={(replacement) => data.replaceAllData(replacement)} onBackup={() => data.backupNow()} onListBackups={data.listBackups} onRestore={data.restoreBackup} members={data.members} activity={data.activity} onRefreshMembers={data.refreshMembers} onAddMember={data.addMember} onUpdateMember={data.updateMember} onRemoveMember={data.removeMember} onOpenPerson={setSelectedId} onSuppressDuplicate={data.suppressDuplicate} onMergePeople={data.mergeDuplicatePeople} onConnectSharedWorkspace={data.connectSharedWorkspace} /></Suspense>
             : data.profiles.length === 0 ? canEdit ? <StartFamilyTree onCreate={() => setProfileModal('create')} onImport={canReplaceData ? openImport : undefined} onDownloadTemplate={downloadFamilyDataTemplate} sharedWorkspaceMode={data.useMockData ? undefined : data.workspace?.rootFolderUrl ? 'drive' : 'invite'} onConnectSharedWorkspace={data.workspace?.rootFolderUrl ? data.connectSharedWorkspace : undefined} /> : <div className="center-state empty-state"><h2>Workspace chưa có dữ liệu</h2><p>Bạn có quyền xem. Hãy nhờ owner hoặc editor bổ sung gia đình.</p></div>
               : data.persons.length ? view === 'tree' ? <>
                 <div className="tree-filter-bar"><span>Đánh dấu trong 30 ngày:</span><button className={treeFilter === 'all' ? 'active' : ''} onClick={() => setTreeFilter('all')}>Tất cả</button><button className={treeFilter === 'birthday' ? 'active' : ''} onClick={() => setTreeFilter('birthday')}><CakeSlice size={14} /> Sinh nhật</button><button className={treeFilter === 'death_anniversary' ? 'active' : ''} onClick={() => setTreeFilter('death_anniversary')}><Flower2 size={14} /> Ngày giỗ</button></div>

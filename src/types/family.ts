@@ -140,6 +140,7 @@ export interface PersonDraft {
   nickname?: string
   gender: Gender
   birthDate?: string
+  birthDateParts?: Person['birthDateParts']
   birthDateConfidence?: FactConfidence
   isDeceased: boolean
   deathDate?: string
@@ -161,6 +162,8 @@ export type WorkspaceRole = 'owner' | 'editor' | 'viewer'
 export interface WorkspaceInfo {
   id: string
   name: string
+  /** Non-authorizing routing code, returned only to the workspace owner. */
+  joinCode?: string
   role: WorkspaceRole
   canRead: boolean
   canEdit: boolean

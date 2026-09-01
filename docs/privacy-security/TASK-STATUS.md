@@ -30,7 +30,7 @@
 ## Product CRs
 
 - [x] CR-12 — Public homepage, five core values and truthful feature list; local implementation/evidence complete; Preview E2E/Lighthouse pending.
-- [x] CR-13 — Family creation wizard and unique 8-character join code; join-code schema/contract local complete; owner approval/join E2E pending.
+- [x] CR-13 — Family creation, unique join code, authenticated request and owner approve/reject workflow; local RPC/RLS tests complete; Preview two-account E2E pending.
 - [ ] CR-14 — Family dashboard with list/tree/mindmap/bubble views — Observation: state contract added, full two remaining canvas views and performance evidence pending.
 - [x] CR-15 — Relationship-aware person entry and partial-date API; local contract/tests complete; full encrypted atomic form flow pending Preview verification.
 - [x] CR-16 — Persons-only Excel staging/normalization contract; local tests complete; merge transaction/browser verification pending.
@@ -39,7 +39,7 @@ Mỗi CR giao diện/tính năng mới tiếp theo vẫn phải khai báo data c
 
 ## Current blocker / next action
 
-- CR-10 implemented locally; Preview/browser and every real-data/Production action remain separate gates. CR-11 remains Observation/gated because explicit Production authorization, independent review and real-data evidence are absent.
+- Release-blocker remediation on the current branch fail-closes Supabase family/media/backup/activity and plaintext IndexedDB Draft paths, repairs join return-to/approval, disaster-bundle validation, portability profile scope, GEDCOM round-trip and partial-date storage. Preview/browser verification remains; CR-11 stays Observation because no Production authorization, independent review or real-data purge evidence exists.
 
 ## Update rule
 

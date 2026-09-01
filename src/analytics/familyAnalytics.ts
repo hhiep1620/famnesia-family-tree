@@ -1,4 +1,5 @@
-import { calculateAge } from '../calendar/dateUtils'
+import { todayInFamilyTimezone } from '../calendar/dateUtils'
+import { ageFromPartialDate, personBirthDate } from '../calendar/partialDate'
 import { calculateAllGenerations } from '../generation/generationEngine'
 import { buildFamilyGraph } from '../graph/familyGraph'
 import { classifyRelativeScope } from '../lineage/lineageClassifier'
@@ -26,7 +27,7 @@ export function calculateFamilyAnalytics(data: FamilyData, subjectId: string | u
   const locationMap = new Map<string, number>()
   for (const person of people) {
     gender[person.gender ?? 'unknown'] += 1
-    const years = calculateAge(person.birthDate ?? undefined)
+    const years = ageFromPartialDate(personBirthDate(person), todayInFamilyTimezone())
     const band = years === undefined || years < 0 ? 'Không rõ' : years >= 80 ? '80+' : `${Math.floor(years / 10) * 10}–${Math.floor(years / 10) * 10 + 9}`
     age[band] += 1
     const location = person.address?.split(',').at(-1)?.trim() || 'Không rõ'
