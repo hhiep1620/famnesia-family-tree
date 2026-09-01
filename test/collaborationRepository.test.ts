@@ -15,7 +15,7 @@ function summary(workspaceId: string, id: string, authorId: string, updatedAt: s
 
 describe('collaboration repository workflow metadata', () => {
   it('keeps one active draft pointer per author and clears it at a terminal status', async () => {
-    const { collaboration } = await import('../api/_server/collaborationRepository')
+    const { collaboration } = await import('../server/_server/collaborationRepository')
     const repository = collaboration()
     const workspaceId = `workspace-${crypto.randomUUID()}`
     const draft = summary(workspaceId, 'draft-1', 'author-1', '2026-08-14T00:00:00.000Z')
@@ -29,7 +29,7 @@ describe('collaboration repository workflow metadata', () => {
   })
 
   it('tracks mirror generation and returns drafts newest first', async () => {
-    const { collaboration } = await import('../api/_server/collaborationRepository')
+    const { collaboration } = await import('../server/_server/collaborationRepository')
     const repository = collaboration()
     const workspaceId = `workspace-${crypto.randomUUID()}`
     await repository.saveDraft(summary(workspaceId, 'older', 'author-a', '2026-08-14T00:00:00.000Z'))
@@ -42,7 +42,7 @@ describe('collaboration repository workflow metadata', () => {
   })
 
   it('serializes submit and review for the same contributor', async () => {
-    const { collaboration } = await import('../api/_server/collaborationRepository')
+    const { collaboration } = await import('../server/_server/collaborationRepository')
     const repository = collaboration()
     const workspaceId = `workspace-${crypto.randomUUID()}`
     const first = await repository.acquireAuthorWorkflowLock(workspaceId, 'author-lock')
@@ -55,7 +55,7 @@ describe('collaboration repository workflow metadata', () => {
   })
 
   it('does not clear a newer active-draft pointer while deleting terminal history', async () => {
-    const { collaboration } = await import('../api/_server/collaborationRepository')
+    const { collaboration } = await import('../server/_server/collaborationRepository')
     const repository = collaboration()
     const workspaceId = `workspace-${crypto.randomUUID()}`
     const old = summary(workspaceId, 'old-terminal', 'same-author', '2026-08-12T00:00:00.000Z')

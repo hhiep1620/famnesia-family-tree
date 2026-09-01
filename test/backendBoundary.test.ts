@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { createDriveRequestBackend } from '../api/_server/driveBackend.js'
-import { parseBackendSelection, requireDrivePersistenceBackends, requireGoogleDriveAuthBackend } from '../api/_server/backendSelectors.js'
-import { requestBackend } from '../api/_server/requestBackend.js'
-import type { AuthContext } from '../api/_server/auth.js'
+import { createDriveRequestBackend } from '../server/_server/driveBackend.js'
+import { parseBackendSelection, requireDrivePersistenceBackends, requireGoogleDriveAuthBackend } from '../server/_server/backendSelectors.js'
+import { requestBackend } from '../server/_server/requestBackend.js'
+import type { AuthContext } from '../server/_server/auth.js'
 
 const driveSelection = { data: 'drive', auth: 'google-drive-oauth', media: 'drive' } as const
 

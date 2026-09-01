@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { deriveCollaborationAccess } from '../api/_server/collaborationAccess'
-import type { WorkspaceAccess } from '../api/_server/types'
+import { deriveCollaborationAccess } from '../server/_server/collaborationAccess'
+import type { WorkspaceAccess } from '../server/_server/types'
 
 function base(overrides: Partial<WorkspaceAccess> = {}): WorkspaceAccess {
   return {

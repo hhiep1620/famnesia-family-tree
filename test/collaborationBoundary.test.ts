@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 describe('CR-08 trusted collaboration boundary', () => {
   it('registers editor delegation only after owner identity and ECDSA verification', () => {
-    const source = readFileSync(new URL('../api/workspaces/[workspaceId]/editor-delegation.ts', import.meta.url), 'utf8')
+    const source = readFileSync(new URL('../server/workspaces/[workspaceId]/editor-delegation.ts', import.meta.url), 'utf8')
     expect(source).toMatch(/requireAuth\(request\)/u)
     expect(source).toMatch(/workspace\.owner_user_id !== auth\.user\.id/u)
     expect(source).toMatch(/verifyEditorDelegation\(artifact, ownerPublicKey/u)
@@ -11,7 +11,7 @@ describe('CR-08 trusted collaboration boundary', () => {
   })
 
   it('recomputes the encrypted request checksum before registering the signed checkpoint', () => {
-    const source = readFileSync(new URL('../api/workspaces/[workspaceId]/checkpoint-intent.ts', import.meta.url), 'utf8')
+    const source = readFileSync(new URL('../server/workspaces/[workspaceId]/checkpoint-intent.ts', import.meta.url), 'utf8')
     expect(source).toMatch(/parseEncryptedCommitRequest\(body\.request\)/u)
     expect(source).toMatch(/requestChecksum\(unsignedRequest\) !== suppliedChecksum/u)
     expect(source).toMatch(/verifyCheckpointIntent\(artifact, actorPublicKey/u)

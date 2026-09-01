@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { mapFamilyDataToSupabaseRows, mapSupabaseRowsToFamilyData, type SupabaseFamilyRows } from '../api/_server/supabase/familyMapper.js'
-import { workspaceInfo } from '../api/_server/supabase/readBackend.js'
+import { mapFamilyDataToSupabaseRows, mapSupabaseRowsToFamilyData, type SupabaseFamilyRows } from '../server/_server/supabase/familyMapper.js'
+import { workspaceInfo } from '../server/_server/supabase/readBackend.js'
 import { requireValidFamilyData } from '../src/schema/familyDataSchema.js'
 import type { FamilyData } from '../src/types/family.js'
 

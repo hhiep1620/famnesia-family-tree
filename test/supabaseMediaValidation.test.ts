@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { MEDIA_MAX_BYTES, MEDIA_THUMB_MAX_BYTES, validateImageBlob } from '../api/_server/supabase/mediaBackend.js'
-import { ApiError } from '../api/_server/http.js'
+import { MEDIA_MAX_BYTES, MEDIA_THUMB_MAX_BYTES, validateImageBlob } from '../server/_server/supabase/mediaBackend.js'
+import { ApiError } from '../server/_server/http.js'
 
 const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0])
 const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 0, 1])

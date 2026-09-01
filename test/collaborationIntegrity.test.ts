@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assetsForOperations, draftAssetIds, draftPayloadHash, draftReviewRequestProblem } from '../api/_server/collaborationIntegrity'
+import { assetsForOperations, draftAssetIds, draftPayloadHash, draftReviewRequestProblem } from '../server/_server/collaborationIntegrity'
 import type { SubmittedFamilyDraft } from '../src/types/collaboration'
 import type { FamilyOperation } from '../src/types/familyOperations'
 

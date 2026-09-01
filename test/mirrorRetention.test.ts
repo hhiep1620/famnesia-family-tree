@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { expiredMirrorHistoryFileIds, MIRROR_SNAPSHOT_LIMIT } from '../api/_server/mirror'
+import { expiredMirrorHistoryFileIds, MIRROR_SNAPSHOT_LIMIT } from '../server/_server/mirror'
 
 describe('Drive mirror snapshot retention', () => {
   it('keeps the newest 20 JSON/manifest snapshot pairs', () => {

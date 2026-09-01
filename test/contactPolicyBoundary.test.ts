@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 describe('CR-07 trusted contact policy boundary', () => {
   it('authenticates the signer, verifies the ECDSA artifact and uses only the admin verifier for registration', () => {
-    const source = readFileSync(new URL('../api/workspaces/[workspaceId]/contact-policy.ts', import.meta.url), 'utf8')
+    const source = readFileSync(new URL('../server/workspaces/[workspaceId]/contact-policy.ts', import.meta.url), 'utf8')
     expect(source).toMatch(/requireAuth\(request\)/u)
     expect(source).toMatch(/principal\.auth_user_id !== auth\.user\.id/u)
     expect(source).toMatch(/verifyContactPolicy\(artifact, publicKey/u)
@@ -19,7 +19,7 @@ describe('CR-07 trusted contact policy boundary', () => {
   })
 
   it('verifies edit scope on a separate authenticated policy-principal endpoint', () => {
-    const source = readFileSync(new URL('../api/workspaces/[workspaceId]/contact-authorization.ts', import.meta.url), 'utf8')
+    const source = readFileSync(new URL('../server/workspaces/[workspaceId]/contact-authorization.ts', import.meta.url), 'utf8')
     expect(source).toMatch(/verifyContactEditAuthorization/u)
     expect(source).toMatch(/signer\.auth_user_id !== auth\.user\.id/u)
     expect(source).toMatch(/policy\.policy_principal_id/u)

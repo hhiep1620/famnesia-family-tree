@@ -3,6 +3,7 @@
   "framework": "vite",
   "rewrites": [
     { "source": "/api/workspaces/:workspaceId/family/commit", "destination": "/api/workspaces/:workspaceId/family?operation=commit" },
+    { "source": "/api/:path*", "destination": "/api" },
     { "source": "/((?!api(?:/|$)|@|src(?:/|$)|node_modules(?:/|$)).*)", "destination": "/index.html" }
   ]
 }

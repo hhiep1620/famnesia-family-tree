@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseSupabasePublicConfiguration, parseSupabaseServerConfiguration, supabaseConfigurationStatus } from '../src/config/supabaseEnvironment.js'
-import { createSupabaseAdminClient } from '../api/_server/supabase/adminClient.js'
-import { createSupabaseUserClient } from '../api/_server/supabase/serverClient.js'
+import { createSupabaseAdminClient } from '../server/_server/supabase/adminClient.js'
+import { createSupabaseUserClient } from '../server/_server/supabase/serverClient.js'
 
 const publishable = `sb_publishable_${'p'.repeat(24)}`
 const secret = `sb_secret_${'s'.repeat(24)}`

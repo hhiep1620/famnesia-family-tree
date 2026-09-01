@@ -1,10 +1,10 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { createOAuthState, readCookie, SESSION_COOKIE, sessionCookie, validateOAuthState } from '../api/_server/cookies.js'
-import { assertSameOrigin } from '../api/_server/http.js'
-import { collaborationApprovalEnabled, googlePickerEnv } from '../api/_server/env.js'
-import { sessions } from '../api/_server/sessionRepository.js'
-import { decryptToken, encryptToken } from '../api/_server/tokenEncryption.js'
-import type { AuthSession } from '../api/_server/types.js'
+import { createOAuthState, readCookie, SESSION_COOKIE, sessionCookie, validateOAuthState } from '../server/_server/cookies.js'
+import { assertSameOrigin } from '../server/_server/http.js'
+import { collaborationApprovalEnabled, googlePickerEnv } from '../server/_server/env.js'
+import { sessions } from '../server/_server/sessionRepository.js'
+import { decryptToken, encryptToken } from '../server/_server/tokenEncryption.js'
+import type { AuthSession } from '../server/_server/types.js'
 
 beforeAll(() => {
   process.env.SESSION_SECRET = 'test-session-secret-with-at-least-32-characters'
