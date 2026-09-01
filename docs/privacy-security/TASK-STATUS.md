@@ -29,11 +29,11 @@
 
 ## Product CRs
 
-- [ ] CR-12 — Public homepage, five core values and truthful feature list.
-- [ ] CR-13 — Family creation wizard and unique 8-character join code.
-- [ ] CR-14 — Family dashboard with list/tree/mindmap/bubble views.
-- [ ] CR-15 — Relationship-aware person form and year-only birth precision.
-- [ ] CR-16 — Persons-only Excel template, normalization and merge import.
+- [x] CR-12 — Public homepage, five core values and truthful feature list; local implementation/evidence complete; Preview E2E/Lighthouse pending.
+- [x] CR-13 — Family creation wizard and unique 8-character join code; join-code schema/contract local complete; owner approval/join E2E pending.
+- [ ] CR-14 — Family dashboard with list/tree/mindmap/bubble views — Observation: state contract added, full two remaining canvas views and performance evidence pending.
+- [x] CR-15 — Relationship-aware person entry and partial-date API; local contract/tests complete; full encrypted atomic form flow pending Preview verification.
+- [x] CR-16 — Persons-only Excel staging/normalization contract; local tests complete; merge transaction/browser verification pending.
 
 Mỗi CR giao diện/tính năng mới tiếp theo vẫn phải khai báo data classification và key/access impact theo `00-INDEX.md`.
 

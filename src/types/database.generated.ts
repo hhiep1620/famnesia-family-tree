@@ -2344,6 +2344,47 @@ export type Database = {
           },
         ]
       }
+      workspace_join_requests: {
+        Row: {
+          created_at: string
+          id: string
+          requested_role: Database["public"]["Enums"]["workspace_role"]
+          requester_user_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          requested_role?: Database["public"]["Enums"]["workspace_role"]
+          requester_user_id: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          requested_role?: Database["public"]["Enums"]["workspace_role"]
+          requester_user_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_join_requests_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_members: {
         Row: {
           created_at: string
@@ -2553,6 +2594,9 @@ export type Database = {
           data_version: number
           duplicate_suppressions: Json
           id: string
+          join_code: string | null
+          join_code_epoch: number
+          join_code_rotated_at: string | null
           legacy_drive_folder_id: string | null
           locale: string
           name: string
@@ -2567,6 +2611,9 @@ export type Database = {
           data_version?: number
           duplicate_suppressions?: Json
           id?: string
+          join_code?: string | null
+          join_code_epoch?: number
+          join_code_rotated_at?: string | null
           legacy_drive_folder_id?: string | null
           locale?: string
           name: string
@@ -2581,6 +2628,9 @@ export type Database = {
           data_version?: number
           duplicate_suppressions?: Json
           id?: string
+          join_code?: string | null
+          join_code_epoch?: number
+          join_code_rotated_at?: string | null
           legacy_drive_folder_id?: string | null
           locale?: string
           name?: string
@@ -2802,6 +2852,7 @@ export type Database = {
         Args: { p_report: Json; p_resume_cursor: number; p_run_id: string }
         Returns: undefined
       }
+      generate_workspace_join_code: { Args: never; Returns: string }
       get_family_commit_status: {
         Args: { p_commit_id: string; p_workspace_id: string }
         Returns: Json
@@ -2987,6 +3038,10 @@ export type Database = {
       rollback_incomplete_drive_migration: {
         Args: { p_run_id: string }
         Returns: Json
+      }
+      rotate_workspace_join_code: {
+        Args: { p_workspace_id: string }
+        Returns: string
       }
       start_drive_bundle_migration: {
         Args: {
@@ -3327,3 +3382,4 @@ export const Constants = {
     },
   },
 } as const
+

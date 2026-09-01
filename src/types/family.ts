@@ -5,6 +5,7 @@ export interface Person {
   nickname?: string | null
   gender?: Gender
   birthDate?: string | null
+  birthDateParts?: { year: number; month?: number; day?: number; precision: 'year' | 'month' | 'day' } | null
   isDeceased?: boolean
   deathDate?: string | null
   deathLunar?: LunarDate | null
