@@ -24,7 +24,7 @@
 - [x] CR-07 — Contact privacy and relationship grants; implementation `a64463a`; owner approved `2026-09-01`; [evidence](./evidence/CR-07/README.md).
 - [x] CR-08 — Encrypted direct collaboration; target roles owner/editor/viewer; implementation `653426d`; local evidence complete; real workspace signer/checkpoint wiring remains a deployment gate.
 - [x] CR-09 — GEDCOM without images and common GEDCOM/JSON/Excel export policy; implementation `60040e0` + tests `2458e22`; [evidence](./evidence/CR-09/README.md); local parser/schema evidence complete; real workspace signer wiring remains a deployment gate.
-- [ ] CR-10 — Self-contained recovery, encrypted backup and media.
+- [x] CR-10 — Self-contained recovery, encrypted backup and media; implementation/tests local; [evidence](./evidence/CR-10/README.md); Production encrypted-only media and restore remain CR-11 gates.
 - [ ] CR-11 — Real-data migration, production rollout and independent security review.
 
 ## Product CRs
@@ -39,7 +39,7 @@ Mỗi CR giao diện/tính năng mới tiếp theo vẫn phải khai báo data c
 
 ## Current blocker / next action
 
-- CR-09 implemented locally; Preview/browser and every real-data/Production action remain separate gates. CR-10 is next and must begin with a new design lock.
+- CR-10 implemented locally; Preview/browser and every real-data/Production action remain separate gates. CR-11 remains Observation/gated because explicit Production authorization, independent review and real-data evidence are absent.
 
 ## Update rule
 
