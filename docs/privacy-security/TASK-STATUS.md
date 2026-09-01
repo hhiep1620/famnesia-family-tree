@@ -19,9 +19,9 @@
 - [x] CR-02 — Crypto and key contract — [evidence](./evidence/CR-02/README.md); implementation commit `5375af7`; reader/security review pass; owner approved `2026-08-31T03:04:42Z`.
 - [x] CR-03 — Google Drive key vault — implementation `8c1792d` + hardening `765cc61`; owner approved `2026-08-31T10:42:52Z`; Production integration actions remain explicit deployment gates.
 - [x] CR-04 — Encrypted data contract — implementation `6c9827b`; local schema/RLS/security review pass; owner approved `2026-08-31T12:04:46Z`; [evidence](./evidence/CR-04/README.md).
-- [ ] CR-05 — Encrypted repository and migration harness; no real-data migration.
-- [ ] CR-06 — Member-person binding.
-- [ ] CR-07 — Contact privacy and relationship grants.
+- [x] CR-05 — Encrypted repository and synthetic migration harness; implementation `805ea92`; owner approved; no real-data migration.
+- [x] CR-06 — Member-person binding; implementation `9770e50`; local evidence complete.
+- [x] CR-07 — Contact privacy and relationship grants; implementation `a64463a`; owner approved `2026-09-01`; [evidence](./evidence/CR-07/README.md).
 - [ ] CR-08 — Encrypted direct collaboration; target roles owner/editor/viewer.
 - [ ] CR-09 — GEDCOM without images and common GEDCOM/JSON/Excel export policy.
 - [ ] CR-10 — Self-contained recovery, encrypted backup and media.
@@ -39,8 +39,8 @@ Mỗi CR giao diện/tính năng mới tiếp theo vẫn phải khai báo data c
 
 ## Current blocker / next action
 
-- CR-04 approved; [evidence and remaining Preview/Production gates](./evidence/CR-04/README.md).
-- CR-05 đã được owner yêu cầu bắt đầu; chỉ dùng synthetic/local/ephemeral Preview fixtures, không migrate workspace thật hoặc Production.
+- CR-07 approved; Preview/browser and every real-data/Production action remain separate gates.
+- CR-08 design validated; implementation setup is the next action and remains synthetic/local until a separate deployment gate.
 
 ## Update rule
 
