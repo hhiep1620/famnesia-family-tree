@@ -22,8 +22,8 @@
 - [x] CR-05 — Encrypted repository and synthetic migration harness; implementation `805ea92`; owner approved; no real-data migration.
 - [x] CR-06 — Member-person binding; implementation `9770e50`; local evidence complete.
 - [x] CR-07 — Contact privacy and relationship grants; implementation `a64463a`; owner approved `2026-09-01`; [evidence](./evidence/CR-07/README.md).
-- [ ] CR-08 — Encrypted direct collaboration; target roles owner/editor/viewer.
-- [ ] CR-09 — GEDCOM without images and common GEDCOM/JSON/Excel export policy.
+- [x] CR-08 — Encrypted direct collaboration; target roles owner/editor/viewer; implementation `653426d`; local evidence complete; real workspace signer/checkpoint wiring remains a deployment gate.
+- [x] CR-09 — GEDCOM without images and common GEDCOM/JSON/Excel export policy; implementation pending commit; [evidence](./evidence/CR-09/README.md); local parser/schema evidence complete; real workspace signer wiring remains a deployment gate.
 - [ ] CR-10 — Self-contained recovery, encrypted backup and media.
 - [ ] CR-11 — Real-data migration, production rollout and independent security review.
 
@@ -39,8 +39,7 @@ Mỗi CR giao diện/tính năng mới tiếp theo vẫn phải khai báo data c
 
 ## Current blocker / next action
 
-- CR-07 approved; Preview/browser and every real-data/Production action remain separate gates.
-- CR-08 design validated; implementation setup is the next action and remains synthetic/local until a separate deployment gate.
+- CR-09 implemented locally; Preview/browser and every real-data/Production action remain separate gates. CR-10 is next and must begin with a new design lock.
 
 ## Update rule
 

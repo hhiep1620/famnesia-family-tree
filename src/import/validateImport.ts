@@ -10,7 +10,7 @@ export interface ImportValidationResult {
   errors: string[]
   preview: ImportPreview
   filename?: string
-  format?: 'json' | 'xlsx'
+  format?: 'json' | 'xlsx' | 'gedcom'
 }
 
 function previewRawImport(raw: unknown) {
@@ -57,5 +57,12 @@ export async function validateImportFile(file: File): Promise<ImportValidationRe
   const envelope = validateImportFileEnvelope(file)
   if (!envelope.format || envelope.errors.length) return { errors: envelope.errors, warnings: [], preview: buildImportPreview(undefined, [], envelope.errors), filename: file.name, format: envelope.format }
   if (envelope.format === 'xlsx') return (await import('./excelFamilyData')).validateExcelImportFile(file)
+  if (file.name.toLowerCase().endsWith('.ged')) {
+    const { parseGedcomText } = await import('./gedcom.js')
+    const result = parseGedcomText(await file.text(), file.name)
+    const errors = result.diagnostics.filter((item) => item.severity === 'error').map((item) => `${item.code}${item.line ? ` (dòng ${item.line})` : ''}: ${item.message}`)
+    const warnings = result.diagnostics.filter((item) => item.severity === 'warning').map((item) => `${item.code}: ${item.message}`)
+    return { data: result.data, errors, warnings, filename: file.name, format: 'gedcom', preview: buildImportPreview(result.data, warnings, errors) }
+  }
   return validateImportText(await file.text(), file.name)
 }

@@ -1920,6 +1920,57 @@ export type Database = {
           },
         ]
       }
+      portability_export_scopes: {
+        Row: {
+          authorization_id: string
+          consumed_at: string | null
+          created_at: string
+          fields: Json
+          format: string
+          living_policy: string
+          person_ids: Json
+          profile_id: string
+          workspace_id: string
+        }
+        Insert: {
+          authorization_id: string
+          consumed_at?: string | null
+          created_at?: string
+          fields: Json
+          format: string
+          living_policy: string
+          person_ids: Json
+          profile_id: string
+          workspace_id: string
+        }
+        Update: {
+          authorization_id?: string
+          consumed_at?: string | null
+          created_at?: string
+          fields?: Json
+          format?: string
+          living_policy?: string
+          person_ids?: Json
+          profile_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portability_export_scopes_authorization_id_fkey"
+            columns: ["authorization_id"]
+            isOneToOne: true
+            referencedRelation: "signed_policy_authorizations"
+            referencedColumns: ["authorization_id"]
+          },
+          {
+            foreignKeyName: "portability_export_scopes_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_crypto_states"
+            referencedColumns: ["workspace_id"]
+          },
+        ]
+      }
       relationships: {
         Row: {
           confidence: Database["public"]["Enums"]["fact_confidence"] | null
@@ -2686,6 +2737,14 @@ export type Database = {
         }
         Returns: Json
       }
+      consume_portability_export_authorization: {
+        Args: {
+          p_authorization_id: string
+          p_export_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
       create_family_snapshot: {
         Args: { p_reason: string; p_workspace_id: string }
         Returns: Json
@@ -2887,6 +2946,26 @@ export type Database = {
           p_principal_id: string
           p_scopes: string[]
           p_signer_fingerprint: string
+          p_verified_at: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
+      register_verified_portability_export_authorization: {
+        Args: {
+          p_actor_principal_id: string
+          p_artifact: Json
+          p_authorization_id: string
+          p_binding_revision: number
+          p_expires_at: string
+          p_fields: Json
+          p_format: string
+          p_graph_revision: number
+          p_key_epoch: number
+          p_nonce_hash: string
+          p_person_ids: Json
+          p_policy_revision: number
+          p_profile_id: string
           p_verified_at: string
           p_workspace_id: string
         }

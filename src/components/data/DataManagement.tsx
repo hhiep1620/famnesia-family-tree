@@ -18,7 +18,7 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
-import { downloadFamilyData, downloadFamilyDataExcel, downloadFamilyDataExcelTemplate, downloadFamilyDataTemplate } from '../../import/exportFamilyData'
+import { downloadFamilyData, downloadFamilyDataExcel, downloadFamilyDataExcelTemplate, downloadFamilyDataGedcom, downloadFamilyDataTemplate } from '../../import/exportFamilyData'
 import { validateImportFile, type ImportValidationResult } from '../../import/validateImport'
 import { validateFamilyData } from '../../schema/familyDataSchema'
 import type { ActivityEvent, FamilyBackup, FamilyData, SaveStatus, WorkspaceInfo, WorkspaceInvitationResult, WorkspaceMember } from '../../types/family'
@@ -65,7 +65,7 @@ function formatBackupTime(value?: string): string {
 function ImportDialog({ result, busy, preferredFormat, onChoose, onClose, onConfirm }: {
   result?: ImportValidationResult
   busy?: string
-  preferredFormat: 'json' | 'xlsx'
+  preferredFormat: 'json' | 'xlsx' | 'gedcom'
   onChoose: (event: ChangeEvent<HTMLInputElement>) => void
   onClose: () => void
   onConfirm: () => Promise<void>
@@ -74,10 +74,10 @@ function ImportDialog({ result, busy, preferredFormat, onChoose, onClose, onConf
   const summary = result?.preview
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <section className="modal-card import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title">
-      <div className="modal-heading"><div><span className="eyebrow">Thay thế có kiểm soát</span><h2 id="import-title">Import {preferredFormat === 'xlsx' ? 'Excel' : 'JSON'}</h2></div><button className="icon-button" onClick={onClose} aria-label="Đóng"><X size={19} /></button></div>
+      <div className="modal-heading"><div><span className="eyebrow">Thay thế có kiểm soát</span><h2 id="import-title">Import {preferredFormat === 'xlsx' ? 'Excel' : preferredFormat === 'gedcom' ? 'GEDCOM' : 'JSON'}</h2></div><button className="icon-button" onClick={onClose} aria-label="Đóng"><X size={19} /></button></div>
       <div className="import-safety-note"><ShieldCheck size={19} /><div><strong>Dữ liệu hiện tại chưa bị thay đổi</strong><p>Ứng dụng chỉ ghi family.json sau khi tệp hợp lệ và bạn xác nhận. Một bản backup sẽ được tạo trước khi thay thế.</p></div></div>
-      <input ref={input} className="sr-only" type="file" accept={preferredFormat === 'xlsx' ? '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : '.json,application/json'} onChange={onChoose} />
-      {!result ? <button className="json-dropzone" onClick={() => input.current?.click()}><FileUp size={26} /><strong>Chọn tệp {preferredFormat === 'xlsx' ? '.xlsx' : '.json'}</strong><span>{preferredFormat === 'xlsx' ? 'Chỉ Open XML thuần; macro, công thức và external link sẽ bị chặn' : 'Tối đa 10 MB; cấu trúc và khoá nguy hiểm sẽ được kiểm tra'}</span></button> : <>
+      <input ref={input} className="sr-only" type="file" accept={preferredFormat === 'xlsx' ? '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : preferredFormat === 'gedcom' ? '.ged,text/plain' : '.json,application/json'} onChange={onChoose} />
+      {!result ? <button className="json-dropzone" onClick={() => input.current?.click()}><FileUp size={26} /><strong>Chọn tệp {preferredFormat === 'xlsx' ? '.xlsx' : preferredFormat === 'gedcom' ? '.ged' : '.json'}</strong><span>{preferredFormat === 'xlsx' ? 'Chỉ Open XML thuần; macro, công thức và external link sẽ bị chặn' : preferredFormat === 'gedcom' ? 'GEDCOM 5.5.1/7.0; media chỉ được ghi nhận, không tải về' : 'Tối đa 10 MB; cấu trúc và khoá nguy hiểm sẽ được kiểm tra'}</span></button> : <>
         <div className="selected-import">{result.format === 'xlsx' ? <FileSpreadsheet size={20} /> : <FileJson size={20} />}<div><strong>{result.filename}</strong><span>{result.errors.length ? 'Cần sửa lỗi trước khi import' : 'Đã đọc, kiểm tra bảo mật và cấu trúc'}</span></div><button className="secondary-button" onClick={() => input.current?.click()}>Chọn tệp khác</button></div>
         {summary && <div className="import-summary" aria-label="Tóm tắt import">
           <div><strong>{summary.profiles}</strong><span>Gia đình</span></div><div><strong>{summary.people}</strong><span>Thành viên</span></div><div><strong>{summary.relationships}</strong><span>Quan hệ</span></div><div><strong>{summary.media}</strong><span>Ảnh tham chiếu</span></div><div><strong>{summary.living}</strong><span>Còn sống</span></div><div><strong>{summary.deceased}</strong><span>Đã mất</span></div>
@@ -97,7 +97,7 @@ export function DataManagement(props: Props) {
   const { onListBackups, openImportOnMount, onImportOpened, onRefreshMembers } = props
   const canManageMembers = props.workspace?.canManageMembers
   const [showImport, setShowImport] = useState(false)
-  const [preferredFormat, setPreferredFormat] = useState<'json' | 'xlsx'>('json')
+  const [preferredFormat, setPreferredFormat] = useState<'json' | 'xlsx' | 'gedcom'>('json')
   const [tab, setTab] = useState<'overview' | 'quality' | 'issues' | 'duplicates' | 'activity' | 'import_export'>('overview')
   const [importResult, setImportResult] = useState<ImportValidationResult>()
   const [readingFile, setReadingFile] = useState(false)
@@ -152,7 +152,7 @@ export function DataManagement(props: Props) {
     await refreshBackups()
   }
 
-  const openImport = (format: 'json' | 'xlsx') => { setPreferredFormat(format); setImportResult(undefined); setShowImport(true) }
+  const openImport = (format: 'json' | 'xlsx' | 'gedcom') => { setPreferredFormat(format); setImportResult(undefined); setShowImport(true) }
 
   async function inviteMember() {
     if (!memberEmail.trim() || !props.onAddMember) return
@@ -205,7 +205,7 @@ export function DataManagement(props: Props) {
     </section>}
     </> : null}
 
-    {tab === 'import_export' ? <section className="portability-center"><header><span className="eyebrow">Data portability</span><h3>Mang dữ liệu theo cách phù hợp</h3><p>JSON giữ toàn bộ mô hình Famnesia. Excel dành cho nhập liệu và chỉnh sửa hàng loạt; ảnh vẫn nằm riêng trong kho media của workspace.</p></header><div className="portability-grid"><article><FileJson /><h4>JSON chuẩn Famnesia</h4><p>Backup/migration đầy đủ schema, profile, thành viên, quan hệ, cài đặt và tham chiếu ảnh.</p><div>{canReplaceData ? <button className="primary-button" onClick={() => openImport('json')}><FileUp size={15} /> Import JSON</button> : null}<button className="secondary-button" onClick={() => downloadFamilyData(props.data)}><Download size={15} /> Export JSON</button><button className="secondary-button" onClick={downloadFamilyDataTemplate}>Tải JSON mẫu</button></div></article><article><FileSpreadsheet /><h4>Excel cho chỉnh sửa hàng loạt</h4><p>Workbook `.xlsx` gồm README, profiles, persons, relationships và media; không nhận macro hoặc công thức.</p><div>{canReplaceData ? <button className="primary-button" onClick={() => openImport('xlsx')}><FileUp size={15} /> Import Excel</button> : null}<button className="secondary-button" onClick={() => downloadFamilyDataExcel(props.data)}><Download size={15} /> Export Excel</button><button className="secondary-button" onClick={downloadFamilyDataExcelTemplate}>Tải Excel mẫu</button></div></article></div><div className="import-security-contract"><ShieldCheck /><div><strong>File bên ngoài luôn được coi là không tin cậy</strong><p>Kiểm tra loại file, chữ ký ZIP, kích thước, độ phức tạp, macro/OLE/external link, công thức, schema, ID và vòng lặp tổ tiên. Import lỗi không ghi đè dữ liệu đang hoạt động.</p></div></div></section> : null}
+    {tab === 'import_export' ? <section className="portability-center"><header><span className="eyebrow">Data portability</span><h3>Mang dữ liệu theo cách phù hợp</h3><p>Xuất dữ liệu phải đi qua policy authorization; workspace thật hiện khóa nút tải trực tiếp cho tới khi signer/nonce flow hoàn tất.</p></header><div className="portability-grid"><article><FileJson /><h4>JSON chuẩn Famnesia</h4><p>Backup/migration đầy đủ schema, profile, thành viên, quan hệ, cài đặt và tham chiếu ảnh.</p><div>{canReplaceData ? <button className="primary-button" onClick={() => openImport('json')}><FileUp size={15} /> Import JSON</button> : null}<button className="secondary-button" disabled={!props.mock} onClick={() => downloadFamilyData(props.data)}><Download size={15} /> Export JSON</button><button className="secondary-button" onClick={downloadFamilyDataTemplate}>Tải JSON mẫu</button></div></article><article><FileSpreadsheet /><h4>Excel cho chỉnh sửa hàng loạt</h4><p>Workbook `.xlsx` gồm README, profiles, persons, relationships và media; không nhận macro hoặc công thức.</p><div>{canReplaceData ? <button className="primary-button" onClick={() => openImport('xlsx')}><FileUp size={15} /> Import Excel</button> : null}<button className="secondary-button" disabled={!props.mock} onClick={() => void downloadFamilyDataExcel(props.data)}><Download size={15} /> Export Excel</button><button className="secondary-button" onClick={downloadFamilyDataExcelTemplate}>Tải Excel mẫu</button></div></article><article><FileJson /><h4>GEDCOM 5.5.1/7.0</h4><p>Trao đổi cây gia phả; media không tải, trường không hỗ trợ được quarantine hoặc bỏ qua theo policy.</p><div>{canReplaceData ? <button className="primary-button" onClick={() => openImport('gedcom')}><FileUp size={15} /> Import GEDCOM</button> : null}<button className="secondary-button" disabled={!props.mock} onClick={() => downloadFamilyDataGedcom(props.data)}><Download size={15} /> Export GEDCOM</button></div></article></div><div className="import-security-contract"><ShieldCheck /><div><strong>File bên ngoài luôn được coi là không tin cậy</strong><p>Kiểm tra loại file, chữ ký ZIP, kích thước, độ phức tạp, macro/OLE/external link, công thức, schema, ID và vòng lặp tổ tiên. Import lỗi không ghi đè dữ liệu đang hoạt động.</p></div></div></section> : null}
     {(tab === 'quality' || tab === 'issues' || tab === 'duplicates') ? <DataQualityCenter data={props.data} mode={tab} canEdit={props.mock || Boolean(props.workspace?.canEdit)} onOpenPerson={props.onOpenPerson} onSuppressDuplicate={props.onSuppressDuplicate} onMerge={canReplaceData ? props.onMergePeople : undefined} /> : null}
     {tab === 'activity' ? <ActivityTimeline events={props.activity ?? []} /> : null}
 
