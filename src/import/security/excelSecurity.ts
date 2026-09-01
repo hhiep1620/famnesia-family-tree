@@ -1,4 +1,4 @@
-import { IMPORT_LIMITS } from './importLimits'
+import { IMPORT_LIMITS } from './importLimits.js'
 
 const BLOCKED_ENTRY = /(^|\/)(vbaProject\.bin|externalLinks|connections\.xml|embeddings|oleObjects|activeX)(\/|$)/i
 

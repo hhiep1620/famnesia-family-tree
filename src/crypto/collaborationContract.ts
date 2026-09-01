@@ -1,5 +1,5 @@
-import { canonicalize, encodeBase64Url } from './contract'
-import { signArtifact, verifyArtifact, type SignedArtifactV1 } from './keyContract'
+import { canonicalize, encodeBase64Url } from './contract.js'
+import { signArtifact, verifyArtifact, type SignedArtifactV1 } from './keyContract.js'
 
 export type EditorCommitScope = 'family_shared' | 'media' | 'contact'
 

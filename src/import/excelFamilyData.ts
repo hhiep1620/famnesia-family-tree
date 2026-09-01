@@ -1,12 +1,12 @@
 import * as XLSX from '@e965/xlsx'
-import { CURRENT_SCHEMA_VERSION, validateFamilyData } from '../schema/familyDataSchema'
-import type { FactConfidence, FamilyData, FamilyProfile, Gender, Person, PersonMedia, Relationship, SpouseStatus } from '../types/family'
-import { buildImportPreview } from './importPreview'
-import type { ImportValidationResult } from './validateImport'
-import { plainText, safeSpreadsheetText } from './security/contentSanitization'
-import { inspectXlsxContainer } from './security/excelSecurity'
-import { IMPORT_LIMITS } from './security/importLimits'
-import { parsePartialDate, serializePartialDate, toLegacyDate } from '../calendar/partialDate'
+import { CURRENT_SCHEMA_VERSION, validateFamilyData } from '../schema/familyDataSchema.js'
+import type { FactConfidence, FamilyData, FamilyProfile, Gender, Person, PersonMedia, Relationship, SpouseStatus } from '../types/family.js'
+import { buildImportPreview } from './importPreview.js'
+import type { ImportValidationResult } from './validateImport.js'
+import { plainText, safeSpreadsheetText } from './security/contentSanitization.js'
+import { inspectXlsxContainer } from './security/excelSecurity.js'
+import { IMPORT_LIMITS } from './security/importLimits.js'
+import { parsePartialDate, serializePartialDate, toLegacyDate } from '../calendar/partialDate.js'
 
 const COLUMNS = {
   profiles: ['id', 'name', 'lineage_surname', 'description', 'photo_file_id', 'subject_person_id', 'requires_secret', 'is_active'],

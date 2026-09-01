@@ -1,4 +1,4 @@
-import type { ActivityEvent } from '../types/family'
+import type { ActivityEvent } from '../types/family.js'
 
 export const ACTIVITY_RETENTION_LIMIT = 20
 

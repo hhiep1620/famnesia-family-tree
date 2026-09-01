@@ -1,6 +1,6 @@
-import { encodeBase64Url } from '../crypto/contract'
-import { signArtifact, verifyArtifact, type SignedArtifactV1 } from '../crypto/keyContract'
-import type { FamilyData, Person } from '../types/family'
+import { encodeBase64Url } from '../crypto/contract.js'
+import { signArtifact, verifyArtifact, type SignedArtifactV1 } from '../crypto/keyContract.js'
+import type { FamilyData, Person } from '../types/family.js'
 
 export type PortabilityFormat = 'gedcom' | 'json' | 'xlsx'
 export type PortabilityField = 'shared' | 'contact' | 'private_note'

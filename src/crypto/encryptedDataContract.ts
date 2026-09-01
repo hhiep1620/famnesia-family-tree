@@ -1,5 +1,5 @@
-import { canonicalize, parseEncryptedEnvelope, type EncryptedEnvelopeV1 } from './contract'
-import { parseWrappedKeyEnvelope, type WrappedKeyEnvelopeV1 } from './keyContract'
+import { canonicalize, parseEncryptedEnvelope, type EncryptedEnvelopeV1 } from './contract.js'
+import { parseWrappedKeyEnvelope, type WrappedKeyEnvelopeV1 } from './keyContract.js'
 
 export const ENCRYPTED_SCHEMA_VERSION = 1 as const
 export const SHARED_FIELD_CLASSES = ['family_profile', 'person_core', 'relationship', 'media_manifest', 'workspace_settings'] as const

@@ -1,4 +1,4 @@
-import type { Person } from '../types/family'
+import type { Person } from '../types/family.js'
 
 export type PartialDatePrecision = 'year' | 'month' | 'day'
 export interface PartialDate { year: number; month?: number; day?: number; precision: PartialDatePrecision }

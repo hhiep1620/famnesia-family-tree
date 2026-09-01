@@ -1,6 +1,6 @@
 import { createEmptyFamilyData, CURRENT_SCHEMA_VERSION, requireValidFamilyData, validateFamilyData } from '../../src/schema/familyDataSchema.js'
 import { ACTIVITY_RETENTION_LIMIT, parseActivityJsonLines, retainRecentActivity, serializeActivityJsonLines } from '../../src/activity/activityRetention.js'
-import { serializeFamilyData } from '../../src/import/exportFamilyData.js'
+import { serializeFamilyDataForServer } from '../../src/import/serializeFamilyDataServer.js'
 import { compactFamilyOperations, mergeFamilyOperations, operationCounts } from '../../src/draft/familyOperations.js'
 import type { ActivityEvent, FamilyBackup, FamilyData } from '../../src/types/family.js'
 import type { FamilyCommitMeta, FamilyCommitRequest, FamilyOperation } from '../../src/types/familyOperations.js'
@@ -206,7 +206,7 @@ export async function saveFamily(accessToken: string, workspaceId: string, data:
   const updatedAt = new Date().toISOString()
   const next = requireValidFamilyData({ ...requireValidFamilyData(data), updatedAt })
   const response = await fetch(`${UPLOAD_API}/files/${encodeURIComponent(resource.familyData.id)}?uploadType=media&fields=${encodeURIComponent(FILE_FIELDS)}`, {
-    method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json; charset=UTF-8' }, body: serializeFamilyData(next, updatedAt),
+    method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json; charset=UTF-8' }, body: serializeFamilyDataForServer(next, updatedAt),
   })
   if (!response.ok) throw new AppError(response.status === 403 ? 403 : 502, response.status === 403 ? 'DRIVE_ACCESS_DENIED' : 'GOOGLE_DRIVE_FAILED', 'family.json could not be saved.')
   const written = await response.json() as DriveFile
@@ -234,7 +234,7 @@ function commitCountLabels(operations: FamilyOperation[]): Record<string, number
 async function writeCommittedFamily(accessToken: string, file: DriveFile, etag: string | undefined, data: FamilyData, commitId: string): Promise<DriveFile> {
   const form = new FormData()
   form.append('metadata', new Blob([JSON.stringify({ appProperties: { ...(file.appProperties ?? {}), lastCommitId: commitId } })], { type: 'application/json' }))
-  form.append('file', new Blob([serializeFamilyData(data, data.updatedAt)], { type: 'application/json' }))
+  form.append('file', new Blob([serializeFamilyDataForServer(data, data.updatedAt)], { type: 'application/json' }))
   const response = await fetch(`${UPLOAD_API}/files/${encodeURIComponent(file.id)}?uploadType=multipart&fields=${encodeURIComponent(FILE_FIELDS)}`, {
     method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, ...(etag ? { 'If-Match': etag } : {}) }, body: form,
   })
@@ -367,7 +367,7 @@ function backupName(): string { return `famnesia_${new Date().toISOString().repl
 
 export async function createBackup(accessToken: string, workspaceId: string, data: FamilyData, reason = 'manual'): Promise<FamilyBackup> {
   const resource = await workspaceResources(accessToken, workspaceId, 'editor')
-  const file = await createJsonFile(accessToken, backupName(), resource.backups.id, 'family-backup', serializeFamilyData(requireValidFamilyData(data)), { schemaVersion: String(CURRENT_SCHEMA_VERSION), reason })
+  const file = await createJsonFile(accessToken, backupName(), resource.backups.id, 'family-backup', serializeFamilyDataForServer(requireValidFamilyData(data)), { schemaVersion: String(CURRENT_SCHEMA_VERSION), reason })
   return { id: file.id, name: file.name, createdTime: file.createdTime, modifiedTime: file.modifiedTime, reason }
 }
 

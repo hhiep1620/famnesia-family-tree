@@ -10,11 +10,12 @@ export default { fetch(request: Request) { return withErrors(async () => {
   const thumbnail = form.get('thumbnail')
   if (!(file instanceof File)) throw new AppError(400, 'PHOTO_REQUIRED', 'A photo file is required.')
   if (thumbnail !== null && !(thumbnail instanceof File)) throw new AppError(400, 'PHOTO_THUMBNAIL_INVALID', 'The photo thumbnail is invalid.')
+  const thumbnailFile = thumbnail instanceof File ? thumbnail : undefined
   const profileId = form.get('profileId')
   const personId = form.get('personId')
   const workspaceId = pathParameter(request, 'workspaces')
   const profile = typeof profileId === 'string' ? profileId : undefined
   const person = typeof personId === 'string' ? personId : undefined
-  const id = await backend.media.upload(workspaceId, file, file.name, profile, person, thumbnail ?? undefined)
+  const id = await backend.media.upload(workspaceId, file, file.name, profile, person, thumbnailFile)
   return json({ id }, { status: 201 })
 }) } }

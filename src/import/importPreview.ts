@@ -1,4 +1,4 @@
-import type { FamilyData } from '../types/family'
+import type { FamilyData } from '../types/family.js'
 
 export interface ImportPreview {
   profiles: number

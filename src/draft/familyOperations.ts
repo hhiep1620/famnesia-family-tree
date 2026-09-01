@@ -1,5 +1,5 @@
-import type { FamilyData, FamilyProfile, Person, PersonMedia, Relationship } from '../types/family'
-import type { FamilyOperation, FamilyOperationConflict, FamilyOperationType } from '../types/familyOperations'
+import type { FamilyData, FamilyProfile, Person, PersonMedia, Relationship } from '../types/family.js'
+import type { FamilyOperation, FamilyOperationConflict, FamilyOperationType } from '../types/familyOperations.js'
 
 const OPERATION_TYPES = new Set<FamilyOperationType>([
   'profile.create', 'profile.update', 'subject.set',

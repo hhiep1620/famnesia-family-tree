@@ -1,8 +1,8 @@
-import { canonicalize, encodeBase64Url } from '../crypto/contract'
-import { signArtifact, verifyArtifact, type SignedArtifactV1 } from '../crypto/keyContract'
-import type { MemberPersonBinding } from '../identity/memberPersonBinding'
-import type { PrivateFieldClass } from '../crypto/encryptedDataContract'
-import type { Relationship } from '../types/family'
+import { canonicalize, encodeBase64Url } from '../crypto/contract.js'
+import { signArtifact, verifyArtifact, type SignedArtifactV1 } from '../crypto/keyContract.js'
+import type { MemberPersonBinding } from '../identity/memberPersonBinding.js'
+import type { PrivateFieldClass } from '../crypto/encryptedDataContract.js'
+import type { Relationship } from '../types/family.js'
 
 export type ContactAudience = 'self_only' | 'direct_family' | 'close_blood' | 'blood_only' | 'workspace_members' | 'custom'
 export type ParentEdgeKind = 'biological' | 'adoptive' | 'step'
