@@ -11,5 +11,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["api/**/*.ts", "src/schema/**/*.ts", "src/import/exportFamilyData.ts", "src/types/family.ts"]
+  "include": ["api/**/*.ts", "server/**/*.ts", "src/schema/**/*.ts", "src/import/exportFamilyData.ts", "src/types/family.ts"]
 }
