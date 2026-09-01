@@ -14,7 +14,7 @@
     "supabase:stop": "supabase stop",
     "supabase:status": "supabase status",
     "supabase:reset": "supabase db reset --local",
-    "supabase:test": "supabase test db",
+    "supabase:test": "supabase test db --local",
     "supabase:lint": "supabase db lint --local",
     "supabase:types": "supabase gen types typescript --local > src/types/database.generated.ts",
     "supabase:auth:smoke": "node scripts/supabase-auth-smoke.mjs",

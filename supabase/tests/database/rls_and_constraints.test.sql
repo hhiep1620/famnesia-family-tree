@@ -34,8 +34,8 @@ values
 insert into public.workspace_members (workspace_id, user_id, role)
 values
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '22222222-2222-2222-2222-222222222222', 'editor'),
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '33333333-3333-3333-3333-333333333333', 'contributor'),
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '44444444-4444-4444-4444-444444444444', 'contributor'),
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '33333333-3333-3333-3333-333333333333', 'viewer'),
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '44444444-4444-4444-4444-444444444444', 'viewer'),
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '55555555-5555-5555-5555-555555555555', 'viewer');
 
 insert into public.family_profiles (id, workspace_id, legacy_id, name)
@@ -81,7 +81,7 @@ select lives_ok(
   'owner can add a member'
 );
 select lives_ok(
-  $$insert into public.workspace_invitations (workspace_id, email, role, invited_by_user_id) values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'future@example.test', 'contributor', '11111111-1111-1111-1111-111111111111')$$,
+  $$insert into public.workspace_invitations (workspace_id, email, role, invited_by_user_id) values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'future@example.test', 'viewer', '11111111-1111-1111-1111-111111111111')$$,
   'owner can create an invitation'
 );
 select lives_ok(
@@ -126,39 +126,39 @@ reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', true);
-select ok(not public.can_commit_workspace('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'), 'contributor cannot commit directly');
+select ok(not public.can_commit_workspace('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'), 'viewer cannot commit directly');
 select results_eq(
   $$select legacy_id from public.persons where legacy_id = 'PERSON-A1'$$,
   array['PERSON-A1'::text],
-  'contributor can read canonical data'
+  'viewer can read canonical data'
 );
 select throws_ok(
   $$insert into public.persons (workspace_id, family_profile_id, legacy_id, name) values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'BLOCKED-CONTRIBUTOR', 'Blocked')$$,
-  'contributor cannot insert canonical data'
+  'viewer cannot insert canonical data'
 );
-select lives_ok(
+select throws_ok(
   $$insert into public.draft_submissions (id, workspace_id, contributor_user_id, base_data_version, checksum) values ('12345678-0000-0000-0000-000000000001', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '33333333-3333-3333-3333-333333333333', 0, 'checksum-a')$$,
-  'contributor can create own draft'
+  'viewer cannot create a legacy draft'
 );
-select lives_ok(
+select throws_ok(
   $$insert into public.draft_operations (id, workspace_id, draft_submission_id, operation_id, sequence_number, operation_type, entity_id) values ('12345678-1000-0000-0000-000000000001', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '12345678-0000-0000-0000-000000000001', 'op-a', 0, 'person.update', 'PERSON-A1')$$,
-  'contributor can add operation to own editable draft'
+  'viewer cannot add a legacy draft operation'
 );
 select throws_ok(
   $$insert into public.draft_submissions (workspace_id, contributor_user_id, base_data_version, checksum) values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '44444444-4444-4444-4444-444444444444', 0, 'impersonated')$$,
-  'contributor cannot create another contributor draft'
+  'viewer cannot create another user draft'
 );
 reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '44444444-4444-4444-4444-444444444444', true);
-select lives_ok(
+select throws_ok(
   $$insert into public.draft_submissions (id, workspace_id, contributor_user_id, base_data_version, checksum) values ('12345678-0000-0000-0000-000000000002', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '44444444-4444-4444-4444-444444444444', 0, 'checksum-b')$$,
-  'second contributor can create own draft'
+  'second viewer cannot create a legacy draft'
 );
-select lives_ok(
+select throws_ok(
   $$insert into public.draft_operations (id, workspace_id, draft_submission_id, operation_id, sequence_number, operation_type, entity_id) values ('12345678-1000-0000-0000-000000000002', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '12345678-0000-0000-0000-000000000002', 'op-b', 0, 'person.update', 'PERSON-A2')$$,
-  'second contributor can add own operation'
+  'second viewer cannot add a legacy draft operation'
 );
 reset role;
 
@@ -166,11 +166,11 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', true);
 select is_empty(
   $$select id from public.draft_submissions where id = '12345678-0000-0000-0000-000000000002'$$,
-  'contributor A cannot read contributor B draft'
+  'viewer A sees no viewer B draft'
 );
 select is_empty(
   $$update public.draft_operations set decision_note = 'tampered' where id = '12345678-1000-0000-0000-000000000002' returning id$$,
-  'contributor A cannot update contributor B operation'
+  'viewer A cannot update a legacy operation'
 );
 reset role;
 
@@ -178,8 +178,8 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', true);
 select results_eq(
   $$select count(*)::bigint from public.draft_submissions where workspace_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'$$,
-  array[2::bigint],
-  'editor can review all contributor drafts'
+  array[0::bigint],
+  'legacy draft creation is disabled for all target roles'
 );
 select is_empty(
   $$update public.draft_submissions set status = 'rejected' where id = '12345678-0000-0000-0000-000000000001' returning id$$,

@@ -198,18 +198,6 @@ export function createSupabaseWriteRequestBackend(auth: AuthContext, selection: 
       update: (workspaceId, memberId, role) => collaboration.updateMember(workspaceId, memberId, role),
       remove: (workspaceId, memberId) => collaboration.removeMember(workspaceId, memberId),
     },
-    drafts: {
-      submit: (workspaceId, request) => collaboration.submit(workspaceId, request),
-      list: (workspaceId) => collaboration.list(workspaceId),
-      status: (workspaceId) => collaboration.status(workspaceId),
-      review: (workspaceId, request) => collaboration.review(workspaceId, request),
-      async syncMirror(workspaceId) {
-        const generation = Number((await repository.getWorkspaceRow(workspaceId)).row.data_version)
-        return { status: 'synced', generation, processed: 0, remaining: 0, lastSyncedAt: new Date().toISOString() }
-      },
-      workspaceInfo: workspace,
-      markCanonicalChanged: async (workspaceId) => Number((await repository.getWorkspaceRow(workspaceId)).row.data_version),
-    },
     backups: {
       create: (workspaceId, _data, reason = 'manual') => repository.createBackup(workspaceId, reason),
       list: (workspaceId) => repository.listBackups(workspaceId),

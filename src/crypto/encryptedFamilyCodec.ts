@@ -82,7 +82,7 @@ export class EncryptedFamilyCodec {
   private readonly session: WorkspaceKeySession
   constructor(session: WorkspaceKeySession) { this.session = session }
 
-  async encrypt(data: FamilyData, dataVersion: number): Promise<EncryptedEntityRecord[]> {
+  async encrypt(data: FamilyData, dataVersion: number, rowVersions: ReadonlyMap<string, number> = new Map()): Promise<EncryptedEntityRecord[]> {
     assertContactPolicyReady(data)
     const validated = requireValidFamilyData(data)
     if (!Number.isSafeInteger(dataVersion) || dataVersion < 1) throw new Error('INVALID_DATA_VERSION')
@@ -108,12 +108,13 @@ export class EncryptedFamilyCodec {
     const records: EncryptedEntityRecord[] = []
     for (const item of resolved) {
       const entityId = item.entityId
+      const rowVersion = rowVersions.get(`${item.fieldClass}:${entityId}`) ?? dataVersion
       const aad = {
         workspaceId: this.session.workspaceId,
         entityId,
         fieldClass: item.fieldClass,
         schemaVersion: 1,
-        dataVersion,
+        dataVersion: rowVersion,
         keyId: this.session.keyId,
         keyEpoch: this.session.keyEpoch,
         writerId: this.session.writerId,
@@ -123,7 +124,7 @@ export class EncryptedFamilyCodec {
         workspaceId: this.session.workspaceId,
         entityId,
         fieldClass: item.fieldClass,
-        rowVersion: dataVersion,
+        rowVersion,
         keyId: this.session.keyId,
         keyEpoch: this.session.keyEpoch,
         writerPrincipalId: this.session.principalId,

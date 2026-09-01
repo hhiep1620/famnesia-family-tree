@@ -7,8 +7,8 @@ export default { fetch(request: Request) { return withErrors(async () => {
   const backend = await requestBackend(request)
   const workspaceId = pathParameter(request, 'workspaces')
   if (request.method === 'GET') return json({ members: await backend.members.list(workspaceId) })
-  const body = await readJson<{ permissionId?: string; email?: string; role?: 'editor' | 'contributor' | 'viewer' }>(request)
-  if (body.role !== undefined && body.role !== 'editor' && body.role !== 'contributor' && body.role !== 'viewer') throw new AppError(400, 'ROLE_INVALID', 'Role must be editor, contributor or viewer.')
+  const body = await readJson<{ permissionId?: string; email?: string; role?: 'editor' | 'viewer' }>(request)
+  if (body.role !== undefined && body.role !== 'editor' && body.role !== 'viewer') throw new AppError(400, 'ROLE_INVALID', 'Role must be editor or viewer.')
   if (request.method === 'POST') {
     if (!body.email || !/^\S+@\S+\.\S+$/.test(body.email) || !body.role) throw new AppError(400, 'MEMBER_INVALID', 'A valid email and role are required.')
     const invitation = await backend.members.add(workspaceId, body.email.toLowerCase(), body.role)
@@ -19,7 +19,7 @@ export default { fetch(request: Request) { return withErrors(async () => {
     await backend.members.remove(workspaceId, body.permissionId)
     return new Response(null, { status: 204 })
   }
-  if (!body.role) throw new AppError(400, 'ROLE_INVALID', 'Role must be editor, contributor or viewer.')
+  if (!body.role) throw new AppError(400, 'ROLE_INVALID', 'Role must be editor or viewer.')
   await backend.members.update(workspaceId, body.permissionId, body.role)
   return json({ ok: true })
 }) } }

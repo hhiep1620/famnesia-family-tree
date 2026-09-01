@@ -164,7 +164,7 @@ export async function collaborationWorkspaceAccess(accessToken: string, access: 
     const folder = await getFile(accessToken, member.draftFolderId).catch(() => undefined)
     draftFolderCanEdit = Boolean(folder?.capabilities?.canEdit)
   }
-  return deriveCollaborationAccess(access, member?.role, draftFolderCanEdit, Boolean(member?.migrationError))
+  return deriveCollaborationAccess(access, member?.role === 'contributor' ? 'viewer' : member?.role, draftFolderCanEdit, Boolean(member?.migrationError))
 }
 
 export async function listCollaborationMembers(accessToken: string, workspaceId: string) {
@@ -175,7 +175,7 @@ export async function listCollaborationMembers(accessToken: string, workspaceId:
     const record = permission.emailAddress ? await repository.getMember(workspaceId, permission.emailAddress) : null
     return {
       id: permission.id, email: permission.emailAddress, name: permission.displayName, photoUrl: permission.photoLink,
-      role: permission.role === 'owner' ? 'owner' as const : record?.role === 'contributor' ? 'contributor' as const : 'viewer' as const,
+      role: permission.role === 'owner' ? 'owner' as const : 'viewer' as const,
       inherited: Boolean(permission.permissionDetails?.some((detail) => detail.inherited)), migrationRequired: Boolean(record?.migrationError || permission.role === 'writer'),
     }
   }))
@@ -394,31 +394,9 @@ export async function cleanupExpiredDrafts(accessToken: string, workspaceId: str
 }
 
 export async function collaborationStatus(accessToken: string, workspaceId: string, user: SafeUser) {
-  if (!collaborationApprovalEnabled()) return { enabled: false, workspaceRole: 'viewer' as const, pendingDraftCount: 0, mirrorGeneration: 0 }
   const loaded = await loadFamily(accessToken, workspaceId)
   const access = await collaborationWorkspaceAccess(accessToken, loaded.workspace, user)
-  if (access.role === 'owner') await cleanupExpiredDrafts(accessToken, workspaceId)
-  else if (access.role === 'contributor') await cleanupExpiredDrafts(accessToken, workspaceId, user.id)
-  const repository = collaboration()
-  const drafts = access.role === 'owner' ? await repository.listDrafts(workspaceId) : []
-  const ownSummary = access.role === 'contributor'
-    ? await repository.getDraftForAuthor(workspaceId, user.id) ?? (await repository.listDrafts(workspaceId)).find((draft) => draft.author.id === user.id) ?? null
-    : null
-  const mirror = access.role === 'contributor' ? await repository.getMirror(workspaceId, user.id) : null
-  let ownDraft: ReviewDraft | undefined
-  if (ownSummary && terminal(ownSummary.status)) ownDraft = { ...ownSummary, operations: [] }
-  else if (ownSummary) {
-    try { ownDraft = draftView(ownSummary, await readDraftPayload(accessToken, ownSummary)) }
-    catch (error) {
-      const invalid = { ...ownSummary, status: 'invalid' as const, updatedAt: new Date().toISOString(), terminalAt: new Date().toISOString(), note: error instanceof Error ? error.message : String(error) }
-      await repository.saveDraft(invalid); ownDraft = { ...invalid, operations: [] }
-    }
-  }
-  return {
-    enabled: true, workspaceRole: access.role, pendingDraftCount: drafts.filter((draft) => !terminal(draft.status)).length,
-    ownDraft, mirrorGeneration: await repository.getMirrorGeneration(workspaceId), migrationRequired: access.migrationRequired,
-    mirror: mirror ? { status: mirror.status, generation: mirror.generation, syncedGeneration: mirror.syncedGeneration, lastSyncedAt: mirror.lastSyncedAt, mirrorFolderUrl: mirror.rootFolderId ? `https://drive.google.com/drive/folders/${mirror.rootFolderId}` : undefined, error: mirror.error } : undefined,
-  }
+  return { enabled: false, workspaceRole: access.role, pendingDraftCount: 0, mirrorGeneration: 0 }
 }
 
 export async function markMirrorChanged(workspaceId: string): Promise<number> {

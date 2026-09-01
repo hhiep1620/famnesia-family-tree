@@ -46,7 +46,8 @@ async function session(rawByte = 7, tabId = 'tab-a') {
 
 class FakeStore implements EncryptedFamilyStoreContract {
   state: EncryptedWorkspaceState = { workspaceId, cryptoVersion: 1, encryptedSchemaVersion: 1, keyEpoch: 1,
-    dataVersion: 1, directoryRevision: 1, migrationState: 'parallel' }
+    dataVersion: 1, directoryRevision: 1, membershipEpoch: 1, checkpointRevision: 1,
+    checkpointHash: 'sha256:initial', migrationState: 'parallel' }
   records: EncryptedEntityRecord[] = []
   requests: CiphertextCommitRequest[] = []
   commitError?: Error
@@ -57,10 +58,13 @@ class FakeStore implements EncryptedFamilyStoreContract {
     this.requests.push(request)
     if (this.commitError) throw this.commitError
     this.state = { ...this.state, dataVersion: request.expectedDataVersion + 1 }
-    return { commitId: request.commitId, dataVersion: this.state.dataVersion, idempotent: false }
+    return { commitId: request.commitId, dataVersion: this.state.dataVersion,
+      checkpointRevision: this.state.checkpointRevision + 1, checkpointHash: `sha256:${'Z'.repeat(43)}`, idempotent: false }
   }
   async committed() { return this.recovery }
 }
+
+const checkpoints = { async register() {} }
 
 describe('CR-05 encrypted family codec and repository', () => {
   it('round-trips all shared classes and keeps settings/media inside ciphertext', async () => {
@@ -130,7 +134,7 @@ describe('CR-05 encrypted family codec and repository', () => {
     const active = await session()
     const store = new FakeStore()
     store.records = await new EncryptedFamilyCodec(active).encrypt(family(), 1)
-    const repository = new EncryptedFamilyRepository(store, active, () => true)
+    const repository = new EncryptedFamilyRepository(store, active, () => true, checkpoints)
     const loaded = await repository.load()
     expect(loaded.data.profiles[0].name).toBe('Gia đình Nguyễn')
     const next = structuredClone(loaded.data); next.profiles[0].description = 'Nhánh trưởng'
@@ -141,26 +145,30 @@ describe('CR-05 encrypted family codec and repository', () => {
     expect(wire).not.toContain('Gia đình Nguyễn')
     expect(wire).not.toContain('Nhánh trưởng')
     expect(store.requests[0].operations.every((operation) => operation.type.startsWith('entity_'))).toBe(true)
+    expect(store.requests[0].operations).toHaveLength(1)
     await expect(repository.save(next, 1)).rejects.toThrow('ENCRYPTED_REVISION_CONFLICT')
   })
 
   it('fails offline and recovers only a confirmed identical unknown commit', async () => {
     const active = await session()
     const store = new FakeStore(); store.records = await new EncryptedFamilyCodec(active).encrypt(family(), 1)
-    const offline = new EncryptedFamilyRepository(store, active, () => false)
+    const offline = new EncryptedFamilyRepository(store, active, () => false, checkpoints)
     await offline.load()
     await expect(offline.save(family(), 1)).rejects.toThrow('ENCRYPTED_OFFLINE_WRITE_DISABLED')
 
     const uncertainStore = new FakeStore(); uncertainStore.records = store.records; uncertainStore.commitError = new Error('network')
-    const uncertain = new EncryptedFamilyRepository(uncertainStore, active, () => true)
+    const uncertain = new EncryptedFamilyRepository(uncertainStore, active, () => true, checkpoints)
     await uncertain.load()
-    await expect(uncertain.save(family(), 1, 'unknown-1')).rejects.toBeInstanceOf(EncryptedCommitOutcomeUnknownError)
-    uncertainStore.recovery = { commitId: 'different-commit', dataVersion: 2, idempotent: true }
-    await expect(uncertain.save(family(), 1, 'unknown-2')).rejects.toThrow('ENCRYPTED_COMMIT_ID_MISMATCH')
-    uncertainStore.recovery = { commitId: 'unknown-2', dataVersion: 2, idempotent: true }
-    const recovered = new EncryptedFamilyRepository(uncertainStore, active, () => true)
+    const changed = family(); changed.profiles[0].description = 'Thay đổi chưa rõ kết quả'
+    await expect(uncertain.save(changed, 1, 'unknown-1')).rejects.toBeInstanceOf(EncryptedCommitOutcomeUnknownError)
+    uncertainStore.recovery = { commitId: 'different-commit', dataVersion: 2, checkpointRevision: 2,
+      checkpointHash: `sha256:${'Z'.repeat(43)}`, idempotent: true }
+    await expect(uncertain.save(changed, 1, 'unknown-2')).rejects.toThrow('ENCRYPTED_COMMIT_ID_MISMATCH')
+    uncertainStore.recovery = { commitId: 'unknown-2', dataVersion: 2, checkpointRevision: 2,
+      checkpointHash: `sha256:${'Z'.repeat(43)}`, idempotent: true }
+    const recovered = new EncryptedFamilyRepository(uncertainStore, active, () => true, checkpoints)
     await recovered.load()
-    await expect(recovered.save(family(), 1, 'unknown-2')).resolves.toMatchObject({ revision: { version: '2' } })
+    await expect(recovered.save(changed, 1, 'unknown-2')).resolves.toMatchObject({ revision: { version: '2' } })
   })
 
   it('has an explicit fail-closed repository mode and a ciphertext-only store module', () => {

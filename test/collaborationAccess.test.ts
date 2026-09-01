@@ -5,28 +5,28 @@ import type { WorkspaceAccess } from '../api/_server/types'
 function base(overrides: Partial<WorkspaceAccess> = {}): WorkspaceAccess {
   return {
     id: 'workspace-1', name: 'Famnesia', role: 'viewer', canRead: true, canEdit: false, canUpload: false,
-    canManageMembers: false, canCommitDirectly: false, canSubmitDraft: false, canReviewDrafts: false,
-    canReplaceData: false, canCreateBackups: false, ownedByMe: false,
+    canManageMembers: false, canCommitDirectly: false, canReplaceData: false,
+    canCreateBackups: false, ownedByMe: false,
     ...overrides,
   }
 }
 
 describe('collaboration role derivation', () => {
-  it('allows contributors to edit Drafts but never commit official data directly', () => {
-    expect(deriveCollaborationAccess(base(), 'contributor', true)).toMatchObject({
-      role: 'contributor', canEdit: true, canUpload: true, canCommitDirectly: false, canSubmitDraft: true, canReviewDrafts: false,
+  it('allows editors to edit and commit canonical data directly', () => {
+    expect(deriveCollaborationAccess(base(), 'editor', true)).toMatchObject({
+      role: 'editor', canEdit: true, canUpload: true, canCommitDirectly: true,
     })
   })
 
-  it('blocks legacy writers until migration gives direct draft-folder writer capability', () => {
-    expect(deriveCollaborationAccess(base({ role: 'contributor', canEdit: true, canCommitDirectly: true }), 'contributor', false)).toMatchObject({
-      role: 'contributor', canEdit: false, canCommitDirectly: false, canSubmitDraft: false, migrationRequired: true,
+  it('keeps viewers read-only even if stale capabilities claim write access', () => {
+    expect(deriveCollaborationAccess(base({ canEdit: true, canCommitDirectly: true }), 'viewer', true)).toMatchObject({
+      role: 'viewer', canEdit: false, canUpload: false, canCommitDirectly: false,
     })
   })
 
-  it('gives review and direct commit capabilities only to the owner', () => {
+  it('gives owner management and direct commit capabilities', () => {
     expect(deriveCollaborationAccess(base({ ownedByMe: true }), undefined, false)).toMatchObject({
-      role: 'owner', canEdit: true, canCommitDirectly: true, canSubmitDraft: false, canReviewDrafts: true,
+      role: 'owner', canEdit: true, canUpload: true, canManageMembers: true, canCommitDirectly: true,
     })
   })
 })

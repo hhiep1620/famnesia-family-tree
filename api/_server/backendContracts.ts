@@ -1,5 +1,4 @@
 import type { ActivityEvent, FamilyBackup, FamilyData, WorkspaceInfo, WorkspaceInvitationResult, WorkspaceMember, WorkspaceRole } from '../../src/types/family.js'
-import type { CollaborationStatus, DraftReviewRequest, DraftReviewResult, MirrorSyncResult, ReviewDraft, SubmitDraftResult } from '../../src/types/collaboration.js'
 import type { FamilyCommitMeta, FamilyCommitRequest, FamilyCommitStatusResult, FamilyRevision } from '../../src/types/familyOperations.js'
 import type { BackendSelection } from './backendSelectors.js'
 import type { SafeUser } from './types.js'
@@ -11,7 +10,7 @@ export interface FamilySnapshot {
 
 export type FamilySaveMode = 'save' | 'replace' | 'restore' | 'merge'
 export type ActivityInput = Pick<ActivityEvent, 'actorEmail' | 'actorName' | 'action' | 'entityType' | 'entityId' | 'summary' | 'metadata'>
-export type AssignableWorkspaceRole = Extract<WorkspaceRole, 'editor' | 'contributor' | 'viewer'>
+export type AssignableWorkspaceRole = Extract<WorkspaceRole, 'editor' | 'viewer'>
 
 export interface WorkspaceRepositoryContract {
   list(): Promise<WorkspaceInfo[]>
@@ -43,16 +42,6 @@ export interface MemberRepositoryContract {
   remove(workspaceId: string, memberId: string): Promise<void>
 }
 
-export interface DraftRepositoryContract {
-  submit(workspaceId: string, request: FamilyCommitRequest): Promise<SubmitDraftResult>
-  list(workspaceId: string): Promise<ReviewDraft[]>
-  status(workspaceId: string): Promise<CollaborationStatus>
-  review(workspaceId: string, request: DraftReviewRequest): Promise<DraftReviewResult>
-  syncMirror(workspaceId: string): Promise<MirrorSyncResult>
-  workspaceInfo(workspaceId: string): Promise<WorkspaceInfo>
-  markCanonicalChanged(workspaceId: string): Promise<number>
-}
-
 export interface BackupRepositoryContract {
   create(workspaceId: string, data: FamilyData, reason?: string): Promise<FamilyBackup>
   list(workspaceId: string): Promise<FamilyBackup[]>
@@ -66,6 +55,5 @@ export interface RequestBackend {
   readonly family: FamilyRepositoryContract
   readonly media: MediaRepositoryContract
   readonly members: MemberRepositoryContract
-  readonly drafts: DraftRepositoryContract
   readonly backups: BackupRepositoryContract
 }

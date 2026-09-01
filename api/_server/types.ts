@@ -1,4 +1,4 @@
-export type WorkspaceRole = 'owner' | 'contributor' | 'viewer'
+export type WorkspaceRole = 'owner' | 'editor' | 'viewer'
 
 export interface AuthSession {
   id: string
@@ -30,8 +30,6 @@ export interface WorkspaceAccess {
   canUpload: boolean
   canManageMembers: boolean
   canCommitDirectly: boolean
-  canSubmitDraft: boolean
-  canReviewDrafts: boolean
   canReplaceData: boolean
   canCreateBackups: boolean
   migrationRequired?: boolean

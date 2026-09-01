@@ -25,7 +25,7 @@ values ('92000000-0000-4000-8000-000000000001', '91000000-0000-4000-8000-0000000
 insert into public.workspace_members (workspace_id, user_id, role)
 values
   ('92000000-0000-4000-8000-000000000001', '91000000-0000-4000-8000-000000000002', 'editor'),
-  ('92000000-0000-4000-8000-000000000001', '91000000-0000-4000-8000-000000000003', 'contributor'),
+  ('92000000-0000-4000-8000-000000000001', '91000000-0000-4000-8000-000000000003', 'viewer'),
   ('92000000-0000-4000-8000-000000000001', '91000000-0000-4000-8000-000000000004', 'viewer');
 
 insert into public.family_profiles (id, workspace_id, legacy_id, name)
@@ -158,7 +158,7 @@ select is(
 select set_config('request.jwt.claim.sub', '91000000-0000-4000-8000-000000000003', true);
 select public.throws_any_ok(
   $$select public.commit_family_operations('92000000-0000-4000-8000-000000000001', 'commit_contributor_denied', 5, '[{"id":"op-denied","type":"person.update","entityId":"P1","changes":{"note":"Denied"},"createdAt":"2026-08-14T04:01:00.000Z"}]'::jsonb, now())$$,
-  'contributor direct commit is denied'
+  'viewer direct commit is denied'
 );
 
 select set_config('request.jwt.claim.sub', '91000000-0000-4000-8000-000000000004', true);

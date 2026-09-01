@@ -70,10 +70,11 @@ describe('CR-04 encrypted relational contract', () => {
   })
 
   it('rejects downgrade, stale epoch, extra fields and cross-workspace commit operations', () => {
-    const operation = { type: 'entity_upsert', entityId: 'person-1', fieldClass: 'person_core', expectedRowVersion: 0,
+    const operation = { type: 'entity_upsert', entityId: 'person-1', fieldClass: 'person_core', expectedRowVersion: 7,
       keyId: 'wk-family-1', keyEpoch: 2, envelope: envelope('person-1', 'person_core', 'family-content') }
     const request = { workspaceId, commitId: 'commit-1', requestChecksum: checksum,
-      expectedDataVersion: 7, expectedKeyEpoch: 2, operations: [operation] }
+      expectedDataVersion: 7, expectedKeyEpoch: 2, expectedMembershipEpoch: 1,
+      dependencies: [], operations: [operation], checkpointId: 'checkpoint-1' }
     expect(parseEncryptedCommitRequest(request).operations).toHaveLength(1)
     expect(() => parseEncryptedCommitRequest({ ...request, operations: [{ ...operation, keyEpoch: 1 }] })).toThrow('AAD_RECORD_BINDING_MISMATCH')
     expect(() => parseEncryptedCommitRequest({ ...request, operations: [{ ...operation, bundle: true }] })).toThrow('INVALID_ENTITY_OPERATION_SHAPE')

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json, Tables } from '../types/database.generated'
-import type { EncryptedCommitOperation, EncryptedEntityRecord } from '../crypto/encryptedDataContract'
+import type { EncryptedCommitDependency, EncryptedCommitOperation, EncryptedEntityRecord } from '../crypto/encryptedDataContract'
 
 export interface EncryptedWorkspaceState {
   workspaceId: string
@@ -9,6 +9,9 @@ export interface EncryptedWorkspaceState {
   keyEpoch: number
   dataVersion: number
   directoryRevision: number
+  membershipEpoch: number
+  checkpointRevision: number
+  checkpointHash?: string
   migrationState: 'parallel' | 'preview_ready' | 'canonical' | 'blocked'
 }
 
@@ -18,13 +21,18 @@ export interface CiphertextCommitRequest {
   requestChecksum: string
   expectedDataVersion: number
   expectedKeyEpoch: number
+  expectedMembershipEpoch: number
+  dependencies: EncryptedCommitDependency[]
   operations: EncryptedCommitOperation[]
+  checkpointId: string
 }
 
 export interface CiphertextCommitResult {
   commitId: string
   dataVersion: number
   idempotent: boolean
+  checkpointRevision: number
+  checkpointHash: string
 }
 
 export interface EncryptedFamilyStoreContract {
@@ -41,10 +49,12 @@ function databaseError(error: { message: string; code?: string } | null): never 
 function commitResult(value: Json): CiphertextCommitResult {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('INVALID_ENCRYPTED_COMMIT_RESULT')
   const result = value as Record<string, Json | undefined>
-  if (typeof result.commitId !== 'string' || typeof result.dataVersion !== 'number' || typeof result.idempotent !== 'boolean') {
+  if (typeof result.commitId !== 'string' || typeof result.dataVersion !== 'number' || typeof result.idempotent !== 'boolean' ||
+      typeof result.checkpointRevision !== 'number' || typeof result.checkpointHash !== 'string') {
     throw new Error('INVALID_ENCRYPTED_COMMIT_RESULT')
   }
-  return { commitId: result.commitId, dataVersion: result.dataVersion, idempotent: result.idempotent }
+  return { commitId: result.commitId, dataVersion: result.dataVersion, idempotent: result.idempotent,
+    checkpointRevision: result.checkpointRevision, checkpointHash: result.checkpointHash }
 }
 
 type EncryptedEntityRow = Tables<'encrypted_entities'> & { writer_id: string }
@@ -69,7 +79,7 @@ export class SupabaseEncryptedFamilyStore implements EncryptedFamilyStoreContrac
 
   async loadState(workspaceId: string): Promise<EncryptedWorkspaceState> {
     const { data, error } = await this.client.from('workspace_crypto_states')
-      .select('workspace_id,crypto_version,encrypted_schema_version,key_epoch,data_version,directory_revision,migration_state')
+      .select('workspace_id,crypto_version,encrypted_schema_version,key_epoch,data_version,directory_revision,membership_epoch,checkpoint_revision,checkpoint_hash,migration_state')
       .eq('workspace_id', workspaceId).single()
     if (error || !data) databaseError(error)
     return {
@@ -79,6 +89,9 @@ export class SupabaseEncryptedFamilyStore implements EncryptedFamilyStoreContrac
       keyEpoch: data.key_epoch,
       dataVersion: data.data_version,
       directoryRevision: data.directory_revision,
+      membershipEpoch: data.membership_epoch,
+      checkpointRevision: data.checkpoint_revision,
+      checkpointHash: data.checkpoint_hash ?? undefined,
       migrationState: data.migration_state,
     }
   }
@@ -92,13 +105,16 @@ export class SupabaseEncryptedFamilyStore implements EncryptedFamilyStoreContrac
   }
 
   async commit(request: CiphertextCommitRequest): Promise<CiphertextCommitResult> {
-    const { data, error } = await this.client.rpc('commit_encrypted_workspace', {
+    const { data, error } = await this.client.rpc('commit_encrypted_workspace_v2', {
       p_workspace_id: request.workspaceId,
       p_commit_id: request.commitId,
       p_request_checksum: request.requestChecksum,
       p_expected_data_version: request.expectedDataVersion,
       p_expected_key_epoch: request.expectedKeyEpoch,
+      p_expected_membership_epoch: request.expectedMembershipEpoch,
+      p_dependencies: request.dependencies as unknown as Json,
       p_operations: request.operations as unknown as Json,
+      p_checkpoint_id: request.checkpointId,
     })
     if (error || !data) databaseError(error)
     return commitResult(data)
@@ -106,8 +122,13 @@ export class SupabaseEncryptedFamilyStore implements EncryptedFamilyStoreContrac
 
   async committed(workspaceId: string, commitId: string): Promise<CiphertextCommitResult | undefined> {
     const { data, error } = await this.client.from('encrypted_commits')
-      .select('commit_id,result_data_version').eq('workspace_id', workspaceId).eq('commit_id', commitId).maybeSingle()
+      .select('commit_id,result_data_version,checkpoint_revision').eq('workspace_id', workspaceId).eq('commit_id', commitId).maybeSingle()
     if (error) databaseError(error)
-    return data ? { commitId: data.commit_id, dataVersion: data.result_data_version, idempotent: true } : undefined
+    if (!data || data.checkpoint_revision === null) return undefined
+    const checkpoint = await this.client.from('workspace_operation_checkpoints').select('checkpoint_hash')
+      .eq('workspace_id', workspaceId).eq('commit_id', commitId).single()
+    if (checkpoint.error || !checkpoint.data) databaseError(checkpoint.error)
+    return { commitId: data.commit_id, dataVersion: data.result_data_version, checkpointRevision: data.checkpoint_revision,
+      checkpointHash: checkpoint.data.checkpoint_hash, idempotent: true }
   }
 }

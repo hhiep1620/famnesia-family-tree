@@ -1,12 +1,11 @@
 import type { ActivityEvent, FamilyBackup, FamilyData, WorkspaceInfo, WorkspaceInvitationResult, WorkspaceMember, WorkspaceRole } from '../types/family'
 import type { FamilyCommitRequest, FamilyCommitResult, FamilyCommitStatusResult } from '../types/familyOperations'
-import type { CollaborationStatus, DraftReviewRequest, DraftReviewResult, MirrorSyncResult, ReviewDraft, SubmitDraftResult } from '../types/collaboration'
 import { ApiError, apiRequest, jsonBody } from './apiClient'
 import { assertLegacyFamilyPathEnabled } from './familyRepositoryMode'
 
 export interface FamilyDataRevision { modifiedTime?: string; version?: string }
 export interface FamilyDataSnapshot { data: FamilyData; revision: FamilyDataRevision }
-export type AssignableWorkspaceRole = Extract<WorkspaceRole, 'editor' | 'contributor' | 'viewer'>
+export type AssignableWorkspaceRole = Extract<WorkspaceRole, 'editor' | 'viewer'>
 
 export interface FamilyRepositoryContract {
   readonly workspace: WorkspaceInfo
@@ -15,11 +14,6 @@ export interface FamilyRepositoryContract {
   save(data: FamilyData, expectedRevision?: FamilyDataRevision, mode?: 'save' | 'replace' | 'restore' | 'merge'): Promise<FamilyDataSnapshot>
   commit(request: FamilyCommitRequest): Promise<FamilyCommitResult>
   commitStatus(commitId: string): Promise<FamilyCommitStatusResult>
-  submitDraft(request: FamilyCommitRequest): Promise<SubmitDraftResult>
-  listDrafts(): Promise<ReviewDraft[]>
-  collaborationStatus(): Promise<CollaborationStatus>
-  reviewDraft(request: DraftReviewRequest): Promise<DraftReviewResult>
-  syncMirror(): Promise<MirrorSyncResult>
   listActivity(): Promise<ActivityEvent[]>
   backup(data: FamilyData, reason?: string): Promise<FamilyBackup>
   listBackups(): Promise<FamilyBackup[]>
@@ -128,26 +122,6 @@ export class FamilyRepository implements FamilyRepositoryContract {
 
   async commitStatus(commitId: string): Promise<FamilyCommitStatusResult> {
     return apiRequest<FamilyCommitStatusResult>(`${workspacePath(this.workspace.id)}/family?resource=commit-status&commitId=${encodeURIComponent(commitId)}`)
-  }
-
-  async submitDraft(request: FamilyCommitRequest): Promise<SubmitDraftResult> {
-    return apiRequest<SubmitDraftResult>(`${workspacePath(this.workspace.id)}/family?operation=draft-submit`, { method: 'POST', ...jsonBody(request) })
-  }
-
-  async listDrafts(): Promise<ReviewDraft[]> {
-    return (await apiRequest<{ drafts: ReviewDraft[] }>(`${workspacePath(this.workspace.id)}/family?resource=drafts`)).drafts
-  }
-
-  async collaborationStatus(): Promise<CollaborationStatus> {
-    return (await apiRequest<{ status: CollaborationStatus }>(`${workspacePath(this.workspace.id)}/family?resource=collaboration-status`)).status
-  }
-
-  async reviewDraft(request: DraftReviewRequest): Promise<DraftReviewResult> {
-    return apiRequest<DraftReviewResult>(`${workspacePath(this.workspace.id)}/family?operation=draft-review`, { method: 'POST', ...jsonBody(request) })
-  }
-
-  async syncMirror(): Promise<MirrorSyncResult> {
-    return apiRequest<MirrorSyncResult>(`${workspacePath(this.workspace.id)}/family?operation=mirror-sync`, { method: 'POST', ...jsonBody({}) })
   }
 
   async listActivity(): Promise<ActivityEvent[]> { return (await apiRequest<{ activity: ActivityEvent[] }>(`${workspacePath(this.workspace.id)}/family?resource=activity`)).activity }

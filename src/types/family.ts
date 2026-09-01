@@ -155,7 +155,7 @@ export interface PersonDraft {
   photos?: File[]
 }
 
-export type WorkspaceRole = 'owner' | 'editor' | 'contributor' | 'viewer'
+export type WorkspaceRole = 'owner' | 'editor' | 'viewer'
 
 export interface WorkspaceInfo {
   id: string
@@ -166,8 +166,6 @@ export interface WorkspaceInfo {
   canUpload: boolean
   canManageMembers: boolean
   canCommitDirectly: boolean
-  canSubmitDraft: boolean
-  canReviewDrafts: boolean
   canReplaceData?: boolean
   canCreateBackups?: boolean
   migrationRequired?: boolean
@@ -191,7 +189,7 @@ export interface WorkspaceMember {
 export interface WorkspaceInvitationResult {
   id: string
   email: string
-  role: Extract<WorkspaceRole, 'editor' | 'contributor' | 'viewer'>
+  role: Extract<WorkspaceRole, 'editor' | 'viewer'>
   expiresAt: string
   inviteUrl: string
 }

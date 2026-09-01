@@ -4,10 +4,7 @@ import { IMPORT_LIMITS } from '../../../src/import/security/importLimits.js'
 import { validateFamilyData } from '../../../src/schema/familyDataSchema.js'
 import type { FamilyData } from '../../../src/types/family.js'
 import type { FamilyCommitRequest } from '../../../src/types/familyOperations.js'
-import type { DraftReviewRequest } from '../../../src/types/collaboration.js'
-import { draftReviewRequestProblem } from '../../_server/collaborationIntegrity.js'
 import type { FamilyRevision } from '../../../src/types/familyOperations.js'
-import { collaborationApprovalEnabled } from '../../_server/env.js'
 import { AppError, assertSameOrigin, json, pathParameter, readJsonLimited, requireMethod, withErrors } from '../../_server/http.js'
 import { requestBackend } from '../../_server/requestBackend.js'
 
@@ -26,30 +23,20 @@ export default { fetch(request: Request) { return withErrors(async () => {
   const backend = await requestBackend(request)
   const workspaceId = pathParameter(request, 'workspaces')
 
-  if (operation === 'commit' || operation === 'draft-submit') {
+  if (operation === 'commit') {
     const body = await readJsonLimited<FamilyCommitRequest>(request, MAX_COMMIT_BYTES)
     if (!validCommitId(body.commitId)) throw new AppError(400, 'FAMILY_COMMIT_ID_INVALID', 'A valid commitId is required.')
     if (!Array.isArray(body.operations) || body.operations.length === 0 || body.operations.length > MAX_OPERATIONS || !body.operations.every(isFamilyOperation)) {
       throw new AppError(422, 'FAMILY_COMMIT_INVALID', 'Commit operations are invalid or exceed the allowed limit.')
     }
     if (typeof body.clientCreatedAt !== 'string' || Number.isNaN(Date.parse(body.clientCreatedAt))) throw new AppError(422, 'FAMILY_COMMIT_INVALID', 'clientCreatedAt must be a valid ISO timestamp.')
-    if (operation === 'draft-submit') return json(await backend.drafts.submit(workspaceId, body), { status: 201 })
-    if (collaborationApprovalEnabled() && !(await backend.drafts.workspaceInfo(workspaceId)).canCommitDirectly) {
-      throw new AppError(403, 'APPROVAL_REQUIRED', 'Contributors must submit this change as a Draft for owner approval.')
-    }
     const result = await backend.family.commit(workspaceId, body)
-    await backend.drafts.markCanonicalChanged(workspaceId)
     return json(result)
   }
 
-  if (operation === 'draft-review') {
-    const body = await readJsonLimited<DraftReviewRequest>(request, MAX_COMMIT_BYTES)
-    const problem = draftReviewRequestProblem(body)
-    if (problem === 'reject_note_required') throw new AppError(422, 'DRAFT_REJECT_NOTE_REQUIRED', 'A reason is required when rejecting changes.')
-    if (problem) throw new AppError(422, 'DRAFT_REVIEW_INVALID', 'Draft review request is invalid.')
-    return json(await backend.drafts.review(workspaceId, body))
+  if (operation === 'draft-submit' || operation === 'draft-review' || operation === 'mirror-sync') {
+    throw new AppError(410, 'LEGACY_DRAFT_DISABLED', 'Legacy draft collaboration is disabled.')
   }
-  if (operation === 'mirror-sync') return json(await backend.drafts.syncMirror(workspaceId))
 
   if (request.method === 'GET') {
     const resource = new URL(request.url).searchParams.get('resource')
@@ -59,12 +46,10 @@ export default { fetch(request: Request) { return withErrors(async () => {
       if (!validCommitId(commitId)) throw new AppError(400, 'FAMILY_COMMIT_ID_INVALID', 'A valid commitId is required.')
       return json(await backend.family.commitStatus(workspaceId, commitId))
     }
-    if (resource === 'drafts') return json({ drafts: await backend.drafts.list(workspaceId) })
-    if (resource === 'collaboration-status') return json({ status: await backend.drafts.status(workspaceId) })
+    if (resource === 'drafts' || resource === 'collaboration-status') {
+      throw new AppError(410, 'LEGACY_DRAFT_DISABLED', 'Legacy draft collaboration is disabled.')
+    }
     return json(await backend.family.load(workspaceId))
-  }
-  if (collaborationApprovalEnabled() && !(await backend.drafts.workspaceInfo(workspaceId)).canCommitDirectly) {
-    throw new AppError(403, 'APPROVAL_REQUIRED', 'Contributors must submit this change as a Draft for owner approval.')
   }
   const body = await readJsonLimited<SaveBody>(request, 11 * 1024 * 1024)
   const validationErrors: string[] = []
@@ -80,6 +65,5 @@ export default { fetch(request: Request) { return withErrors(async () => {
     throw new AppError(422, 'FAMILY_DATA_INVALID', 'Family data failed security or genealogy validation.', { errors: validationErrors.slice(0, 50) })
   }
   const snapshot = await backend.family.save(workspaceId, body.data, body.expectedRevision, body.mode)
-  await backend.drafts.markCanonicalChanged(workspaceId)
   return json({ snapshot })
 }) } }

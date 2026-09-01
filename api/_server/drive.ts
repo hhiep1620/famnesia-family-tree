@@ -6,7 +6,6 @@ import type { ActivityEvent, FamilyBackup, FamilyData } from '../../src/types/fa
 import type { FamilyCommitMeta, FamilyCommitRequest, FamilyOperation } from '../../src/types/familyOperations.js'
 import { AppError } from './http.js'
 import type { WorkspaceAccess, WorkspaceRole } from './types.js'
-import { collaborationApprovalEnabled } from './env.js'
 
 export const DRIVE_API = 'https://www.googleapis.com/drive/v3'
 export const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3'
@@ -142,13 +141,11 @@ async function ensureResources(accessToken: string, root: DriveFile): Promise<Wo
 }
 
 function accessOf(root: DriveFile): WorkspaceAccess {
-  const approval = collaborationApprovalEnabled()
-  const role: WorkspaceRole = root.ownedByMe ? 'owner' : root.capabilities?.canEdit ? 'contributor' : 'viewer'
+  const role: WorkspaceRole = root.ownedByMe ? 'owner' : root.capabilities?.canEdit ? 'editor' : 'viewer'
   return {
     id: root.id, name: root.name, role, canRead: true,
     canEdit: role !== 'viewer', canUpload: role !== 'viewer', canManageMembers: role === 'owner',
-    canCommitDirectly: role === 'owner' || (!approval && role === 'contributor'),
-    canSubmitDraft: approval && role === 'contributor', canReviewDrafts: approval && role === 'owner',
+    canCommitDirectly: role === 'owner' || role === 'editor',
     canReplaceData: role === 'owner', canCreateBackups: role === 'owner',
     ownedByMe: Boolean(root.ownedByMe), webViewLink: root.webViewLink,
   }
@@ -169,7 +166,7 @@ export async function workspaceResources(accessToken: string, workspaceId: strin
     throw new AppError(404, 'WORKSPACE_NOT_FOUND', 'Famnesia workspace not found.')
   }
   const result = await ensureResources(accessToken, root)
-  const level = { viewer: 0, contributor: 1, owner: 2 }
+  const level = { viewer: 0, editor: 1, owner: 2 }
   if (level[result.access.role] < level[minimum]) throw new AppError(403, 'INSUFFICIENT_ROLE', `This operation requires ${minimum} access.`)
   return result
 }
@@ -196,7 +193,7 @@ export async function loadFamily(accessToken: string, workspaceId: string): Prom
 }
 
 export async function saveFamily(accessToken: string, workspaceId: string, data: FamilyData, expected: FamilyRevision | undefined, mode: 'save' | 'replace' | 'restore' | 'merge' = 'save', actor?: { email: string; name?: string }): Promise<FamilySnapshot> {
-  const minimum: WorkspaceRole = mode === 'replace' || mode === 'restore' || collaborationApprovalEnabled() ? 'owner' : 'contributor'
+  const minimum: WorkspaceRole = mode === 'replace' || mode === 'restore' ? 'owner' : 'editor'
   const resource = await workspaceResources(accessToken, workspaceId, minimum)
   const current = await getFile(accessToken, resource.familyData.id)
   if (!sameRevision(expected, current)) throw new AppError(409, 'FAMILY_DATA_CONFLICT', 'Family data changed in another session. Reload before saving.', { currentRevision: revision(current) })
@@ -273,7 +270,7 @@ async function validateCommitPhotoReferences(accessToken: string, workspaceId: s
 export async function commitFamily(accessToken: string, workspaceId: string, request: FamilyCommitRequest, actor: { email: string; name?: string }): Promise<{ snapshot: FamilySnapshot; commit: FamilyCommitMeta }> {
   const operations = compactFamilyOperations(request.operations)
   const commit: FamilyCommitMeta = { commitId: request.commitId, operationCount: operations.length, counts: commitCountLabels(operations) }
-  const resource = await workspaceResources(accessToken, workspaceId, collaborationApprovalEnabled() ? 'owner' : 'contributor')
+  const resource = await workspaceResources(accessToken, workspaceId, 'editor')
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const currentVersion = await getFileVersion(accessToken, resource.familyData.id)
@@ -345,7 +342,7 @@ async function writeTextFile(accessToken: string, fileId: string, content: strin
 }
 
 export async function appendActivity(accessToken: string, workspaceId: string, input: Pick<ActivityEvent, 'actorEmail' | 'actorName' | 'action' | 'entityType' | 'entityId' | 'summary' | 'metadata'>): Promise<void> {
-  const resource = await workspaceResources(accessToken, workspaceId, collaborationApprovalEnabled() ? 'owner' : 'contributor')
+  const resource = await workspaceResources(accessToken, workspaceId, 'editor')
   const folder = resource.activity ?? await createFolder(accessToken, 'activity', 'activity', resource.root.id)
   const month = new Date().toISOString().slice(0, 7)
   const files = await listFiles(accessToken, `${propertyQuery('activity-log')} and '${escapeQuery(folder.id)}' in parents`, 'name desc')
@@ -369,7 +366,7 @@ export async function listActivity(accessToken: string, workspaceId: string, lim
 function backupName(): string { return `famnesia_${new Date().toISOString().replace(/[-:]/g, '').replace('T', '_').replace(/\.\d{3}Z$/, '')}.json` }
 
 export async function createBackup(accessToken: string, workspaceId: string, data: FamilyData, reason = 'manual'): Promise<FamilyBackup> {
-  const resource = await workspaceResources(accessToken, workspaceId, collaborationApprovalEnabled() ? 'owner' : 'contributor')
+  const resource = await workspaceResources(accessToken, workspaceId, 'editor')
   const file = await createJsonFile(accessToken, backupName(), resource.backups.id, 'family-backup', serializeFamilyData(requireValidFamilyData(data)), { schemaVersion: String(CURRENT_SCHEMA_VERSION), reason })
   return { id: file.id, name: file.name, createdTime: file.createdTime, modifiedTime: file.modifiedTime, reason }
 }
@@ -390,7 +387,7 @@ export async function loadBackup(accessToken: string, workspaceId: string, backu
 }
 
 export async function uploadPhoto(accessToken: string, workspaceId: string, file: Blob, filename: string, profileId?: string, personId?: string, uploadedBy?: string): Promise<string> {
-  const resource = await workspaceResources(accessToken, workspaceId, collaborationApprovalEnabled() ? 'owner' : 'contributor')
+  const resource = await workspaceResources(accessToken, workspaceId, 'editor')
   if (!file.type.startsWith('image/')) throw new AppError(415, 'PHOTO_TYPE_INVALID', 'Only image files can be uploaded.')
   if (file.size > 10 * 1024 * 1024) throw new AppError(413, 'PHOTO_TOO_LARGE', 'Photo must be 10 MB or smaller.')
   let parentId = resource.photos.id
@@ -416,7 +413,7 @@ export async function uploadPhoto(accessToken: string, workspaceId: string, file
 }
 
 export async function cleanupOrphanPhotos(accessToken: string, workspaceId: string, data?: FamilyData, ttlDays = Number(process.env.FAMNESIA_ORPHAN_PHOTO_TTL_DAYS ?? 7)): Promise<number> {
-  await workspaceResources(accessToken, workspaceId, collaborationApprovalEnabled() ? 'owner' : 'contributor')
+  await workspaceResources(accessToken, workspaceId, 'editor')
   const snapshot = data ?? (await loadFamily(accessToken, workspaceId)).snapshot.data
   const referenced = new Set(snapshot.media.flatMap((item) => item.driveFileId ? [item.driveFileId] : []))
   const cutoff = Date.now() - Math.max(1, ttlDays) * 24 * 60 * 60 * 1000
@@ -445,14 +442,14 @@ export async function readPhoto(accessToken: string, workspaceId: string, fileId
 }
 
 export async function deletePhoto(accessToken: string, workspaceId: string, fileId: string): Promise<void> {
-  const resource = await workspaceResources(accessToken, workspaceId, collaborationApprovalEnabled() ? 'owner' : 'contributor')
+  const resource = await workspaceResources(accessToken, workspaceId, 'editor')
   const file = await getFile(accessToken, fileId)
   if (file.appProperties?.resourceType !== 'person-photo' || !await isInsidePhotoFolder(accessToken, file, resource.photos.id)) throw new AppError(404, 'PHOTO_NOT_FOUND', 'Photo not found in this workspace.')
   await googleResponse(accessToken, `/files/${encodeURIComponent(fileId)}`, { method: 'DELETE' })
 }
 
 interface DrivePermission { id: string; emailAddress?: string; displayName?: string; photoLink?: string; role: string; type: string; permissionDetails?: { inherited?: boolean }[] }
-function memberRole(permission: DrivePermission): WorkspaceRole { return permission.role === 'owner' ? 'owner' : permission.role === 'writer' ? 'contributor' : 'viewer' }
+function memberRole(permission: DrivePermission): WorkspaceRole { return permission.role === 'owner' ? 'owner' : permission.role === 'writer' ? 'editor' : 'viewer' }
 
 export async function listMembers(accessToken: string, workspaceId: string): Promise<WorkspaceMember[]> {
   await workspaceResources(accessToken, workspaceId, 'owner')
@@ -464,14 +461,14 @@ export async function listMembers(accessToken: string, workspaceId: string): Pro
 export async function addMember(accessToken: string, workspaceId: string, email: string, role: Exclude<WorkspaceRole, 'owner'>): Promise<void> {
   await workspaceResources(accessToken, workspaceId, 'owner')
   await googleJson(accessToken, `/files/${encodeURIComponent(workspaceId)}/permissions?sendNotificationEmail=true&fields=id`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'user', role: role === 'contributor' && !collaborationApprovalEnabled() ? 'writer' : 'reader', emailAddress: email }),
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'user', role: role === 'editor' ? 'writer' : 'reader', emailAddress: email }),
   })
 }
 
 export async function updateMember(accessToken: string, workspaceId: string, permissionId: string, role: Exclude<WorkspaceRole, 'owner'>): Promise<void> {
   await workspaceResources(accessToken, workspaceId, 'owner')
   await googleJson(accessToken, `/files/${encodeURIComponent(workspaceId)}/permissions/${encodeURIComponent(permissionId)}?fields=id`, {
-    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: role === 'contributor' && !collaborationApprovalEnabled() ? 'writer' : 'reader' }),
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: role === 'editor' ? 'writer' : 'reader' }),
   })
 }
 

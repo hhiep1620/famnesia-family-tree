@@ -69,13 +69,23 @@ export type EncryptedCommitOperation =
   | { type: 'private_delete'; personId: string; fieldClass: PrivateFieldClass; expectedRowVersion: number; authorizationId: string }
   | { type: 'key_envelope_insert'; wrappedEnvelope: WrappedKeyEnvelopeV1 }
 
+export interface EncryptedCommitDependency {
+  kind: 'entity' | 'private'
+  entityId: string
+  fieldClass: SharedFieldClass | PrivateFieldClass
+  expectedRowVersion: number
+}
+
 export interface EncryptedCommitRequest {
   workspaceId: string
   commitId: string
   requestChecksum: string
   expectedDataVersion: number
   expectedKeyEpoch: number
+  expectedMembershipEpoch: number
+  dependencies: EncryptedCommitDependency[]
   operations: EncryptedCommitOperation[]
+  checkpointId: string
 }
 
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u
@@ -244,24 +254,40 @@ export function assertContactEditAuthorization(
 
 export function parseEncryptedCommitRequest(value: unknown): EncryptedCommitRequest {
   const input = record(value, 'ENCRYPTED_COMMIT')
-  exact(input, ['workspaceId', 'commitId', 'requestChecksum', 'expectedDataVersion', 'expectedKeyEpoch', 'operations'], 'ENCRYPTED_COMMIT')
+  exact(input, ['workspaceId', 'commitId', 'requestChecksum', 'expectedDataVersion', 'expectedKeyEpoch', 'expectedMembershipEpoch', 'dependencies', 'operations', 'checkpointId'], 'ENCRYPTED_COMMIT')
   const workspaceId = id(input.workspaceId, 'WORKSPACE_ID')
   const expectedDataVersion = positive(input.expectedDataVersion, 'EXPECTED_DATA_VERSION')
   const expectedKeyEpoch = positive(input.expectedKeyEpoch, 'EXPECTED_KEY_EPOCH')
+  const expectedMembershipEpoch = positive(input.expectedMembershipEpoch, 'EXPECTED_MEMBERSHIP_EPOCH')
   if (typeof input.requestChecksum !== 'string' || !checksumPattern.test(input.requestChecksum)) throw new Error('INVALID_REQUEST_CHECKSUM')
+  if (!Array.isArray(input.dependencies) || input.dependencies.length > 500) throw new Error('INVALID_DEPENDENCY_BATCH')
+  const dependencies = input.dependencies.map((candidate): EncryptedCommitDependency => {
+    const dependency = record(candidate, 'ENCRYPTED_DEPENDENCY')
+    exact(dependency, ['kind', 'entityId', 'fieldClass', 'expectedRowVersion'], 'ENCRYPTED_DEPENDENCY')
+    const kind = member(dependency.kind, ['entity', 'private'] as const, 'DEPENDENCY_KIND')
+    return {
+      kind,
+      entityId: id(dependency.entityId, 'DEPENDENCY_ENTITY_ID'),
+      fieldClass: kind === 'entity'
+        ? member(dependency.fieldClass, SHARED_FIELD_CLASSES, 'SHARED_FIELD_CLASS')
+        : member(dependency.fieldClass, PRIVATE_FIELD_CLASSES, 'PRIVATE_FIELD_CLASS'),
+      expectedRowVersion: nonnegative(dependency.expectedRowVersion, 'DEPENDENCY_ROW_VERSION'),
+    }
+  })
   if (!Array.isArray(input.operations) || input.operations.length < 1 || input.operations.length > 500) throw new Error('INVALID_OPERATION_BATCH')
   const operations = input.operations.map((candidate): EncryptedCommitOperation => {
     const operation = record(candidate, 'ENCRYPTED_OPERATION')
     switch (operation.type) {
       case 'entity_upsert': {
         exact(operation, ['type', 'entityId', 'fieldClass', 'expectedRowVersion', 'keyId', 'keyEpoch', 'envelope'], 'ENTITY_OPERATION')
+        const expectedRowVersion = nonnegative(operation.expectedRowVersion, 'EXPECTED_ROW_VERSION')
         const parsed = parseEncryptedEntityRecord({ workspaceId, entityId: operation.entityId, fieldClass: operation.fieldClass,
-          rowVersion: expectedDataVersion + 1, keyId: operation.keyId, keyEpoch: operation.keyEpoch,
+          rowVersion: expectedRowVersion + 1, keyId: operation.keyId, keyEpoch: operation.keyEpoch,
           writerPrincipalId: parseEncryptedEnvelope(operation.envelope).aad.writerId,
           writerId: parseEncryptedEnvelope(operation.envelope).aad.writerId, envelope: operation.envelope })
         if (parsed.keyEpoch !== expectedKeyEpoch) throw new Error('STALE_KEY_EPOCH')
         return { type: 'entity_upsert', entityId: parsed.entityId, fieldClass: parsed.fieldClass,
-          expectedRowVersion: nonnegative(operation.expectedRowVersion, 'EXPECTED_ROW_VERSION'), keyId: parsed.keyId,
+          expectedRowVersion, keyId: parsed.keyId,
           keyEpoch: parsed.keyEpoch, envelope: parsed.envelope }
       }
       case 'entity_delete':
@@ -271,13 +297,14 @@ export function parseEncryptedCommitRequest(value: unknown): EncryptedCommitRequ
           expectedRowVersion: positive(operation.expectedRowVersion, 'EXPECTED_ROW_VERSION') }
       case 'private_upsert': {
         exact(operation, ['type', 'personId', 'fieldClass', 'expectedRowVersion', 'keyId', 'keyEpoch', 'authorizationId', 'envelope'], 'PRIVATE_OPERATION')
+        const expectedRowVersion = nonnegative(operation.expectedRowVersion, 'EXPECTED_ROW_VERSION')
         const parsed = parseEncryptedPrivateFieldRecord({ workspaceId, personId: operation.personId, fieldClass: operation.fieldClass,
-          rowVersion: expectedDataVersion + 1, keyId: operation.keyId, keyEpoch: operation.keyEpoch,
+          rowVersion: expectedRowVersion + 1, keyId: operation.keyId, keyEpoch: operation.keyEpoch,
           writerPrincipalId: parseEncryptedEnvelope(operation.envelope).aad.writerId,
           writerId: parseEncryptedEnvelope(operation.envelope).aad.writerId, envelope: operation.envelope })
         if (parsed.keyEpoch !== expectedKeyEpoch) throw new Error('STALE_KEY_EPOCH')
         return { type: 'private_upsert', personId: parsed.personId, fieldClass: parsed.fieldClass,
-          expectedRowVersion: nonnegative(operation.expectedRowVersion, 'EXPECTED_ROW_VERSION'), keyId: parsed.keyId,
+          expectedRowVersion, keyId: parsed.keyId,
           keyEpoch: parsed.keyEpoch, authorizationId: id(operation.authorizationId, 'AUTHORIZATION_ID'), envelope: parsed.envelope }
       }
       case 'private_delete':
@@ -299,5 +326,6 @@ export function parseEncryptedCommitRequest(value: unknown): EncryptedCommitRequ
     }
   })
   return { workspaceId, commitId: id(input.commitId, 'COMMIT_ID'), requestChecksum: input.requestChecksum,
-    expectedDataVersion, expectedKeyEpoch, operations }
+    expectedDataVersion, expectedKeyEpoch, expectedMembershipEpoch, dependencies, operations,
+    checkpointId: id(input.checkpointId, 'CHECKPOINT_ID') }
 }

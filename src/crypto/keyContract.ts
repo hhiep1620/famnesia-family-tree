@@ -4,7 +4,7 @@ const encoder = new TextEncoder()
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
 const suite = 'FAMNESIA-P256-AESGCM-HKDF-SHA256-V1' as const
 
-export type SigningPurpose = 'directory' | 'policy' | 'enrollment' | 'principal-rebind' | 'key-wrap'
+export type SigningPurpose = 'directory' | 'policy' | 'enrollment' | 'principal-rebind' | 'key-wrap' | 'delegation' | 'checkpoint'
 export type WrappedKeyPurpose = 'workspace' | 'contact' | 'media' | 'recovery'
 
 export interface SignedArtifactV1<T extends Record<string, unknown>> {

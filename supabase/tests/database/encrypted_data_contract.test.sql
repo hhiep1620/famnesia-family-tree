@@ -40,7 +40,7 @@ values ('42000000-0000-4000-8000-000000000001', '41000000-0000-4000-8000-0000000
 insert into public.workspace_members(workspace_id, user_id, role) values
   ('42000000-0000-4000-8000-000000000001', '41000000-0000-4000-8000-000000000002', 'editor'),
   ('42000000-0000-4000-8000-000000000001', '41000000-0000-4000-8000-000000000003', 'viewer'),
-  ('42000000-0000-4000-8000-000000000001', '41000000-0000-4000-8000-000000000005', 'contributor');
+  ('42000000-0000-4000-8000-000000000001', '41000000-0000-4000-8000-000000000005', 'viewer');
 
 insert into public.encrypted_private_key_bundles(auth_user_id, principal_id, bundle, state, recovery_epoch, unwrap_fingerprint, signing_fingerprint) values
   ('41000000-0000-4000-8000-000000000001', 'cp_aaaaaaaaaaaaaaaaaaaaaaaa', public.test_private_bundle('cp_aaaaaaaaaaaaaaaaaaaaaaaa', 'a', 'b'), 'active', 1, 'sha256:' || repeat('a',43), 'sha256:' || repeat('b',43)),
@@ -120,7 +120,7 @@ select set_config('request.jwt.claim.sub','41000000-0000-4000-8000-000000000004'
 select is_empty($$select entity_id from public.encrypted_entities$$, 'outsider reads no ciphertext');
 select set_config('request.jwt.claim.sub','41000000-0000-4000-8000-000000000005',true);
 select throws_ok($$select public.commit_encrypted_workspace('42000000-0000-4000-8000-000000000001','contributor-commit','sha256:'||repeat('q',43),1,1,'[{"type":"entity_delete","entityId":"person-1","fieldClass":"person_core","expectedRowVersion":1}]')$$,
-  'legacy contributor is denied direct encrypted commit');
+  'second viewer is denied direct encrypted commit');
 select set_config('request.jwt.claim.sub','41000000-0000-4000-8000-000000000002',true);
 select throws_ok($$select public.commit_encrypted_workspace('42000000-0000-4000-8000-000000000001','stale-commit','sha256:'||repeat('s',43),1,2,'[{"type":"entity_delete","entityId":"person-1","fieldClass":"person_core","expectedRowVersion":1}]')$$,
   'stale key epoch fails closed');
@@ -155,14 +155,14 @@ select set_config('request.jwt.claim.sub','41000000-0000-4000-8000-000000000002'
 select throws_ok($$select public.commit_encrypted_workspace('42000000-0000-4000-8000-000000000001','scope-attack','sha256:'||repeat('x',43),1,1,
   '[{"type":"private_delete","personId":"person-1","fieldClass":"address","expectedRowVersion":1,"authorizationId":"auth-phone"}]')$$,
   'phone authorization cannot mutate address');
-select lives_ok($$select public.commit_encrypted_workspace('42000000-0000-4000-8000-000000000001','phone-write','sha256:'||repeat('p',43),1,1,
+select throws_ok($$select public.commit_encrypted_workspace('42000000-0000-4000-8000-000000000001','phone-write','sha256:'||repeat('p',43),1,1,
   jsonb_build_array(jsonb_build_object('type','private_upsert','personId','person-1','fieldClass','phone','expectedRowVersion',0,
     'keyId','ck-person-1-phone','keyEpoch',1,'authorizationId','auth-phone',
     'envelope',jsonb_build_object('version',1,'suite','FAMNESIA-P256-AESGCM-HKDF-SHA256-V1','nonce','ICEiIyQlJicoKSor',
       'ciphertext',repeat('A',32),'aad',jsonb_build_object('workspaceId','42000000-0000-4000-8000-000000000001',
       'entityId','person-1','fieldClass','phone','schemaVersion',1,'dataVersion',2,'keyId','ck-person-1-phone','keyEpoch',1,
       'writerId','cp_cccccccccccccccccccccccc','purpose','contact')))))$$,
-  'matching contact authorization commits one field atomically');
+  'legacy encrypted commit path is disabled after CR-08 cutover');
 select throws_ok($$select public.commit_encrypted_workspace('42000000-0000-4000-8000-000000000001','phone-replay','sha256:'||repeat('r',43),2,1,
   '[{"type":"private_delete","personId":"person-1","fieldClass":"phone","expectedRowVersion":2,"authorizationId":"auth-phone"}]')$$,
   'consumed contact authorization cannot replay');

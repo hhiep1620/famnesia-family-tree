@@ -139,6 +139,41 @@ export type Database = {
           },
         ]
       }
+      collaboration_cutovers: {
+        Row: {
+          activated_at: string | null
+          activated_membership_epoch: number | null
+          inventory_completed_at: string | null
+          state: Database["public"]["Enums"]["collaboration_cutover_state"]
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          activated_at?: string | null
+          activated_membership_epoch?: number | null
+          inventory_completed_at?: string | null
+          state?: Database["public"]["Enums"]["collaboration_cutover_state"]
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          activated_at?: string | null
+          activated_membership_epoch?: number | null
+          inventory_completed_at?: string | null
+          state?: Database["public"]["Enums"]["collaboration_cutover_state"]
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaboration_cutovers_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       commits: {
         Row: {
           actor_user_id: string
@@ -794,12 +829,71 @@ export type Database = {
           },
         ]
       }
+      editor_commit_delegations: {
+        Row: {
+          artifact: Json
+          created_at: string
+          delegation_id: string
+          expires_at: string
+          membership_epoch: number
+          principal_id: string
+          revoked_at: string | null
+          scopes: string[]
+          signer_fingerprint: string
+          verified_at: string
+          workspace_id: string
+        }
+        Insert: {
+          artifact: Json
+          created_at?: string
+          delegation_id: string
+          expires_at: string
+          membership_epoch: number
+          principal_id: string
+          revoked_at?: string | null
+          scopes: string[]
+          signer_fingerprint: string
+          verified_at: string
+          workspace_id: string
+        }
+        Update: {
+          artifact?: Json
+          created_at?: string
+          delegation_id?: string
+          expires_at?: string
+          membership_epoch?: number
+          principal_id?: string
+          revoked_at?: string | null
+          scopes?: string[]
+          signer_fingerprint?: string
+          verified_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "editor_commit_delegations_principal_id_fkey"
+            columns: ["principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["principal_id"]
+          },
+          {
+            foreignKeyName: "editor_commit_delegations_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_crypto_states"
+            referencedColumns: ["workspace_id"]
+          },
+        ]
+      }
       encrypted_commits: {
         Row: {
           actor_principal_id: string
           base_data_version: number
+          checkpoint_revision: number | null
           commit_id: string
           created_at: string
+          membership_epoch: number | null
           operation_count: number
           request_checksum: string
           request_payload: Json
@@ -809,8 +903,10 @@ export type Database = {
         Insert: {
           actor_principal_id: string
           base_data_version: number
+          checkpoint_revision?: number | null
           commit_id: string
           created_at?: string
+          membership_epoch?: number | null
           operation_count: number
           request_checksum: string
           request_payload: Json
@@ -820,8 +916,10 @@ export type Database = {
         Update: {
           actor_principal_id?: string
           base_data_version?: number
+          checkpoint_revision?: number | null
           commit_id?: string
           created_at?: string
+          membership_epoch?: number | null
           operation_count?: number
           request_checksum?: string
           request_payload?: Json
@@ -1138,6 +1236,41 @@ export type Database = {
           },
           {
             foreignKeyName: "family_profiles_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      legacy_collaboration_inventory: {
+        Row: {
+          artifact_id: string
+          artifact_kind: string
+          disposition: Database["public"]["Enums"]["legacy_collaboration_disposition"]
+          legacy_role: string | null
+          recorded_at: string
+          workspace_id: string
+        }
+        Insert: {
+          artifact_id: string
+          artifact_kind: string
+          disposition: Database["public"]["Enums"]["legacy_collaboration_disposition"]
+          legacy_role?: string | null
+          recorded_at?: string
+          workspace_id: string
+        }
+        Update: {
+          artifact_id?: string
+          artifact_kind?: string
+          disposition?: Database["public"]["Enums"]["legacy_collaboration_disposition"]
+          legacy_role?: string | null
+          recorded_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legacy_collaboration_inventory_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -1963,15 +2096,100 @@ export type Database = {
         }
         Relationships: []
       }
+      verified_checkpoint_intents: {
+        Row: {
+          actor_principal_id: string
+          artifact: Json
+          checkpoint_id: string
+          consumed_at: string | null
+          consumed_by_commit_id: string | null
+          created_at: string
+          delegation_id: string | null
+          expires_at: string
+          external_anchor_hash: string
+          key_epoch: number
+          membership_epoch: number
+          next_checkpoint_hash: string
+          previous_checkpoint_hash: string | null
+          previous_checkpoint_revision: number
+          request_checksum: string
+          verified_at: string
+          workspace_id: string
+        }
+        Insert: {
+          actor_principal_id: string
+          artifact: Json
+          checkpoint_id: string
+          consumed_at?: string | null
+          consumed_by_commit_id?: string | null
+          created_at?: string
+          delegation_id?: string | null
+          expires_at: string
+          external_anchor_hash: string
+          key_epoch: number
+          membership_epoch: number
+          next_checkpoint_hash: string
+          previous_checkpoint_hash?: string | null
+          previous_checkpoint_revision: number
+          request_checksum: string
+          verified_at: string
+          workspace_id: string
+        }
+        Update: {
+          actor_principal_id?: string
+          artifact?: Json
+          checkpoint_id?: string
+          consumed_at?: string | null
+          consumed_by_commit_id?: string | null
+          created_at?: string
+          delegation_id?: string | null
+          expires_at?: string
+          external_anchor_hash?: string
+          key_epoch?: number
+          membership_epoch?: number
+          next_checkpoint_hash?: string
+          previous_checkpoint_hash?: string | null
+          previous_checkpoint_revision?: number
+          request_checksum?: string
+          verified_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkpoint_intent_delegation_fk"
+            columns: ["workspace_id", "delegation_id"]
+            isOneToOne: false
+            referencedRelation: "editor_commit_delegations"
+            referencedColumns: ["workspace_id", "delegation_id"]
+          },
+          {
+            foreignKeyName: "verified_checkpoint_intents_actor_principal_id_fkey"
+            columns: ["actor_principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["principal_id"]
+          },
+          {
+            foreignKeyName: "verified_checkpoint_intents_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_crypto_states"
+            referencedColumns: ["workspace_id"]
+          },
+        ]
+      }
       workspace_crypto_states: {
         Row: {
           binding_revision: number
+          checkpoint_hash: string | null
+          checkpoint_revision: number
           crypto_version: number
           data_version: number
           directory_revision: number
           encrypted_schema_version: number
           graph_revision: number
           key_epoch: number
+          membership_epoch: number
           migration_state: Database["public"]["Enums"]["crypto_migration_state"]
           policy_revision: number
           updated_at: string
@@ -1979,12 +2197,15 @@ export type Database = {
         }
         Insert: {
           binding_revision?: number
+          checkpoint_hash?: string | null
+          checkpoint_revision?: number
           crypto_version?: number
           data_version?: number
           directory_revision?: number
           encrypted_schema_version?: number
           graph_revision?: number
           key_epoch?: number
+          membership_epoch?: number
           migration_state?: Database["public"]["Enums"]["crypto_migration_state"]
           policy_revision?: number
           updated_at?: string
@@ -1992,12 +2213,15 @@ export type Database = {
         }
         Update: {
           binding_revision?: number
+          checkpoint_hash?: string | null
+          checkpoint_revision?: number
           crypto_version?: number
           data_version?: number
           directory_revision?: number
           encrypted_schema_version?: number
           graph_revision?: number
           key_epoch?: number
+          membership_epoch?: number
           migration_state?: Database["public"]["Enums"]["crypto_migration_state"]
           policy_revision?: number
           updated_at?: string
@@ -2104,6 +2328,73 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "workspaces"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_operation_checkpoints: {
+        Row: {
+          actor_principal_id: string
+          artifact: Json
+          checkpoint_hash: string
+          checkpoint_id: string
+          checkpoint_revision: number
+          commit_id: string
+          created_at: string
+          external_anchor_hash: string
+          key_epoch: number
+          membership_epoch: number
+          previous_checkpoint_hash: string | null
+          workspace_id: string
+        }
+        Insert: {
+          actor_principal_id: string
+          artifact: Json
+          checkpoint_hash: string
+          checkpoint_id: string
+          checkpoint_revision: number
+          commit_id: string
+          created_at?: string
+          external_anchor_hash: string
+          key_epoch: number
+          membership_epoch: number
+          previous_checkpoint_hash?: string | null
+          workspace_id: string
+        }
+        Update: {
+          actor_principal_id?: string
+          artifact?: Json
+          checkpoint_hash?: string
+          checkpoint_id?: string
+          checkpoint_revision?: number
+          commit_id?: string
+          created_at?: string
+          external_anchor_hash?: string
+          key_epoch?: number
+          membership_epoch?: number
+          previous_checkpoint_hash?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operation_checkpoint_commit_fk"
+            columns: ["workspace_id", "commit_id"]
+            isOneToOne: true
+            referencedRelation: "encrypted_commits"
+            referencedColumns: ["workspace_id", "commit_id"]
+          },
+          {
+            foreignKeyName: "workspace_operation_checkpoints_actor_principal_id_fkey"
+            columns: ["actor_principal_id"]
+            isOneToOne: false
+            referencedRelation: "crypto_principals"
+            referencedColumns: ["principal_id"]
+          },
+          {
+            foreignKeyName: "workspace_operation_checkpoints_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_crypto_states"
+            referencedColumns: ["workspace_id"]
           },
         ]
       }
@@ -2334,10 +2625,6 @@ export type Database = {
         Args: { object_name: string }
         Returns: boolean
       }
-      cleanup_terminal_family_drafts: {
-        Args: { p_workspace_id: string }
-        Returns: number
-      }
       commit_contact_field_write: {
         Args: {
           p_authorization_id: string
@@ -2359,6 +2646,20 @@ export type Database = {
           p_commit_id: string
           p_expected_data_version: number
           p_expected_key_epoch: number
+          p_operations: Json
+          p_request_checksum: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      commit_encrypted_workspace_v2: {
+        Args: {
+          p_checkpoint_id: string
+          p_commit_id: string
+          p_dependencies: Json
+          p_expected_data_version: number
+          p_expected_key_epoch: number
+          p_expected_membership_epoch: number
           p_operations: Json
           p_request_checksum: string
           p_workspace_id: string
@@ -2442,18 +2743,6 @@ export type Database = {
         Args: { p_report: Json; p_resume_cursor: number; p_run_id: string }
         Returns: undefined
       }
-      finalize_family_draft_review: {
-        Args: {
-          p_decision: string
-          p_draft_id: string
-          p_expected_revision: number
-          p_note: string
-          p_operation_ids: string[]
-          p_result_data_version: number
-          p_workspace_id: string
-        }
-        Returns: Json
-      }
       get_family_commit_status: {
         Args: { p_commit_id: string; p_workspace_id: string }
         Returns: Json
@@ -2479,15 +2768,6 @@ export type Database = {
           p_run_id: string
         }
         Returns: Json
-      }
-      mark_family_draft_needs_changes: {
-        Args: {
-          p_draft_id: string
-          p_expected_revision: number
-          p_note: string
-          p_workspace_id: string
-        }
-        Returns: undefined
       }
       media_object_upload_id: { Args: { object_name: string }; Returns: string }
       media_object_workspace_id: {
@@ -2536,6 +2816,25 @@ export type Database = {
         }
         Returns: undefined
       }
+      register_verified_checkpoint_intent: {
+        Args: {
+          p_actor_principal_id: string
+          p_artifact: Json
+          p_checkpoint_id: string
+          p_delegation_id: string
+          p_expires_at: string
+          p_external_anchor_hash: string
+          p_key_epoch: number
+          p_membership_epoch: number
+          p_next_checkpoint_hash: string
+          p_previous_checkpoint_hash: string
+          p_previous_checkpoint_revision: number
+          p_request_checksum: string
+          p_verified_at: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
       register_verified_contact_edit_authorization: {
         Args: {
           p_actor_principal_id: string
@@ -2579,6 +2878,20 @@ export type Database = {
         }
         Returns: Json
       }
+      register_verified_editor_delegation: {
+        Args: {
+          p_artifact: Json
+          p_delegation_id: string
+          p_expires_at: string
+          p_membership_epoch: number
+          p_principal_id: string
+          p_scopes: string[]
+          p_signer_fingerprint: string
+          p_verified_at: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
       replace_family_dataset: {
         Args: {
           p_expected_data_version: number
@@ -2609,16 +2922,6 @@ export type Database = {
         }
         Returns: Json
       }
-      submit_family_draft: {
-        Args: {
-          p_base_data_version: number
-          p_checksum: string
-          p_client_created_at: string
-          p_operations: Json
-          p_workspace_id: string
-        }
-        Returns: Json
-      }
       verify_media_upload: {
         Args: {
           p_byte_size: number
@@ -2639,6 +2942,7 @@ export type Database = {
     Enums: {
       ancestral_role: "none" | "founding_ancestor"
       backup_capability_state: "active" | "consumed" | "revoked" | "expired"
+      collaboration_cutover_state: "inventory" | "ready" | "active" | "blocked"
       commit_status: "pending" | "applied" | "conflict" | "failed"
       contact_audience:
         | "self_only"
@@ -2674,6 +2978,11 @@ export type Database = {
       fact_confidence: "confirmed" | "likely" | "estimated" | "unknown"
       gender_type: "male" | "female" | "other" | "unknown"
       invitation_status: "pending" | "accepted" | "revoked" | "expired"
+      legacy_collaboration_disposition:
+        | "viewer"
+        | "revoked"
+        | "export_required"
+        | "discarded"
       media_cleanup_status: "pending" | "completed" | "failed"
       media_upload_status:
         | "staging"
@@ -2712,13 +3021,14 @@ export type Database = {
         | "divorced"
         | "widowed"
         | "unknown"
-      workspace_role: "owner" | "editor" | "contributor" | "viewer"
+      workspace_role: "owner" | "editor" | "viewer"
     }
     CompositeTypes: {
       [_ in never]: never
     }
   }
 }
+
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
 type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
@@ -2844,6 +3154,7 @@ export const Constants = {
     Enums: {
       ancestral_role: ["none", "founding_ancestor"],
       backup_capability_state: ["active", "consumed", "revoked", "expired"],
+      collaboration_cutover_state: ["inventory", "ready", "active", "blocked"],
       commit_status: ["pending", "applied", "conflict", "failed"],
       contact_audience: [
         "self_only",
@@ -2883,6 +3194,12 @@ export const Constants = {
       fact_confidence: ["confirmed", "likely", "estimated", "unknown"],
       gender_type: ["male", "female", "other", "unknown"],
       invitation_status: ["pending", "accepted", "revoked", "expired"],
+      legacy_collaboration_disposition: [
+        "viewer",
+        "revoked",
+        "export_required",
+        "discarded",
+      ],
       media_cleanup_status: ["pending", "completed", "failed"],
       media_upload_status: [
         "staging",
@@ -2927,7 +3244,7 @@ export const Constants = {
         "widowed",
         "unknown",
       ],
-      workspace_role: ["owner", "editor", "contributor", "viewer"],
+      workspace_role: ["owner", "editor", "viewer"],
     },
   },
 } as const
