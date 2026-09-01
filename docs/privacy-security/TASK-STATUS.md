@@ -23,7 +23,7 @@
 - [x] CR-06 — Member-person binding; implementation `9770e50`; local evidence complete.
 - [x] CR-07 — Contact privacy and relationship grants; implementation `a64463a`; owner approved `2026-09-01`; [evidence](./evidence/CR-07/README.md).
 - [x] CR-08 — Encrypted direct collaboration; target roles owner/editor/viewer; implementation `653426d`; local evidence complete; real workspace signer/checkpoint wiring remains a deployment gate.
-- [x] CR-09 — GEDCOM without images and common GEDCOM/JSON/Excel export policy; implementation pending commit; [evidence](./evidence/CR-09/README.md); local parser/schema evidence complete; real workspace signer wiring remains a deployment gate.
+- [x] CR-09 — GEDCOM without images and common GEDCOM/JSON/Excel export policy; implementation `60040e0` + tests `2458e22`; [evidence](./evidence/CR-09/README.md); local parser/schema evidence complete; real workspace signer wiring remains a deployment gate.
 - [ ] CR-10 — Self-contained recovery, encrypted backup and media.
 - [ ] CR-11 — Real-data migration, production rollout and independent security review.
 
