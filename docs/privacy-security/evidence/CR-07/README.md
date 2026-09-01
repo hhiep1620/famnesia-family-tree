@@ -36,10 +36,10 @@ Validated locally at `2026-08-31T16:13:53Z`:
 
 ## Gate
 
-Status: `AWAITING_OWNER_APPROVAL`.
+Status: `APPROVED`.
 
 | Owner | Decision | Recorded at |
 |---|---|---|
-| `hoanghiep.0179@gmail.com` | Pending CR-07 local evidence review | — |
+| `hoanghiep.0179@gmail.com` | Approved CR-07 local implementation evidence | `2026-09-01T08:25:25+07:00` |
 
 Approval is local-contract approval only. Preview wiring/browser smoke and every real-data/Production action remain separate gates.
