@@ -8,6 +8,11 @@ interface TokenResponse {
   error?: string
 }
 
+interface TokenError {
+  type?: string
+  message?: string
+}
+
 interface TokenClient {
   requestAccessToken(options?: { prompt?: string }): void
 }
@@ -20,7 +25,7 @@ interface GoogleIdentityWindow extends Window {
           client_id: string
           scope: string
           callback: (response: TokenResponse) => void
-          error_callback: () => void
+          error_callback: (error?: TokenError) => void
         }): TokenClient
       }
     }
@@ -126,6 +131,10 @@ export class BrowserGoogleDriveAuthorization {
         client_id: this.clientId,
         scope: DRIVE_FILE_SCOPE,
         callback: (response) => {
+          if (response.error === 'origin_mismatch') {
+            reject(new Error('GOOGLE_DRIVE_ORIGIN_MISMATCH'))
+            return
+          }
           if (response.error || typeof response.access_token !== 'string' || !Number.isFinite(response.expires_in)) {
             reject(new Error('GOOGLE_DRIVE_AUTH_FAILED'))
             return
@@ -136,7 +145,12 @@ export class BrowserGoogleDriveAuthorization {
           }
           resolve(this.token)
         },
-        error_callback: () => reject(new Error('GOOGLE_DRIVE_AUTH_CANCELLED')),
+        error_callback: (error) => {
+          const detail = `${error?.type ?? ''} ${error?.message ?? ''}`.toLowerCase()
+          reject(new Error(detail.includes('origin_mismatch') || detail.includes('origin mismatch')
+            ? 'GOOGLE_DRIVE_ORIGIN_MISMATCH'
+            : 'GOOGLE_DRIVE_AUTH_CANCELLED'))
+        },
       })
       client.requestAccessToken({ prompt: 'consent' })
     })

@@ -17,6 +17,7 @@ function friendlyError(caught: unknown): string {
     OWNER_MUST_ENROLL_MEMBER_KEY: 'Owner chưa cấp khóa mã hóa cho tài khoản này.',
     OWNER_MUST_BOOTSTRAP_WORKSPACE: 'Owner cần mở workspace lần đầu để tạo dữ liệu mã hóa.',
     WORKSPACE_KEY_ENVELOPE_MISSING: 'Không tìm thấy khóa dành cho tài khoản này. Hãy liên hệ owner.',
+    GOOGLE_DRIVE_ORIGIN_MISMATCH: `Google chưa cho phép origin này (${window.location.origin}). Hãy thêm chính xác origin đó vào Google Cloud Console → Google Auth Platform → Clients → Authorized JavaScript origins, rồi thử lại.`,
   }
   return known[message] ?? message
 }

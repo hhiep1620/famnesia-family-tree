@@ -61,6 +61,8 @@ Giao diện không phải security boundary. Vercel Function xác minh Supabase 
    https://famnesia-family-tree.vercel.app
    ```
 
+   Khi kiểm thử trên Vercel Preview, phải thêm **đúng origin của deployment đang mở** (ví dụ `https://famnesia-family-tree-<mã-preview>-neptworks.vercel.app`). Google OAuth không hỗ trợ wildcard cho JavaScript origins. Nếu gặp `Error 400: origin_mismatch`, hãy copy origin trên thanh địa chỉ, thêm vào danh sách này, lưu lại và tải lại Preview.
+
 Ứng dụng dùng Authorization Code Flow với `access_type=offline`, cookie state ký HMAC và các scope `openid`, `email`, `profile`, `drive.file`.
 
 ## Chạy local
