@@ -21,7 +21,7 @@ function createCoordinator() {
   const authorization = new BrowserGoogleDriveAuthorization(parseDriveClientId(import.meta.env.VITE_GOOGLE_DRIVE_CLIENT_ID))
   return new RecoveryVaultCoordinator(
     new SupabaseRecoveryPrivateKeyRepository(getSupabaseBrowserClient()),
-    new GoogleDriveKeyVaultClient(() => authorization.connect(), fetch, Date.now, () => authorization.clear()),
+    new GoogleDriveKeyVaultClient(() => authorization.connect(), globalThis.fetch.bind(globalThis), Date.now, () => authorization.clear()),
   )
 }
 

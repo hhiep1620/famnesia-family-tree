@@ -69,7 +69,7 @@ export class GoogleDriveKeyVaultClient {
 
   constructor(
     tokenProvider: () => Promise<DriveToken>,
-    fetcher: typeof fetch = fetch,
+    fetcher: typeof fetch = globalThis.fetch.bind(globalThis),
     now: () => number = Date.now,
     invalidateToken: () => void = () => undefined,
   ) {
