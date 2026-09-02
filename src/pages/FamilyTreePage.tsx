@@ -18,16 +18,17 @@ import { getAllKinships } from '../kinship/kinshipEngine'
 import { classifyAllRelativeScopes } from '../lineage/lineageClassifier'
 import { getMaleSurnameSuggestions } from '../family/profileLineage'
 import type { FamilyEventType, FriendlyRelationship, GoogleUser } from '../types/family'
+import type { FamilyRepositoryContract } from '../services/familyRepository'
 
 const DataManagement = lazy(() => import('../components/data/DataManagement').then((module) => ({ default: module.DataManagement })))
 
-interface Props { user?: GoogleUser; onSignOut?: () => void }
+interface Props { user?: GoogleUser; onSignOut?: () => void; runtimeRepository?: FamilyRepositoryContract }
 type ModalState = { type: 'add' } | { type: 'relative'; kind: FriendlyRelationship } | { type: 'edit' } | undefined
 type TreeFilter = FamilyEventType | 'all'
 interface PendingLeave { title: string; run: () => void | Promise<void> }
 
-export function FamilyTreePage({ user, onSignOut }: Props) {
-  const data = useFamilyData(user?.id ?? user?.email ?? 'mock-user')
+export function FamilyTreePage({ user, onSignOut, runtimeRepository }: Props) {
+  const data = useFamilyData(user?.id ?? user?.email ?? 'mock-user', runtimeRepository)
   const [view, setView] = useState<MainView>('tree')
   const [selectedId, setSelectedId] = useState<string>()
   const [treeFilter, setTreeFilter] = useState<TreeFilter>('all')

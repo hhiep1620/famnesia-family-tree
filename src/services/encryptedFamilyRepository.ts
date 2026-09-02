@@ -1,6 +1,7 @@
 import { canonicalize, encodeBase64Url } from '../crypto/contract'
 import { EncryptedFamilyCodec } from '../crypto/encryptedFamilyCodec'
 import type { EncryptedCommitOperation, EncryptedEntityRecord } from '../crypto/encryptedDataContract'
+import type { WrappedKeyEnvelopeV1 } from '../crypto/keyContract'
 import { WorkspaceKeySession } from '../crypto/workspaceKeySession'
 import type { FamilyData } from '../types/family'
 import type {
@@ -80,7 +81,35 @@ export class EncryptedFamilyRepository {
     return { data, revision: { version: String(state.dataVersion) } }
   }
 
-  async save(data: FamilyData, expectedVersion: number, commitId = crypto.randomUUID()): Promise<EncryptedFamilySnapshot> {
+  async initialize(data: FamilyData, wrappedKey: WrappedKeyEnvelopeV1, commitId: string = `bootstrap_${crypto.randomUUID()}`): Promise<EncryptedFamilySnapshot> {
+    if (!this.isOnline()) throw new Error('ENCRYPTED_OFFLINE_WRITE_DISABLED')
+    if (!this.checkpoints) throw new Error('ENCRYPTED_CHECKPOINT_SIGNER_REQUIRED')
+    const state = await this.store.loadState(this.session.workspaceId)
+    if (state.dataVersion !== 0 || state.keyEpoch !== this.session.keyEpoch || state.directoryRevision !== this.session.directoryRevision || state.migrationState === 'blocked') {
+      throw new Error('ENCRYPTED_WORKSPACE_ALREADY_INITIALIZED')
+    }
+    const records = await this.codec.encrypt(data, 1)
+    const operations: EncryptedCommitOperation[] = records.map((record) => ({
+      type: 'entity_upsert', entityId: record.entityId, fieldClass: record.fieldClass,
+      expectedRowVersion: 0, keyId: record.keyId, keyEpoch: record.keyEpoch, envelope: record.envelope,
+    }))
+    operations.push({ type: 'key_envelope_insert', wrappedEnvelope: wrappedKey })
+    const requestWithoutChecksum = {
+      workspaceId: this.session.workspaceId, commitId, expectedDataVersion: 0,
+      expectedKeyEpoch: this.session.keyEpoch, operations,
+      expectedMembershipEpoch: state.membershipEpoch, dependencies: [], checkpointId: `checkpoint-${commitId}`,
+    }
+    const request: CiphertextCommitRequest = { ...requestWithoutChecksum, requestChecksum: await checksum(requestWithoutChecksum) }
+    await this.checkpoints.register(request, state)
+    const committed = await this.store.commit(request)
+    if (committed.dataVersion !== 1) throw new Error('ENCRYPTED_BOOTSTRAP_VERSION_MISMATCH')
+    this.state = { ...state, dataVersion: 1, checkpointRevision: committed.checkpointRevision, checkpointHash: committed.checkpointHash }
+    this.records = records
+    this.currentData = data
+    return { data, revision: { version: '1' } }
+  }
+
+  async save(data: FamilyData, expectedVersion: number, commitId: string = crypto.randomUUID()): Promise<EncryptedFamilySnapshot> {
     if (!this.isOnline()) throw new Error('ENCRYPTED_OFFLINE_WRITE_DISABLED')
     if (!this.state || !this.currentData || this.state.dataVersion !== expectedVersion) throw new Error('ENCRYPTED_REVISION_CONFLICT')
     if (!this.checkpoints) throw new Error('ENCRYPTED_CHECKPOINT_SIGNER_REQUIRED')

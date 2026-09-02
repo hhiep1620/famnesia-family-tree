@@ -15,7 +15,7 @@ export default function App() {
   if (auth.status === 'authorized') {
     const joinMatch = /^\/join\/([A-Za-z0-9]{8})\/?$/u.exec(window.location.pathname)
     if (joinMatch) return <JoinRequestPage code={joinMatch[1]} onSignOut={auth.signOut} />
-    if (auth.backend === 'supabase') return <EncryptedWorkspaceGate onSignOut={auth.signOut} />
+    if (auth.backend === 'supabase') return <EncryptedWorkspaceGate user={auth.user!} onSignOut={auth.signOut} renderFamily={(runtimeRepository) => familyPage({ user: auth.user, onSignOut: auth.signOut, runtimeRepository })} />
     return familyPage({ user: auth.user, onSignOut: auth.signOut })
   }
 

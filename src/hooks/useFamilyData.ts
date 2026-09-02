@@ -9,7 +9,7 @@ import { duplicatePairId } from '../integrity/duplicateDetection'
 import { mergePeople } from '../integrity/mergePerson'
 import { CURRENT_SCHEMA_VERSION, requireValidFamilyData } from '../schema/familyDataSchema'
 import { ApiError } from '../services/apiClient'
-import { CommitOutcomeUnknownError, FamilyRepository, NoWorkspaceError, type FamilyDataRevision } from '../services/familyRepository'
+import { CommitOutcomeUnknownError, FamilyRepository, NoWorkspaceError, type FamilyDataRevision, type FamilyRepositoryContract } from '../services/familyRepository'
 import { mediaReferenceId } from '../services/mediaReference'
 import { sharedWorkspaceForEmptyOwner } from '../services/workspaceSelection'
 import type { ActivityEvent, FamilyBackup, FamilyData, FamilyProfile, FriendlyRelationship, Person, PersonDraft, PersonMedia, Relationship, SaveStatus, SpouseStatus, WorkspaceInfo, WorkspaceInvitationResult, WorkspaceMember } from '../types/family'
@@ -51,9 +51,9 @@ function changedFields(before: object, after: object): { changes: Record<string,
 }
 function operationConflictKey(conflict: FamilyOperationConflict): string { return `${conflict.operationId}:${conflict.field}` }
 
-export function useFamilyData(userId = 'mock-user') {
+export function useFamilyData(userId = 'mock-user', providedRepository?: FamilyRepositoryContract) {
   const useMockData = import.meta.env.DEV && import.meta.env.VITE_USE_MOCK_DATA === 'true'
-  const repository = useRef<FamilyRepository | undefined>(undefined)
+  const repository = useRef<FamilyRepositoryContract | undefined>(providedRepository)
   const revision = useRef<FamilyDataRevision | undefined>(undefined)
   const pendingRef = useRef<FamilyOperation[]>([])
   const commitId = useRef<string | undefined>(undefined)
@@ -108,10 +108,10 @@ export function useFamilyData(userId = 'mock-user') {
         const next = cloneData(mockData.current)
         setWorkspace(undefined); setSavedData(next); setFamilyData(next); selectAvailableProfile(next); setSaveStatus(pendingRef.current.length ? 'unsaved' : 'saved')
       } else {
-        if (!repository.current || (activeWorkspaceId && repository.current.workspace.id !== activeWorkspaceId)) repository.current = await FamilyRepository.connect(activeWorkspaceId)
+        if (!repository.current || (!providedRepository && activeWorkspaceId && repository.current.workspace.id !== activeWorkspaceId)) repository.current = providedRepository ?? await FamilyRepository.connect(activeWorkspaceId)
         let connected = repository.current
         let snapshot = await connected.load()
-        const sharedWorkspace = sharedWorkspaceForEmptyOwner(connected.workspace, connected.workspaces, snapshot.data, false)
+        const sharedWorkspace = providedRepository ? undefined : sharedWorkspaceForEmptyOwner(connected.workspace, connected.workspaces, snapshot.data, false)
         if (sharedWorkspace) {
           repository.current = await FamilyRepository.connect(sharedWorkspace.id)
           connected = repository.current
@@ -139,14 +139,14 @@ export function useFamilyData(userId = 'mock-user') {
         console.error(caught); setError(caught instanceof Error ? caught.message : 'Không thể tải dữ liệu gia đình.')
       }
     } finally { setLoading(false) }
-  }, [activeWorkspaceId, restoreDraft, selectAvailableProfile, useMockData])
+  }, [activeWorkspaceId, providedRepository, restoreDraft, selectAvailableProfile, useMockData])
 
   useEffect(() => {
-    if (repository.current?.workspace.id !== activeWorkspaceId) {
+    if (!providedRepository && repository.current?.workspace.id !== activeWorkspaceId) {
       repository.current = undefined; revision.current = undefined
     }
     void refresh()
-  }, [activeWorkspaceId, refresh])
+  }, [activeWorkspaceId, providedRepository, refresh])
 
   useEffect(() => {
     if (!pendingOperations.length) return

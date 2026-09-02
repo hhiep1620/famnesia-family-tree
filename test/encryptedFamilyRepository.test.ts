@@ -149,6 +149,29 @@ describe('CR-05 encrypted family codec and repository', () => {
     await expect(repository.save(next, 1)).rejects.toThrow('ENCRYPTED_REVISION_CONFLICT')
   })
 
+  it('bootstraps an empty workspace with ciphertext and its owner key envelope in one fenced commit', async () => {
+    const active = await session()
+    const store = new FakeStore()
+    store.state = { ...store.state, dataVersion: 0, checkpointRevision: 0, checkpointHash: undefined }
+    let registered = 0
+    const repository = new EncryptedFamilyRepository(store, active, () => true, { async register() { registered += 1 } })
+    const wrappedKey = {
+      version: 1, suite: 'FAMNESIA-P256-AESGCM-HKDF-SHA256-V1',
+      context: { envelopeId: 'env-bootstrap', workspaceId, entityId: 'workspace-root', recipientPrincipalId: descriptor.principalId,
+        recipientKeyFingerprint: `sha256:${'a'.repeat(43)}`, keyId: descriptor.keyId, keyPurpose: 'workspace', keyEpoch: 1,
+        directoryRevision: 1, issuerPrincipalId: descriptor.principalId, issuerSigningFingerprint: `sha256:${'b'.repeat(43)}`, expiresAt: 1_900_000_000 },
+      ephemeralPublicKey: {}, salt: 'A'.repeat(43), nonce: 'A'.repeat(16), wrappedKey: 'A'.repeat(64), issuerSignature: 'A'.repeat(86),
+    } as const
+    const empty = family(); empty.profiles = []; empty.persons = []; empty.media = []
+    const snapshot = await repository.initialize(empty, wrappedKey, 'bootstrap-commit')
+    expect(snapshot.revision.version).toBe('1')
+    expect(registered).toBe(1)
+    expect(store.requests).toHaveLength(1)
+    expect(store.requests[0].expectedDataVersion).toBe(0)
+    expect(store.requests[0].operations.some((operation) => operation.type === 'key_envelope_insert')).toBe(true)
+    expect(JSON.stringify(store.requests[0])).not.toContain('Gia đình Nguyễn')
+  })
+
   it('fails offline and recovers only a confirmed identical unknown commit', async () => {
     const active = await session()
     const store = new FakeStore(); store.records = await new EncryptedFamilyCodec(active).encrypt(family(), 1)

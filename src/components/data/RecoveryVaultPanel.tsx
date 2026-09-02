@@ -4,6 +4,7 @@ import { BrowserGoogleDriveAuthorization, parseDriveClientId } from '../../secur
 import { DriveVaultError, GoogleDriveKeyVaultClient } from '../../security/googleDriveKeyVault'
 import { SupabaseRecoveryPrivateKeyRepository } from '../../security/recoveryPrivateKeyRepository'
 import { canConfirmRecoveryArtifacts, RecoveryVaultCoordinator, type PendingRecoverySetup } from '../../security/recoveryVaultCoordinator'
+import type { RecoveryIdentity } from '../../services/encryptedWorkspaceRuntime'
 import { getSupabaseBrowserClient } from '../../services/supabase/browserClient'
 
 function downloadJson(filename: string, content: string): void {
@@ -24,7 +25,7 @@ function createCoordinator() {
   )
 }
 
-export function RecoveryVaultPanel() {
+export function RecoveryVaultPanel({ onActive }: { onActive?: (identity: RecoveryIdentity) => void | Promise<void> } = {}) {
   const coordinator = useRef<RecoveryVaultCoordinator>(undefined)
   const [pending, setPending] = useState<PendingRecoverySetup>()
   const [downloadedDriveKit, setDownloadedDriveKit] = useState(false)
@@ -52,13 +53,13 @@ export function RecoveryVaultPanel() {
   }
   const restore = async () => {
     setStatus('working'); setError(undefined)
-    try { await getCoordinator().restore(await currentEmail()); setStatus('active') }
+    try { const identity = await getCoordinator().restore(await currentEmail()); await onActive?.(identity); setStatus('active') }
     catch (caught) { setError(caught instanceof Error ? caught.message : 'Không thể khôi phục khóa.'); setStatus('idle') }
   }
   const confirm = async () => {
     if (!pending || !canConfirmRecoveryArtifacts(downloadedDriveKit, downloadedEncryptedBackup, savedSeparately)) return
     setStatus('working'); setError(undefined)
-    try { await pending.confirmArtifactsSaved(); setPending(undefined); setStatus('active') }
+    try { const identity = await pending.confirmArtifactsSaved(); await onActive?.(identity); setPending(undefined); setStatus('active') }
     catch (caught) { setError(caught instanceof Error ? caught.message : 'Không thể kích hoạt key vault.'); setStatus('idle') }
   }
   const resetMissingPending = async () => {
