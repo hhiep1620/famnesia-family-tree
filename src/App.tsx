@@ -39,6 +39,7 @@ function PublicRoutes({ onSignIn, error }: { onSignIn: () => void; error?: strin
     <Route path="/" element={<><PublicHomepage onSignIn={onSignIn} />{error && <p className="form-error auth-error">{error}</p>}</>} />
     <Route path="/login" element={<><PublicHomepage onSignIn={onSignIn} />{error && <p className="form-error auth-error">{error}</p>}</>} />
     <Route path="/join/:code" element={<Navigate to="/login" replace />} />
+    <Route path="/workspaces/*" element={<Navigate to="/login" replace />} />
     <Route path="*" element={<RouteNotFound />} />
   </Routes>
 }
