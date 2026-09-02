@@ -1,5 +1,7 @@
-import { BarChart3, CalendarDays, Database, LogOut, Network, PencilLine, Plus, RefreshCw } from 'lucide-react'
+import { BarChart3, CalendarDays, Database, LogOut, Network, PencilLine, Plus, RefreshCw, UsersRound } from 'lucide-react'
 import { groupProfilesByLineage } from '../../family/profileLineage'
+import { NavLink } from 'react-router-dom'
+import { appRoutes } from '../../routing/routes'
 import type { FamilyProfile, FamilyScope, GoogleUser, KinshipResult, Person, PersonMedia, WorkspaceInfo } from '../../types/family'
 import { PersonSearch } from '../search/PersonSearch'
 import { BrandLogo } from './BrandLogo'
@@ -41,7 +43,16 @@ function ProfileSwitcher({ profiles, persons, activeProfileId, canEdit, onProfil
   </div>
 }
 
-function Navigation({ view, onViewChange, mobile = false }: { view: MainView; onViewChange: Props['onViewChange']; mobile?: boolean }) {
+function Navigation({ view, workspaceId, onViewChange, mobile = false }: { view: MainView; workspaceId?: string; onViewChange: Props['onViewChange']; mobile?: boolean }) {
+  if (workspaceId) {
+    return <nav className={mobile ? 'mobile-bottom-nav' : 'primary-nav'} aria-label="Điều hướng chính">
+      <NavLink className={({ isActive }) => isActive ? 'active' : ''} to={appRoutes.workspace(workspaceId, 'tree')}><Network size={17} /> Cây gia đình</NavLink>
+      <NavLink className={({ isActive }) => isActive ? 'active' : ''} to={appRoutes.workspace(workspaceId, 'calendar')}><CalendarDays size={17} /> Lịch</NavLink>
+      <NavLink className={({ isActive }) => isActive ? 'active' : ''} to={appRoutes.workspace(workspaceId, 'analytics')}><BarChart3 size={17} /> Phân tích</NavLink>
+      <NavLink className={({ isActive }) => isActive ? 'active' : ''} to={appRoutes.workspace(workspaceId, 'members')}><UsersRound size={17} /> Thành viên</NavLink>
+      <NavLink className={({ isActive }) => isActive ? 'active' : ''} to={appRoutes.workspace(workspaceId, 'settings')}><Database size={17} /> Cài đặt</NavLink>
+    </nav>
+  }
   return <nav className={mobile ? 'mobile-bottom-nav' : 'primary-nav'} aria-label="Điều hướng chính">
     <button className={view === 'tree' ? 'active' : ''} onClick={() => onViewChange('tree')}><Network size={17} /> Cây gia đình</button>
     <button className={view === 'calendar' ? 'active' : ''} onClick={() => onViewChange('calendar')}><CalendarDays size={17} /> Lịch</button>
@@ -54,7 +65,7 @@ export function AppHeader({ persons, profileMembers, profiles, activeProfileId, 
   return <>
     <header className="app-header">
       <div className="archive-mark"><BrandLogo compact /></div><div className="header-divider" /><h1>Too many relatives. Not enough memory.</h1>
-      <Navigation view={view} onViewChange={onViewChange} />
+      <Navigation view={view} workspaceId={workspaceId} onViewChange={onViewChange} />
       <div className="header-actions">
         {!mock && workspaces && workspaces.length > 0 && <label className="family-switcher workspace-switcher"><span className="sr-only">Chọn workspace</span><select value={activeWorkspaceId ?? ''} onChange={(event) => onWorkspaceChange?.(event.target.value)}>{workspaces.map((workspace) => <option value={workspace.id} key={workspace.id}>{workspace.name} · {workspace.role}</option>)}</select></label>}
         {profiles.length > 0 && <ProfileSwitcher profiles={profiles} persons={profileMembers} activeProfileId={activeProfileId} canEdit={canEdit} onProfileChange={onProfileChange} onEditProfile={onEditProfile} />}
@@ -66,6 +77,6 @@ export function AppHeader({ persons, profileMembers, profiles, activeProfileId, 
         {!mock && onSignOut && <button className="icon-button" type="button" onClick={onSignOut} aria-label="Đăng xuất"><LogOut size={17} /></button>}
       </div>
     </header>
-    <Navigation view={view} onViewChange={onViewChange} mobile />
+    <Navigation view={view} workspaceId={workspaceId} onViewChange={onViewChange} mobile />
   </>
 }

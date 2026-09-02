@@ -1,5 +1,6 @@
 import { ArrowLeft, Check, ChevronRight, Copy, KeyRound, LogOut, Plus, RefreshCw, ShieldCheck, UsersRound, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { apiRequest, jsonBody } from '../../services/apiClient'
 import { unlockFromAnotherTab, unlockWithRecovery, type RecoveryIdentity, type UnlockedWorkspaceRuntime } from '../../services/encryptedWorkspaceRuntime'
 import type { EncryptedFamilyRuntimeAdapter } from '../../services/encryptedFamilyRuntimeAdapter'
@@ -22,11 +23,13 @@ function friendlyError(caught: unknown): string {
   return known[message] ?? message
 }
 
-export function EncryptedWorkspaceGate({ user, onSignOut, renderFamily }: {
+export function EncryptedWorkspaceGate({ user, onSignOut, workspaceId, renderFamily }: {
   user: GoogleUser
   onSignOut: () => void
+  workspaceId?: string
   renderFamily: (repository: EncryptedFamilyRuntimeAdapter) => ReactNode
 }) {
+  const navigate = useNavigate()
   const joinWorkflowAvailable = import.meta.env.VITE_JOIN_WORKFLOW_ENABLED === 'true'
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([])
   const [requests, setRequests] = useState<Record<string, JoinRequest[]>>({})
@@ -57,6 +60,12 @@ export function EncryptedWorkspaceGate({ user, onSignOut, renderFamily }: {
     finally { setBusy(undefined) }
   }, [joinWorkflowAvailable])
   useEffect(() => { void refresh() }, [refresh])
+  useEffect(() => {
+    if (!workspaceId || selected || !workspaces.length) return
+    const match = workspaces.find((workspace) => workspace.id === workspaceId)
+    if (match) setSelected(match)
+    else setError('Không tìm thấy workspace này hoặc bạn không có quyền truy cập.')
+  }, [selected, workspaceId, workspaces])
 
   async function createWorkspace() {
     if (!name.trim()) return
@@ -65,12 +74,13 @@ export function EncryptedWorkspaceGate({ user, onSignOut, renderFamily }: {
       const result = await apiRequest<{ workspace: WorkspaceInfo }>('/api/workspaces', { method: 'POST', ...jsonBody({ name: name.trim() }) })
       setWorkspaces((current) => [result.workspace, ...current.filter((item) => item.id !== result.workspace.id)])
       setSelected(result.workspace)
+      navigate(`/workspaces/${encodeURIComponent(result.workspace.id)}/tree`)
     } catch (caught) { setError(friendlyError(caught)) }
     finally { setBusy(undefined) }
   }
 
   async function openWorkspace(workspace: WorkspaceInfo) {
-    setSelected(workspace); setBusy('Đang tìm khóa trên thiết bị này…'); setError(undefined)
+    setSelected(workspace); navigate(`/workspaces/${encodeURIComponent(workspace.id)}/tree`); setBusy('Đang tìm khóa trên thiết bị này…'); setError(undefined)
     try { installRuntime(await unlockFromAnotherTab(workspace)) }
     catch { /* Recovery Center is the deliberate next step. */ }
     finally { setBusy(undefined) }
@@ -98,7 +108,7 @@ export function EncryptedWorkspaceGate({ user, onSignOut, renderFamily }: {
   return <main className="workspace-hub">
     <header className="workspace-header"><BrandLogo /><div className="workspace-account"><span><strong>{user.name}</strong><small>{user.email}</small></span><button className="icon-button" onClick={onSignOut} aria-label="Đăng xuất"><LogOut size={18} /></button></div></header>
     {selected ? <section className="unlock-layout">
-      <button className="back-action" onClick={() => { setSelected(undefined); setError(undefined) }}><ArrowLeft size={17} /> Tất cả workspace</button>
+      <button className="back-action" onClick={() => { setSelected(undefined); setError(undefined); navigate('/workspaces') }}><ArrowLeft size={17} /> Tất cả workspace</button>
       <div className="unlock-heading"><span className="eyebrow">Không gian gia đình được mã hóa</span><h1>Mở “{selected.name}”</h1><p>Khóa chỉ được dùng trong bộ nhớ của trình duyệt. Famnesia và Supabase không thể đọc dữ liệu gia đình của bạn.</p></div>
       <div className="unlock-grid"><section className="unlock-card unlock-status-card"><div className="unlock-icon"><KeyRound /></div><span className="section-label">Trạng thái hiện tại</span><h2>Cần mở khóa trên thiết bị này</h2><p>Tìm một tab Famnesia đang mở hoặc dùng recovery vault riêng của bạn trên Google Drive.</p><button className="secondary-button" disabled={Boolean(busy)} onClick={() => void openWorkspace(selected)}><RefreshCw className={busy ? 'spin' : ''} size={16} /> Thử nhận khóa từ tab khác</button><div className="security-note"><ShieldCheck size={17} /><span>Không lưu khóa trong localStorage hoặc database.</span></div></section><RecoveryVaultPanel onActive={unlock} /></div>
       {busy && <p className="inline-status"><span className="mini-spinner" />{busy}</p>}
