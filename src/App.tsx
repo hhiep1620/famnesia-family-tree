@@ -18,8 +18,11 @@ function AuthenticatedRoutes({ auth }: { auth: ReturnType<typeof useGoogleAuth> 
   if (!auth.user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
   if (auth.backend !== 'supabase') return familyPage({ user: auth.user, onSignOut: auth.signOut })
   return <Routes>
+    <Route path="/" element={<Navigate to="/workspaces" replace />} />
+    <Route path="/login" element={<Navigate to="/workspaces" replace />} />
     <Route path="/join/:code" element={<JoinRoute onSignOut={auth.signOut} />} />
     <Route path="/workspaces" element={<EncryptedWorkspaceGate user={auth.user} onSignOut={auth.signOut} renderFamily={(runtimeRepository) => familyPage({ user: auth.user, onSignOut: auth.signOut, runtimeRepository })} />} />
+    <Route path="/workspaces/:workspaceId" element={<WorkspaceIndexRedirect />} />
     <Route path="/workspaces/:workspaceId/tree" element={<WorkspaceRoute user={auth.user} onSignOut={auth.signOut} />} />
     <Route path="/workspaces/:workspaceId/calendar" element={<WorkspaceRoute user={auth.user} onSignOut={auth.signOut} />} />
     <Route path="/workspaces/:workspaceId/analytics" element={<WorkspaceRoute user={auth.user} onSignOut={auth.signOut} />} />
@@ -27,6 +30,11 @@ function AuthenticatedRoutes({ auth }: { auth: ReturnType<typeof useGoogleAuth> 
     <Route path="/workspaces/:workspaceId/settings" element={<WorkspaceRoute user={auth.user} onSignOut={auth.signOut} />} />
     <Route path="*" element={<RouteNotFound />} />
   </Routes>
+}
+
+function WorkspaceIndexRedirect() {
+  const { workspaceId } = useParams()
+  return <Navigate to={`/workspaces/${encodeURIComponent(workspaceId ?? '')}/tree`} replace />
 }
 
 function JoinRoute({ onSignOut }: { onSignOut: () => void }) {
